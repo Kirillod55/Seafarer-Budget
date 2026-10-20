@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { SyncBadge } from './components/SyncBadge.tsx'
 import { Accounts } from './screens/Accounts.tsx'
 import { Goals } from './screens/Goals.tsx'
 import { Home } from './screens/Home.tsx'
 import { Limits } from './screens/Limits.tsx'
 import { RecordScreen } from './screens/Record.tsx'
-import { Report } from './screens/Report.tsx'
 import { Settings } from './screens/Settings.tsx'
+
+// The report pulls in the chart library, so it loads on demand (it is precached by the service worker).
+const Report = lazy(() => import('./screens/Report.tsx').then((m) => ({ default: m.Report })))
 
 export type Screen = 'home' | 'record' | 'report' | 'goals' | 'limits' | 'accounts' | 'settings'
 
@@ -36,7 +38,9 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
         ) : screen === 'record' ? (
           <RecordScreen id={view.recordId} onDone={() => go('home')} />
         ) : screen === 'report' ? (
-          <Report />
+          <Suspense fallback={<p className="splash muted">Загрузка…</p>}>
+            <Report />
+          </Suspense>
         ) : screen === 'goals' ? (
           <Goals />
         ) : screen === 'limits' ? (
