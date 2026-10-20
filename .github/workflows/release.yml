@@ -15,6 +15,7 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
@@ -37,6 +38,10 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($tauriVersion -ne $version) {
+            throw "src-tauri/tauri.conf.json version ($tauriVersion) differs from package.json ($version)"
+          }
           $tag = "v$version"
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) {
             throw "Pushed tag $env:GITHUB_REF_NAME does not match package.json version ($tag)"
@@ -56,6 +61,7 @@ jobs:
           releaseDraft: false
           prerelease: false
           releaseAssetNamePattern: 'Seafarer-Budget-[version][setup][ext]'
+          uploadUpdaterJson: false
 
       - name: Attach portable zip (and installer name safety net)
         shell: pwsh
