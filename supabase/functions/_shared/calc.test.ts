@@ -251,15 +251,39 @@ describe('contractStats', () => {
     expect(contractStats(txs, s, '2026-10-21').projectedUsd).toBeNull()
   })
 
-  it('projectedUsd = earned + saved-per-day * days left', () => {
-    // saved 300 over 21 days -> 14.2857/day; 10 days left -> +142.86
-    const r = contractStats(txs, settings({ contract_start_date: '2026-08-01', contract_end_date: '2026-10-31' }), '2026-10-21')
-    expect(r.projectedUsd).toBeCloseTo(2500 + (300 / 21) * 10, 2)
-  })
+  describe('projectedUsd (projected net savings over the contract)', () => {
+    // window 2026-09-01..2026-10-01 = 30 days: income 3000, expenses 600 -> net 2400, pace 80/day
+    const wtxs = [
+      tx({ kind: 'income', amount_usd: 3000, date: '2026-09-15' }),
+      tx({ kind: 'expense', amount_usd: 400, date: '2026-09-20' }),
+      tx({ kind: 'expense', amount_usd: 200, date: '2026-10-01' }),
+      tx({ kind: 'income', amount_usd: 7777, date: '2026-08-31' }), // before the contract
+      tx({ kind: 'expense', amount_usd: 7777, date: '2026-10-02' }), // after today
+      tx({ kind: 'expense', amount_usd: 7777, date: '2026-09-10', deleted: true }),
+    ]
+    const cs = (p: Partial<Settings>) =>
+      contractStats(wtxs, settings({ contract_start_date: '2026-09-01', ...p }), '2026-10-01')
 
-  it('projectedUsd does not go below earned when contract is over', () => {
-    const r = contractStats(txs, settings({ contract_start_date: '2026-08-01', contract_end_date: '2026-10-01' }), '2026-10-21')
-    expect(r.projectedUsd).toBe(2500)
+    it('net + pace * days left: 2400 + 80 * 90 = 9600', () => {
+      expect(cs({ contract_end_date: '2026-12-30' }).projectedUsd).toBe(9600)
+    })
+
+    it('is null when contract_end_date is missing', () => {
+      expect(cs({ contract_end_date: null }).projectedUsd).toBeNull()
+    })
+
+    it('is null when contract_start_date is missing', () => {
+      const r = contractStats(wtxs, settings({ contract_end_date: '2026-12-30' }), '2026-10-01')
+      expect(r.projectedUsd).toBeNull()
+    })
+
+    it('equals net when the contract has already ended', () => {
+      expect(cs({ contract_end_date: '2026-09-20' }).projectedUsd).toBe(2400)
+    })
+
+    it('does not change earnedUsd (gross income since start)', () => {
+      expect(cs({ contract_end_date: '2026-12-30' }).earnedUsd).toBe(3000)
+    })
   })
 })
 
@@ -292,6 +316,15 @@ describe('goalProgress', () => {
     const old = goalProgress(goal, [move({ amount_usd: 100, date: addDays(today, -200) })], today)
     expect(old.etaDate).toBeNull()
     expect(goalProgress(goal, [], today).etaDate).toBeNull()
+  })
+
+  it('etaDate is null when the ETA is more than 100 years away (tiny pace)', () => {
+    // 0.009 in the 90-day window -> 0.0001/day; 1000 left -> 10,000,000 days
+    const p = goalProgress(goal, [move({ amount_usd: 0.009, date: today })], today)
+    expect(p.etaDate).toBeNull()
+    // just inside the bound still yields a date
+    const near = goalProgress({ ...goal, target_usd: 365 }, [move({ amount_usd: 9, date: today })], today)
+    expect(near.etaDate).toBe(addDays(today, 3560)) // pace 0.1/day, 356 left
   })
 
   it('ignores deleted moves and other goals', () => {

@@ -9,6 +9,7 @@ const DAYS_PER_MONTH = 30.4
 const WARN_SHARE = 0.8
 const OVER_SHARE = 1.0
 const PACE_WINDOW_DAYS = 90
+const MAX_ETA_DAYS = 36_500 // 100 years
 const TOP_COUNT = 5
 const UNCATEGORIZED = 'uncategorized'
 
@@ -136,13 +137,20 @@ export function contractStats(
     sum(inMonth.filter((t) => t.kind === 'income').map((t) => t.amount_usd)) -
     sum(inMonth.filter((t) => t.kind === 'expense').map((t) => t.amount_usd))
 
-  // projected = earned so far + (this month's saved / days elapsed this month) * days until contract end.
-  // Simple linear estimate; past the end date there are no days left, so projected equals earned.
+  // projected = projected NET savings over the whole contract:
+  //   net  = income - expense (amount_usd) for start <= date <= today
+  //   pace = net / max(1, days from start to today)
+  //   projected = net + pace * max(0, days from today to end)
+  // Needs both contract_start_date and contract_end_date, otherwise null.
+  // After the end date there are no days left, so projected equals net.
   let projected: number | null = null
-  if (s.contract_end_date) {
-    const daysLeft = Math.max(0, daysBetween(today, s.contract_end_date))
-    const elapsed = Number(today.slice(8, 10))
-    projected = round2(earned + (saved / elapsed) * daysLeft)
+  if (start && s.contract_end_date) {
+    const inContract = live.filter((t) => t.date >= start && t.date <= today)
+    const net =
+      sum(inContract.filter((t) => t.kind === 'income').map((t) => t.amount_usd)) -
+      sum(inContract.filter((t) => t.kind === 'expense').map((t) => t.amount_usd))
+    const pace = net / Math.max(1, daysBetween(start, today))
+    projected = round2(net + pace * Math.max(0, daysBetween(today, s.contract_end_date)))
   }
 
   return { earnedUsd: round2(earned), savedThisMonthUsd: round2(saved), projectedUsd: projected }
@@ -164,7 +172,9 @@ export function goalProgress(
   const pace = recent / PACE_WINDOW_DAYS
   let etaDate: string | null = null
   if (remaining > 0 && pace > 0) {
-    etaDate = addDays(today, Math.ceil(remaining / pace - 1e-9))
+    // more than 100 years away is not a meaningful ETA (and would overflow Date)
+    const etaDays = Math.ceil(remaining / pace - 1e-9)
+    if (etaDays <= MAX_ETA_DAYS) etaDate = addDays(today, etaDays)
   }
 
   // Needed per month until the deadline (months = days / 30.4).
