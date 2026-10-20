@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Account, Category, Transaction } from '@shared/types.ts'
-import { csvFileName, toCsv } from './export.ts'
+import { csvFileName, downloadCsv, toCsv } from './export.ts'
 
 const HEADER = 'Дата;Тип;Сумма;Валюта;Сумма USD;Категория;Счёт;Заметка'
 
@@ -113,5 +113,27 @@ describe('toCsv', () => {
 describe('csvFileName', () => {
   it('is seafarer-budget-YYYY-MM-DD.csv', () => {
     expect(csvFileName('2026-10-21')).toBe('seafarer-budget-2026-10-21.csv')
+  })
+})
+
+describe('downloadCsv (D3)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps the blob URL alive for ~10 s before revoking it', () => {
+    vi.useFakeTimers()
+    const create = vi.fn(() => 'blob:x')
+    const revoke = vi.fn()
+    vi.stubGlobal('URL', { ...URL, createObjectURL: create, revokeObjectURL: revoke })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    downloadCsv('a.csv', 'x')
+    expect(click).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1000)
+    expect(revoke).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(9000)
+    expect(revoke).toHaveBeenCalledWith('blob:x')
+    click.mockRestore()
   })
 })

@@ -37,12 +37,13 @@ describe('Shell navigation', () => {
     expect(await screen.findByRole('button', { name: '+ Запись' })).toBeTruthy()
   })
 
-  it('tapping a transaction opens it for editing; «Удалить» returns home without it', async () => {
+  it('tapping a transaction opens it for editing; «Удалить» → «Точно удалить?» returns home without it', async () => {
     await setup()
     fireEvent.click(await screen.findByRole('button', { name: /кофе/ }))
     expect(((await screen.findByLabelText('Сумма')) as HTMLInputElement).value).toBe('80')
 
     fireEvent.click(screen.getByRole('button', { name: 'Удалить' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Точно удалить?' }))
     await waitFor(() => expect(screen.queryByText('кофе')).toBeNull())
     expect(await screen.findByRole('button', { name: '+ Запись' })).toBeTruthy()
   })

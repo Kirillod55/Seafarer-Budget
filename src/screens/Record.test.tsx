@@ -64,13 +64,35 @@ describe('Record', () => {
     expect(await env.db.transactions.count()).toBe(2) // the opening adjustment + the edited expense, no duplicate
   })
 
-  it('«Удалить» calls repo.remove and soft-deletes the transaction', async () => {
+  it('D2: «Удалить» asks in place first; «Нет» backs out without deleting', async () => {
+    await seed()
+    const remove = vi.spyOn(env.repo, 'remove')
+    const confirm = vi.spyOn(window, 'confirm')
+    const onDone = vi.fn()
+    renderWithApp(<RecordScreen id={existing.id} onDone={onDone} />, env)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить' }))
+    expect(screen.getByRole('button', { name: 'Точно удалить?' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Удалить' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Нет' }))
+
+    expect(screen.getByRole('button', { name: 'Удалить' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Точно удалить?' })).toBeNull()
+    expect(remove).not.toHaveBeenCalled()
+    expect(confirm).not.toHaveBeenCalled()
+    expect(onDone).not.toHaveBeenCalled()
+    expect((await env.db.transactions.get(existing.id))!.deleted).toBe(false)
+  })
+
+  it('«Удалить» → «Точно удалить?» calls repo.remove and soft-deletes the transaction', async () => {
     await seed()
     const remove = vi.spyOn(env.repo, 'remove')
     const onDone = vi.fn()
     renderWithApp(<RecordScreen id={existing.id} onDone={onDone} />, env)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Удалить' }))
+    expect(remove).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Точно удалить?' }))
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith('transactions', existing.id))
     await waitFor(() => expect(onDone).toHaveBeenCalled())

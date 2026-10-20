@@ -3,7 +3,8 @@ import type { Account, Category, Transaction, TxKind } from '@shared/types.ts'
 const BOM = '﻿' // makes Excel read the file as UTF-8
 const SEPARATOR = ';'
 const EOL = '\r\n'
-const REVOKE_DELAY_MS = 100
+// Generous: Safari / WKWebView may read the blob well after the click handler returns.
+const REVOKE_DELAY_MS = 10_000
 const HEADER = ['Дата', 'Тип', 'Сумма', 'Валюта', 'Сумма USD', 'Категория', 'Счёт', 'Заметка']
 
 const KIND_LABEL: Record<TxKind, string> = {

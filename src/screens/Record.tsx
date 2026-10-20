@@ -56,6 +56,8 @@ function RecordForm({
   const [note, setNote] = useState(existing?.note ?? '')
   const [errors, setErrors] = useState<{ amount?: string; date?: string; save?: string }>({})
   const [busy, setBusy] = useState(false)
+  // two-step delete in place instead of window.confirm: «Удалить» → «Точно удалить?» / «Нет»
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const currencies = settings.currencies.includes(currency) ? settings.currencies : [...settings.currencies, currency]
   const kindCategories = categories.filter((c) => c.kind === kind && (!c.archived || c.id === categoryId))
@@ -267,11 +269,21 @@ function RecordForm({
           Отмена
         </button>
       </div>
-      {isEdit && (
-        <button type="button" className="btn btn-danger btn-block" disabled={busy} onClick={() => void remove()}>
-          Удалить
-        </button>
-      )}
+      {isEdit &&
+        (confirmDelete ? (
+          <div className="row">
+            <button type="button" className="btn btn-danger grow" disabled={busy} onClick={() => void remove()}>
+              Точно удалить?
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => setConfirmDelete(false)}>
+              Нет
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn-danger btn-block" disabled={busy} onClick={() => setConfirmDelete(true)}>
+            Удалить
+          </button>
+        ))}
     </form>
   )
 }

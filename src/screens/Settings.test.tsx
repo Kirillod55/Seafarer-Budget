@@ -407,7 +407,8 @@ describe('Settings: export and sign-out', () => {
     expect(text).toContain('Дата;Тип;Сумма;Валюта;Сумма USD;Категория;Счёт;Заметка')
     expect(text).toContain('Расход;12,5;UAH;')
     expect(text).toContain('Корректировка;5000;UAH;')
-    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake'))
+    // revoked later (10 s, see export.test.ts), not while Safari may still be reading the blob
+    expect(revokeObjectURL).not.toHaveBeenCalled()
     expect(document.querySelector('a[download]')).toBeNull() // the temporary link is removed
   })
 
