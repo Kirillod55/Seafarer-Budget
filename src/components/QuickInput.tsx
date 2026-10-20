@@ -61,6 +61,13 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
         return
       }
 
+      // R21: an expense that matches no category goes to «Прочее», like the bot does.
+      const categoryId =
+        parsed.categoryId ??
+        (parsed.kind === 'expense'
+          ? (categories.find((c) => c.name === 'Прочее' && c.kind === 'expense' && !c.deleted && !c.archived)?.id ?? null)
+          : null)
+
       await repo.addTransaction({
         kind: parsed.kind,
         amount: parsed.amount,
@@ -69,12 +76,12 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
         to_account_id: null,
         to_amount: null,
         to_currency: null,
-        category_id: parsed.categoryId,
+        category_id: categoryId,
         date: parsed.date,
         note: parsed.note,
         source: 'app',
       })
-      const category = categories.find((c) => c.id === parsed.categoryId)
+      const category = categories.find((c) => c.id === categoryId)
       const sign = parsed.kind === 'expense' ? '-' : '+'
       setFeedback({
         kind: 'ok',

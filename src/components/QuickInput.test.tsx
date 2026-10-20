@@ -60,6 +60,19 @@ describe('QuickInput', () => {
     expect(addTransaction.mock.calls[0][0].currency).toBe('UAH')
   })
 
+  it('R21: an expense that matches no category is saved to «Прочее»', async () => {
+    const { env, submit, addTransaction } = await setup()
+    const other = (await env.db.categories.toArray()).find((c) => c.name === 'Прочее' && c.kind === 'expense')!
+    expect(other).toBeTruthy()
+
+    submit('непонятное 50')
+
+    await waitFor(() => expect(addTransaction).toHaveBeenCalledTimes(1))
+    expect(addTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'expense', amount: 50, category_id: other.id }),
+    )
+  })
+
   it('ignores an empty submit', async () => {
     const { submit, addTransaction } = await setup()
     submit('   ')
