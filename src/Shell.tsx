@@ -6,6 +6,7 @@ import { Home } from './screens/Home.tsx'
 import { Limits } from './screens/Limits.tsx'
 import { RecordScreen } from './screens/Record.tsx'
 import { Report } from './screens/Report.tsx'
+import { Settings } from './screens/Settings.tsx'
 
 export type Screen = 'home' | 'record' | 'report' | 'goals' | 'limits' | 'accounts' | 'settings'
 
@@ -19,15 +20,6 @@ const NAV: { id: Screen; icon: string; label: string }[] = [
   { id: 'settings', icon: '⚙️', label: 'Ещё' },
 ]
 
-function Soon({ title }: { title: string }) {
-  return (
-    <section className="card center">
-      <h2>{title}</h2>
-      <p className="muted">Скоро</p>
-    </section>
-  )
-}
-
 export function Shell({ onSignOut }: { onSignOut(): void }) {
   const [view, setView] = useState<{ screen: Screen; recordId?: string }>({ screen: 'home' })
   const { screen } = view
@@ -37,9 +29,6 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
     <div className="shell">
       <header className="topbar">
         <SyncBadge />
-        <button type="button" className="btn btn-link" onClick={onSignOut}>
-          Выйти
-        </button>
       </header>
       <main className="page">
         {screen === 'home' ? (
@@ -55,7 +44,7 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
         ) : screen === 'accounts' ? (
           <Accounts />
         ) : (
-          <Soon title={NAV.find((n) => n.id === screen)!.label} />
+          <Settings onSignOut={onSignOut} />
         )}
       </main>
       <nav className="tabbar" aria-label="Разделы">

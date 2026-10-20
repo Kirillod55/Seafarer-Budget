@@ -55,4 +55,15 @@ describe('Shell navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
     expect(await screen.findByText('Октябрь 2026')).toBeTruthy()
   })
+
+  it('the «Ещё» tab opens the settings, whose «Выйти» signs out', async () => {
+    const env = makeEnv()
+    await env.repo.initDefaults('single', [])
+    const onSignOut = vi.fn()
+    renderWithApp(<Shell onSignOut={onSignOut} />, env)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ещё' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
+    expect(onSignOut).toHaveBeenCalledTimes(1)
+  })
 })
