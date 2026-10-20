@@ -1,6 +1,10 @@
 import { render, screen } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import App from './App'
+
+// supabase.ts reads VITE_SUPABASE_* at import time, so a local .env would make the client exist.
+// These tests are about the «not configured» path, so they pin the client to null.
+vi.mock('./supabase.ts', () => ({ supabase: null }))
 
 it('renders the app title', () => {
   render(<App />)
