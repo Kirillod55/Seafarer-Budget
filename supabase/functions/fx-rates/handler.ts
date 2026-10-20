@@ -51,8 +51,10 @@ export async function handleFxRequest(req: Request, deps: FxDeps): Promise<Respo
   }
 
   try {
+    // a hit only when every wanted currency is cached for that date (a newly added one is not yet)
     const cached = await deps.readRates(date)
-    if (cached.some((r) => r.currency === 'USD')) return json(cached)
+    const have = new Set(cached.filter((r) => r.date === date).map((r) => r.currency))
+    if (wanted.every((c) => have.has(c))) return json(cached)
   } catch {
     // cache read failure is not fatal: fall through to NBU
   }

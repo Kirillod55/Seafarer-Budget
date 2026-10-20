@@ -96,4 +96,12 @@ describe('scheduler', () => {
     expect(seen).toContain('syncing')
     s.stop()
   })
+
+  it('an fx-rates failure alone keeps the status idle (I1)', async () => {
+    const sync = { syncOnce: vi.fn(async () => ({ pushed: 1, pulled: 1, fxError: 'fx down' })) }
+    const s = startScheduler(sync, { debounceMs: 10, pollMs: 1000, subscribe: () => () => {} })
+    await vi.advanceTimersByTimeAsync(10)
+    expect(s.status$.get()).toMatchObject({ state: 'idle', error: null })
+    s.stop()
+  })
 })

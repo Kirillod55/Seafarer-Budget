@@ -550,6 +550,13 @@ label {
   color: var(--neg);
 }
 
+.sync-err {
+  color: var(--neg);
+  border-color: var(--neg);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .tabbar {
   position: fixed;
   left: 50%;

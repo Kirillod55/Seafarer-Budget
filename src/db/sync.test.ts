@@ -1,9 +1,9 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Account, FxRate, SyncTable, Transaction } from '@shared/types.ts'
+import type { Account, FxRate, Goal, SyncTable, Transaction } from '@shared/types.ts'
 import { createDb, type LocalDb } from './local.ts'
 import { createRepo, type Repo } from './repo.ts'
-import { createSync, type Remote } from './sync.ts'
+import { createSync, RowRejectedError, type RatePatch, type Remote } from './sync.ts'
 
 class FakeRemote implements Remote {
   tables = new Map<SyncTable, Map<string, Record<string, unknown>>>()
@@ -12,14 +12,22 @@ class FakeRemote implements Remote {
   failPull = false
   fx: Record<string, FxRate[]> = {}
   fxCalls: string[] = []
+  fxCurrencies: string[][] = []
   pushLog: object[] = []
+  attempted: string[] = []
+  patchLog: RatePatch[][] = []
+  /** id -> message: the server refuses any batch containing this row (an upsert is all-or-nothing) */
+  reject = new Map<string, string>()
 
-  private t(table: SyncTable) {
+  t(table: SyncTable) {
     if (!this.tables.has(table)) this.tables.set(table, new Map())
     return this.tables.get(table)!
   }
   async push(table: SyncTable, rows: object[]) {
     if (this.failPush) throw new Error('network down')
+    for (const r of rows) this.attempted.push((r as { id: string }).id)
+    const bad = rows.find((r) => this.reject.has((r as { id: string }).id))
+    if (bad) throw new RowRejectedError(this.reject.get((bad as { id: string }).id)!)
     return rows.map((r) => {
       this.pushLog.push(r)
       const row = r as { id: string }
@@ -34,9 +42,25 @@ class FakeRemote implements Remote {
       .filter((r) => (r.rev as number) > sinceRev)
       .sort((a, b) => (a.rev as number) - (b.rev as number))
   }
-  async fxRates(date: string) {
+  async fxRates(date: string, currencies: string[]) {
     this.fxCalls.push(date)
+    this.fxCurrencies.push(currencies)
     return this.fx[date] ?? []
+  }
+  // like update(...).eq('id', id).eq('rate_pending', true): only the rate columns, only while still pending
+  async patchRates(rows: RatePatch[]) {
+    this.patchLog.push(rows)
+    for (const p of rows) {
+      const row = this.t('transactions').get(p.id)
+      if (!row || row.rate_pending !== true) continue
+      this.t('transactions').set(p.id, {
+        ...row,
+        rate_usd: p.rate_usd,
+        amount_usd: p.amount_usd,
+        rate_pending: false,
+        rev: this.nextRev++,
+      })
+    }
   }
   // a row written from outside the app (the Telegram bot); explicit rev allowed
   seed(table: SyncTable, row: Record<string, unknown>, rev?: number) {
@@ -137,6 +161,82 @@ describe('push', () => {
   })
 })
 
+describe('push isolation (I1)', () => {
+  it('a rejected row does not block pulling, is parked with its message, and its chunk-mates still go out', async () => {
+    const a = device()
+    const r1 = await a.repo.put<Account>('accounts', { ...acc, name: 'Один' })
+    const r2 = await a.repo.put<Account>('accounts', { ...acc, name: 'Плохой' })
+    const r3 = await a.repo.put<Account>('accounts', { ...acc, name: 'Три' })
+    remote.reject.set(r2.id, 'violates check constraint "accounts_name_check"')
+    remote.seed('transactions', botTx('bot-1'))
+
+    const res = await a.sync.syncOnce()
+
+    expect(await a.db.transactions.get('bot-1')).toMatchObject({ note: 'bot', dirty: 0 })
+    expect(remote.t('accounts').has(r1.id)).toBe(true)
+    expect(remote.t('accounts').has(r3.id)).toBe(true)
+    expect(remote.t('accounts').has(r2.id)).toBe(false)
+    expect(await a.db.accounts.get(r1.id)).toMatchObject({ dirty: 0 })
+    expect(await a.db.accounts.get(r3.id)).toMatchObject({ dirty: 0 })
+    expect(await a.db.accounts.get(r2.id)).toMatchObject({ dirty: 2 })
+    expect(await a.db.meta.get(`parked:accounts:${r2.id}`)).toMatchObject({
+      value: { table: 'accounts', id: r2.id, error: 'violates check constraint "accounts_name_check"' },
+    })
+    expect(res.parked).toBe(1)
+    expect(res.error).toMatch(/accounts_name_check/)
+  })
+
+  it('a parked row is not retried every sync, but is retried after the user edits it', async () => {
+    const a = device()
+    const bad = await a.repo.put<Account>('accounts', { ...acc, name: 'Плохой' })
+    remote.reject.set(bad.id, 'bad row')
+    await a.sync.syncOnce()
+    const before = remote.attempted.length
+    expect(before).toBeGreaterThan(0)
+    const res2 = await a.sync.syncOnce()
+    expect(res2.error).toBeUndefined()
+    expect(remote.attempted.length).toBe(before)
+
+    remote.reject.clear()
+    await a.repo.put<Account>('accounts', { id: bad.id, name: 'Исправлен' })
+    await a.sync.syncOnce()
+    expect(remote.t('accounts').get(bad.id)).toMatchObject({ name: 'Исправлен' })
+    expect(await a.db.accounts.get(bad.id)).toMatchObject({ dirty: 0 })
+    expect(await a.db.meta.get(`parked:accounts:${bad.id}`)).toBeUndefined()
+  })
+
+  it('parked rows are retried on app start (a new sync instance)', async () => {
+    const a = device()
+    const bad = await a.repo.put<Account>('accounts', { ...acc, name: 'Плохой' })
+    remote.reject.set(bad.id, 'bad row')
+    await a.sync.syncOnce()
+    expect((await a.db.accounts.get(bad.id))!.dirty).toBe(2)
+    remote.reject.clear()
+    const restarted = createSync(a.db, remote)
+    const res = await restarted.syncOnce()
+    expect(res.error).toBeUndefined()
+    expect(await a.db.accounts.get(bad.id)).toMatchObject({ dirty: 0 })
+    expect(await a.db.meta.get(`parked:accounts:${bad.id}`)).toBeUndefined()
+  })
+
+  it('a failing table does not stop the other tables or the pulls', async () => {
+    const a = device()
+    const account = await a.repo.put<Account>('accounts', acc)
+    const goal = await a.repo.put<Goal>('goals', { name: 'Машина', target_usd: 100, deadline: null, archived: false })
+    remote.seed('transactions', botTx('bot-1'))
+    const origPush = remote.push.bind(remote)
+    remote.push = async (table, rows) => {
+      if (table === 'accounts') throw new Error('timeout on accounts')
+      return origPush(table, rows)
+    }
+    const res = await a.sync.syncOnce()
+    expect(res.error).toMatch(/timeout on accounts/)
+    expect(await a.db.accounts.get(account.id as string)).toMatchObject({ dirty: 1 }) // transient: stays dirty, not parked
+    expect(await a.db.goals.get(goal.id as string)).toMatchObject({ dirty: 0 })
+    expect(await a.db.transactions.get('bot-1')).toBeTruthy()
+  })
+})
+
 describe('pull', () => {
   it('brings a row created by the bot on the server', async () => {
     const a = device()
@@ -225,11 +325,83 @@ describe('fx rates', () => {
     const after = (await a.db.transactions.get(tx.id)) as Transaction & { dirty: number }
     expect(after.rate_pending).toBe(false)
     expect(after.amount_usd).toBe(1.94)
-    expect(after.dirty).toBe(1)
+    // the fix goes out as a column-scoped patch, not as a dirty whole row
+    expect(after.dirty).toBe(0)
     expect(await a.db.fx_rates.get(['2026-10-21', 'USD'])).toBeTruthy()
+    expect(remote.patchLog).toEqual([[{ id: tx.id, rate_usd: 1 / 41.25, amount_usd: 1.94 }]])
+    expect(remote.t('transactions').get(tx.id)).toMatchObject({ amount_usd: 1.94, rate_pending: false })
+    // the server result (new rev) was pulled back
+    expect(after.rev).toBe(remote.t('transactions').get(tx.id)!.rev)
+    expect(await a.db.meta.get('rate_fix')).toMatchObject({ value: [] })
+  })
+
+  it('I3: a rate fix does not resurrect a row the bot deleted or revert its category', async () => {
+    const a = device()
+    remote.seed('transactions', botTx('bot-p', { currency: 'UAH', amount: 80, rate_usd: 0, amount_usd: 0, rate_pending: true, category_id: 'old', date: '2026-10-21' }))
+    remote.seed('transactions', botTx('bot-q', { currency: 'UAH', amount: 40, rate_usd: 0, amount_usd: 0, rate_pending: true, category_id: 'old', date: '2026-10-21' }))
+    await a.sync.syncOnce() // pulled while still pending
+    expect(await a.db.transactions.get('bot-p')).toMatchObject({ rate_pending: true, dirty: 0 })
+    remote.fxRates = async (date) => {
+      // meanwhile, on the server, the bot deletes one row and re-categorises the other
+      remote.seed('transactions', { ...remote.t('transactions').get('bot-p')!, deleted: true })
+      remote.seed('transactions', { ...remote.t('transactions').get('bot-q')!, category_id: 'new' })
+      return [
+        { date, currency: 'UAH', uah_per_unit: 1 },
+        { date, currency: 'USD', uah_per_unit: 40 },
+      ]
+    }
+    const res = await a.sync.syncOnce()
+    expect(res.error).toBeUndefined()
+    expect(remote.t('transactions').get('bot-p')).toMatchObject({ deleted: true })
+    expect(remote.t('transactions').get('bot-q')).toMatchObject({ category_id: 'new', amount_usd: 1, rate_pending: false })
+    // nothing was pushed as a whole row
+    expect(remote.pushLog).toHaveLength(0)
+    // and the local copy follows the server
+    expect(await a.db.transactions.get('bot-p')).toMatchObject({ deleted: true, dirty: 0 })
+    expect(await a.db.transactions.get('bot-q')).toMatchObject({ category_id: 'new', amount_usd: 1, rate_pending: false, dirty: 0 })
+  })
+
+  it('I3: a failed rate patch is kept in the local marker and retried on the next sync', async () => {
+    const a = device()
+    remote.seed('transactions', botTx('bot-p', { currency: 'UAH', amount: 80, rate_usd: 0, amount_usd: 0, rate_pending: true, date: '2026-10-21' }))
+    remote.fx['2026-10-21'] = [
+      { date: '2026-10-21', currency: 'UAH', uah_per_unit: 1 },
+      { date: '2026-10-21', currency: 'USD', uah_per_unit: 40 },
+    ]
+    const origPatch = remote.patchRates.bind(remote)
+    remote.patchRates = async () => {
+      throw new Error('network down')
+    }
+    const res = await a.sync.syncOnce()
+    expect(res.error).toBeUndefined()
+    expect(res.fxError).toMatch(/network down/)
+    expect(await a.db.transactions.get('bot-p')).toMatchObject({ amount_usd: 2, rate_pending: false, dirty: 0 })
+    expect(await a.db.meta.get('rate_fix')).toMatchObject({ value: ['bot-p'] })
+    remote.patchRates = origPatch
     await a.sync.syncOnce()
-    expect((await a.db.transactions.get(tx.id))!.dirty).toBe(0)
-    expect((remote.tables.get('transactions')!.get(tx.id) as { amount_usd: number }).amount_usd).toBe(1.94)
+    expect(remote.t('transactions').get('bot-p')).toMatchObject({ amount_usd: 2, rate_pending: false })
+    expect(await a.db.meta.get('rate_fix')).toMatchObject({ value: [] })
+  })
+
+  it('I2: asks fx-rates for every currency in settings, including added ones', async () => {
+    const a = device()
+    await a.repo.initDefaults('single', [])
+    const s = (await a.db.settings.toCollection().first())!
+    await a.db.settings.put({ ...s, currencies: [...s.currencies, 'GBP'] })
+    await a.sync.syncOnce()
+    expect(remote.fxCurrencies[0]).toEqual(expect.arrayContaining(['UAH', 'USD', 'EUR', 'MDL', 'GBP']))
+  })
+
+  it('I1: an fx-rates failure is reported apart and does not mark the sync as failed', async () => {
+    const a = device()
+    await a.repo.initDefaults('single', [])
+    remote.fxRates = async () => {
+      throw new Error('fx down')
+    }
+    const res = await a.sync.syncOnce()
+    expect(res.error).toBeUndefined()
+    expect(res.fxError).toMatch(/fx down/)
+    expect(res.pushed).toBeGreaterThan(0)
   })
 
   it('recomputes from the current row when it was edited during the rate fetch', async () => {

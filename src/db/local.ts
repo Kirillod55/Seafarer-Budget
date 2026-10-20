@@ -11,8 +11,9 @@ import type {
   Transaction,
 } from '@shared/types.ts'
 
-// Booleans cannot be indexed in IndexedDB, so `dirty` is 0|1.
-export type Row<T> = T & { dirty: 0 | 1 }
+// Booleans cannot be indexed in IndexedDB, so `dirty` is a number:
+// 0 = in sync, 1 = waiting to be pushed, 2 = parked (the server refused it; retried after an edit or on app start).
+export type Row<T> = T & { dirty: 0 | 1 | 2 }
 
 export interface MetaRow {
   key: string

@@ -60,9 +60,11 @@ describe('handleFxRequest', () => {
     expect(deps.fetchNbu).not.toHaveBeenCalled()
   })
 
-  it('returns cached rows without calling NBU when USD is covered', async () => {
+  it('returns cached rows without calling NBU when every base currency is covered', async () => {
     const cached: FxRate[] = [
       { date: '2026-10-20', currency: 'USD', uah_per_unit: 41.5 },
+      { date: '2026-10-20', currency: 'EUR', uah_per_unit: 48.2 },
+      { date: '2026-10-20', currency: 'MDL', uah_per_unit: 2.4 },
       { date: '2026-10-20', currency: 'UAH', uah_per_unit: 1 },
     ]
     const deps = makeDeps({ readRates: vi.fn(async () => cached) })
@@ -109,6 +111,34 @@ describe('handleFxRequest', () => {
     const res = await handleFxRequest(post({ date: '2026-10-20', currencies: ['GBP', 'bad!', 42] }), deps)
     const body = (await res.json()) as FxRate[]
     expect(body.find((r) => r.currency === 'GBP')).toEqual({ date: '2026-10-20', currency: 'GBP', uah_per_unit: 55.1 })
+  })
+
+  it('treats the cache as a miss when a wanted currency is missing for the date (I2)', async () => {
+    const cached: FxRate[] = [
+      { date: '2026-10-20', currency: 'USD', uah_per_unit: 41.5 },
+      { date: '2026-10-20', currency: 'EUR', uah_per_unit: 48.2 },
+      { date: '2026-10-20', currency: 'MDL', uah_per_unit: 2.4 },
+      { date: '2026-10-20', currency: 'UAH', uah_per_unit: 1 },
+    ]
+    const deps = makeDeps({ readRates: vi.fn(async () => cached) })
+    const res = await handleFxRequest(post({ date: '2026-10-20', currencies: ['UAH', 'USD', 'GBP'] }), deps)
+    expect(deps.fetchNbu).toHaveBeenCalledTimes(1)
+    const body = (await res.json()) as FxRate[]
+    expect(body.find((r) => r.currency === 'GBP')).toEqual({ date: '2026-10-20', currency: 'GBP', uah_per_unit: 55.1 })
+  })
+
+  it('a cache holding every wanted currency is a hit (I2)', async () => {
+    const cached: FxRate[] = [
+      { date: '2026-10-20', currency: 'USD', uah_per_unit: 41.5 },
+      { date: '2026-10-20', currency: 'EUR', uah_per_unit: 48.2 },
+      { date: '2026-10-20', currency: 'MDL', uah_per_unit: 2.4 },
+      { date: '2026-10-20', currency: 'GBP', uah_per_unit: 55.1 },
+      { date: '2026-10-20', currency: 'UAH', uah_per_unit: 1 },
+    ]
+    const deps = makeDeps({ readRates: vi.fn(async () => cached) })
+    const res = await handleFxRequest(post({ date: '2026-10-20', currencies: ['GBP'] }), deps)
+    expect(await res.json()).toEqual(cached)
+    expect(deps.fetchNbu).not.toHaveBeenCalled()
   })
 
   it('returns [] and writes nothing when NBU returns []', async () => {
