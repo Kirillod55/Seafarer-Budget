@@ -12,14 +12,23 @@ function fromUtcMs(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10)
 }
 
+// Older engines (ICU before 2022) only know the pre-2022 name of Kyiv.
+const LEGACY_ZONE: Record<string, string> = { 'Europe/Kyiv': 'Europe/Kiev' }
+
+function dayFormat(timeZone: string): Intl.DateTimeFormat {
+  const opts: Intl.DateTimeFormatOptions = { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }
+  try {
+    return new Intl.DateTimeFormat('en-US', opts)
+  } catch (e) {
+    const legacy = LEGACY_ZONE[timeZone]
+    if (!(e instanceof RangeError) || !legacy) throw e
+    return new Intl.DateTimeFormat('en-US', { ...opts, timeZone: legacy })
+  }
+}
+
 /** Calendar date of `now` in the given IANA time zone. */
 export function localDate(now: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now)
+  const parts = dayFormat(timeZone).formatToParts(now)
   const get = (type: string) => parts.find((p) => p.type === type)!.value
   return `${get('year')}-${get('month')}-${get('day')}`
 }

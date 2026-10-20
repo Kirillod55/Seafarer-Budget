@@ -1,10 +1,30 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { addDays, daysBetween, localDate, monthOf, prevMonth } from './dates.ts'
 
 describe('localDate', () => {
   it('uses the time zone, not UTC', () => {
     expect(localDate(new Date('2026-10-20T21:30:00Z'), 'Europe/Kyiv')).toBe('2026-10-21')
     expect(localDate(new Date('2026-10-20T21:30:00Z'), 'UTC')).toBe('2026-10-20')
+  })
+
+  describe('M4: an engine without Europe/Kyiv', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it('falls back to Europe/Kiev', () => {
+      const Original = Intl.DateTimeFormat
+      const seen: string[] = []
+      vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((function (locale: string, opts: Intl.DateTimeFormatOptions) {
+        seen.push(String(opts?.timeZone))
+        if (opts?.timeZone === 'Europe/Kyiv') throw new RangeError('Invalid time zone specified: Europe/Kyiv')
+        return new Original(locale, opts)
+      }) as never)
+      expect(localDate(new Date('2026-10-20T21:30:00Z'), 'Europe/Kyiv')).toBe('2026-10-21')
+      expect(seen).toEqual(['Europe/Kyiv', 'Europe/Kiev'])
+    })
+
+    it('other invalid zones still throw', () => {
+      expect(() => localDate(new Date(), 'Mars/Olympus')).toThrow(RangeError)
+    })
   })
 })
 

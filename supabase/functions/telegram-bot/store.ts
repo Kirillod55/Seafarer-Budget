@@ -9,6 +9,7 @@ import type { Category, FxRate, GoalMove, Settings, Transaction } from '../_shar
 
 const PAGE = 1000
 const RATE_ROWS = 600 // ~150 days of UAH/USD/EUR/MDL, plenty for "nearest earlier rate"
+const NBU_TIMEOUT_MS = 10_000 // a hung NBU must not hang the webhook
 
 export interface StoreOptions {
   /** injectable for tests; defaults to global fetch */
@@ -30,7 +31,7 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
   const fetchJson =
     opts.fetchJson ??
     (async (url: string) => {
-      const res = await fetch(url)
+      const res = await fetch(url, { signal: AbortSignal.timeout(NBU_TIMEOUT_MS) })
       if (!res.ok) throw new Error(`NBU responded ${res.status}`)
       return await res.json()
     })

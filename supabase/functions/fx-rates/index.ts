@@ -3,6 +3,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { handleFxRequest } from './handler.ts'
 import type { FxRate } from '../_shared/types.ts'
 
+const NBU_TIMEOUT_MS = 10_000 // a hung NBU must not hang the function
+
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false },
 })
@@ -10,7 +12,7 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 Deno.serve((req: Request) =>
   handleFxRequest(req, {
     async fetchNbu(url: string) {
-      const res = await fetch(url)
+      const res = await fetch(url, { signal: AbortSignal.timeout(NBU_TIMEOUT_MS) })
       if (!res.ok) throw new Error(`NBU responded ${res.status}`)
       return await res.json()
     },
