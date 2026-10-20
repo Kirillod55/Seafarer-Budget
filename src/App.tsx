@@ -1,59 +1,75 @@
 import { useEffect, useState } from 'react'
-import type { Session, SupabaseClient } from '@supabase/supabase-js'
-import { AppProvider, type AppContextValue } from './context.tsx'
-import { db } from './db/local.ts'
-import { createRepo } from './db/repo.ts'
-import { createSupabaseRemote } from './db/remote-supabase.ts'
-import { startScheduler } from './db/scheduler.ts'
-import { createSync } from './db/sync.ts'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
+import { Authed } from './Authed.tsx'
 import { Login } from './screens/Login.tsx'
-import { FirstRunGate } from './screens/FirstRunGate.tsx'
-import { Shell } from './Shell.tsx'
 import { supabase } from './supabase.ts'
 
-const DEBOUNCE_MS = 2000
-const POLL_MS = 60_000
+const NO_CONNECTION = 'Нет связи с сервером, попробуйте позже'
+const BAD_CREDENTIALS = 'Не удалось войти: проверьте почту и пароль'
 
-interface Services {
-  app: AppContextValue
-  syncOnce: () => Promise<{ error?: string }>
-}
-
-/** Everything that exists only while someone is signed in. */
-function Authed({ client, onSignOut }: { client: SupabaseClient; onSignOut(): void }) {
-  const [services, setServices] = useState<Services | null>(null)
-
-  useEffect(() => {
-    const remote = createSupabaseRemote(client)
-    const sync = createSync(db, remote)
-    const scheduler = startScheduler(sync, { debounceMs: DEBOUNCE_MS, pollMs: POLL_MS, subscribe: remote.subscribe })
-    const repo = createRepo(db, { now: () => new Date(), uuid: () => crypto.randomUUID(), onChange: scheduler.kick })
-    setServices({ app: { db, repo, scheduler, now: () => new Date() }, syncOnce: sync.syncOnce })
-    return () => {
-      scheduler.stop()
-      setServices(null)
+/** supabase-js keeps the session under `sb-<project-ref>-auth-token`; it survives an expired access token. */
+export function hasStoredSession(): boolean {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && /^sb-.+-auth-token$/.test(key)) return true
     }
-  }, [client])
-
-  if (!services) return <p className="splash muted">Загрузка…</p>
-  return (
-    <AppProvider value={services.app}>
-      <FirstRunGate syncOnce={services.syncOnce}>
-        <Shell onSignOut={onSignOut} />
-      </FirstRunGate>
-    </AppProvider>
-  )
+  } catch {
+    // storage unavailable (private mode etc.): nothing stored
+  }
+  return false
 }
+
+function clearStoredSession(): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i)
+      if (key && /^sb-.+-auth-token$/.test(key)) localStorage.removeItem(key)
+    }
+  } catch {
+    // nothing to clear
+  }
+}
+
+/** A failure to reach the server (offline, DNS, timeout) rather than a server answer. */
+export function isNetworkError(e: unknown): boolean {
+  if (isAuthRetryableFetchError(e)) return true
+  if (e instanceof TypeError) return true // fetch() rejects with TypeError when there is no network
+  const msg = e instanceof Error ? e.message : String(e ?? '')
+  return /failed to fetch|network|load failed|fetch failed|timeout/i.test(msg)
+}
+
+// 'checking' = reading the stored session, 'in' = signed in (maybe offline), 'out' = signed out
+type AuthState = 'checking' | 'in' | 'out'
 
 export default function App() {
-  // undefined = still checking the stored session, null = signed out
-  const [session, setSession] = useState<Session | null | undefined>(supabase ? undefined : null)
+  const [auth, setAuth] = useState<AuthState>(supabase ? 'checking' : 'out')
 
   useEffect(() => {
     if (!supabase) return
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
-    return () => data.subscription.unsubscribe()
+    let alive = true
+    const set = (s: AuthState) => alive && setAuth(s)
+    // Offline with an expired access token getSession() answers { session: null, error: AuthRetryableFetchError }
+    // while the session is still in storage: that is "signed in, offline", not "signed out".
+    // Auto-refresh emits TOKEN_REFRESHED once the network is back.
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (data.session) set('in')
+        else if ((error && isNetworkError(error)) || hasStoredSession()) set('in')
+        else set('out')
+      })
+      .catch(() => set(hasStoredSession() ? 'in' : 'out'))
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_OUT') set('out')
+      else if (s) set('in')
+      else if (!hasStoredSession()) set('out')
+      // null session with a stored one (INITIAL_SESSION offline): keep the current state
+    })
+    return () => {
+      alive = false
+      data.subscription.unsubscribe()
+    }
   }, [])
 
   if (!supabase) {
@@ -66,16 +82,35 @@ export default function App() {
   }
   const client = supabase
 
-  if (session === undefined) return <p className="splash muted">Загрузка…</p>
-  if (!session) {
+  if (auth === 'checking') return <p className="splash muted">Загрузка…</p>
+  if (auth === 'out') {
     return (
       <Login
         onLogin={async (email, password) => {
-          const { error } = await client.auth.signInWithPassword({ email, password })
-          return error ? 'Не удалось войти: проверьте почту и пароль' : null
+          try {
+            const { error } = await client.auth.signInWithPassword({ email, password })
+            if (!error) return null
+            return isNetworkError(error) ? NO_CONNECTION : BAD_CREDENTIALS
+          } catch (e) {
+            return isNetworkError(e) ? NO_CONNECTION : BAD_CREDENTIALS
+          }
         }}
       />
     )
   }
-  return <Authed client={client} onSignOut={() => void client.auth.signOut()} />
+  return (
+    <Authed
+      client={client}
+      onSignOut={() => {
+        void client.auth
+          .signOut()
+          .catch(() => undefined)
+          // offline with an expired token supabase-js keeps the stored session: drop it so a reload stays signed out
+          .then(() => {
+            clearStoredSession()
+            setAuth('out')
+          })
+      }}
+    />
+  )
 }
