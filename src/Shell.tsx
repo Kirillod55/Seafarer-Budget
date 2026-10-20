@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { SyncBadge } from './components/SyncBadge.tsx'
+import { Accounts } from './screens/Accounts.tsx'
+import { Goals } from './screens/Goals.tsx'
 import { Home } from './screens/Home.tsx'
+import { Limits } from './screens/Limits.tsx'
 import { RecordScreen } from './screens/Record.tsx'
 import { Report } from './screens/Report.tsx'
 
@@ -45,6 +48,12 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
           <RecordScreen id={view.recordId} onDone={() => go('home')} />
         ) : screen === 'report' ? (
           <Report />
+        ) : screen === 'goals' ? (
+          <Goals />
+        ) : screen === 'limits' ? (
+          <Limits />
+        ) : screen === 'accounts' ? (
+          <Accounts />
         ) : (
           <Soon title={NAV.find((n) => n.id === screen)!.label} />
         )}

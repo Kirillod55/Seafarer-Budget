@@ -9,6 +9,10 @@
   --pos: #15803d;
   --neg: #c62828;
   --warn-bg: #fff4e5;
+  --level-ok: #15803d;
+  --level-warn: #d97706;
+  --level-over: #c62828;
+  --track: #e6e9ef;
   --radius: 14px;
   --tap: 48px;
   color-scheme: light dark;
@@ -26,6 +30,10 @@
     --pos: #4ade80;
     --neg: #ff6b6b;
     --warn-bg: #3a2c14;
+    --level-ok: #4ade80;
+    --level-warn: #fbbf24;
+    --level-over: #ff6b6b;
+    --track: #2b323d;
   }
 }
 
@@ -451,6 +459,73 @@ label {
 .cat-share {
   width: 3rem;
   text-align: right;
+}
+
+/* ---------- goals, limits, accounts ---------- */
+
+.bar {
+  height: 0.7rem;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 999px;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.bar.level-ok .bar-fill {
+  background: var(--level-ok);
+}
+
+.bar.level-warn .bar-fill {
+  background: var(--level-warn);
+}
+
+.bar.level-over .bar-fill {
+  background: var(--level-over);
+}
+
+.limit-warn {
+  color: var(--level-warn);
+}
+
+.limit-over {
+  color: var(--level-over);
+}
+
+.limit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.limit-btn {
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.limit-title {
+  font-weight: 600;
+}
+
+.balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 1.2rem;
+  font-weight: 600;
 }
 
 /* ---------- sync badge + nav ---------- */

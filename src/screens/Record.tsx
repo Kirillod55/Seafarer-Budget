@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { localDate } from '@shared/dates.ts'
 import type { Account, Category, Settings, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
+import { parseAmount } from '../lib/amount.ts'
 
 interface Props {
   /** Transaction to edit; omitted = a new record. */
@@ -11,12 +12,6 @@ interface Props {
 }
 
 type Kind = 'expense' | 'income'
-
-/** «12,5» and «12.5» both work; anything that is not a number gives NaN. */
-function parseAmount(text: string): number {
-  const n = Number(text.trim().replace(/\s/g, '').replace(',', '.'))
-  return Number.isFinite(n) ? n : NaN
-}
 
 function RecordForm({
   existing,
