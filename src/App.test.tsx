@@ -6,3 +6,8 @@ it('renders the app title', () => {
   render(<App />)
   expect(screen.getByText('Seafarer Budget')).toBeTruthy()
 })
+
+it('cleans up the DOM between tests', () => {
+  render(<App />)
+  expect(screen.getByText('Seafarer Budget')).toBeTruthy()
+})
