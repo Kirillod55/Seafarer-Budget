@@ -30,8 +30,14 @@ export function toCsv(txs: Transaction[], categories: Category[], accounts: Acco
   const rows = txs
     .filter((t) => !t.deleted)
     .map((t) => {
-      const from = accountName.get(t.account_id) ?? ''
-      const to = t.kind === 'transfer' && t.to_account_id ? accountName.get(t.to_account_id) : undefined
+      // the second leg of a transfer / exchange has no column of its own, so it goes in front of the note
+      let leg = ''
+      if (t.kind === 'transfer' && t.to_account_id) {
+        leg = `→ ${accountName.get(t.to_account_id) ?? ''}`
+      } else if (t.kind === 'exchange' && t.to_amount !== null && t.to_currency !== null) {
+        leg = `→ ${number(t.to_amount)} ${t.to_currency}`
+      }
+      const note = leg && t.note ? `${leg} ${t.note}` : leg || t.note
       return [
         t.date,
         KIND_LABEL[t.kind] ?? t.kind,
@@ -39,8 +45,8 @@ export function toCsv(txs: Transaction[], categories: Category[], accounts: Acco
         t.currency,
         number(t.amount_usd),
         (t.category_id && categoryName.get(t.category_id)) || '',
-        to ? `${from} → ${to}` : from,
-        t.note,
+        accountName.get(t.account_id) ?? '',
+        note,
       ]
         .map(cell)
         .join(SEPARATOR)

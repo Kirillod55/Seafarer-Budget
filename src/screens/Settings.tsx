@@ -764,7 +764,7 @@ export function Settings({ onSignOut }: { onSignOut(): void }) {
       <CurrenciesSection settings={settings} />
       <ReconcileSection settings={settings} accounts={accounts} txs={txs} today={today} />
       <CategoriesSection categories={categories} />
-      <AccountsSection accounts={accounts} />
+      {settings.accounts_mode === 'multi' && <AccountsSection accounts={accounts} />}
       <ExportSection today={today} />
       <button type="button" className="btn btn-danger btn-block" onClick={onSignOut}>
         Выйти

@@ -62,9 +62,36 @@ describe('toCsv', () => {
     expect(lines(toCsv([tx({ kind })], [], [main]))[1].split(';')[1]).toBe(label)
   })
 
-  it('shows a transfer as «from → to» in the account column', () => {
-    const csv = toCsv([tx({ kind: 'transfer', to_account_id: 'a2' })], [], [main, cash])
-    expect(lines(csv)[1].split(';')[6]).toBe('Основной → Наличные')
+  describe('second leg of a transfer / exchange (complete copy)', () => {
+    const transfer = { kind: 'transfer', to_account_id: 'a2' } as const
+    const exchange = { kind: 'exchange', amount: 1000, to_account_id: 'a1', to_amount: 24.5, to_currency: 'USD' } as const
+    const row = (patch: Partial<Transaction>) => lines(toCsv([tx(patch)], [], [main, cash]))[1]
+
+    it('transfer: «Счёт» is the source only, «Заметка» is «→ target»', () => {
+      expect(row(transfer)).toBe('2026-10-21;Перевод;10;UAH;0,25;;Основной;→ Наличные')
+    })
+
+    it('transfer with a note: «→ target note»', () => {
+      expect(row({ ...transfer, note: 'на мелочи' })).toBe('2026-10-21;Перевод;10;UAH;0,25;;Основной;→ Наличные на мелочи')
+    })
+
+    it('transfer with «;» in the note is quoted', () => {
+      expect(row({ ...transfer, note: 'а;б' })).toBe('2026-10-21;Перевод;10;UAH;0,25;;Основной;"→ Наличные а;б"')
+    })
+
+    it('exchange: «Заметка» is «→ amount currency» with a decimal comma', () => {
+      expect(row(exchange)).toBe('2026-10-21;Обмен;1000;UAH;0,25;;Основной;→ 24,5 USD')
+    })
+
+    it('exchange with a note: «→ amount currency note»', () => {
+      expect(row({ ...exchange, note: 'в банке' })).toBe('2026-10-21;Обмен;1000;UAH;0,25;;Основной;→ 24,5 USD в банке')
+    })
+
+    it('exchange with «;» in the note is quoted', () => {
+      expect(row({ ...exchange, note: 'курс 40;5' })).toBe(
+        '2026-10-21;Обмен;1000;UAH;0,25;;Основной;"→ 24,5 USD курс 40;5"',
+      )
+    })
   })
 
   it('quotes values containing «;», quotes or newlines CSV-style', () => {

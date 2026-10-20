@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Account, Category } from '@shared/types.ts'
+import type { Account, Category, Settings as SettingsRow } from '@shared/types.ts'
 import { RecordScreen } from './Record.tsx'
 import { Settings } from './Settings.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
@@ -324,6 +324,20 @@ describe('Settings: categories', () => {
 })
 
 describe('Settings: accounts', () => {
+  it('account management is shown in multi mode only', async () => {
+    await seed('single')
+    const view = renderSettings()
+    await screen.findByRole('region', { name: 'Сверка' })
+    expect(screen.queryByRole('region', { name: 'Управление счетами' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Изменить счёт Основной' })).toBeNull()
+
+    view.unmount()
+    await env.repo.put<SettingsRow>('settings', { id: (await settingsRow()).id, accounts_mode: 'multi' })
+    renderSettings()
+    expect(await screen.findByRole('region', { name: 'Управление счетами' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Изменить счёт Основной' })).toBeTruthy()
+  })
+
   it('renames an account and stores its aliases', async () => {
     await seed('multi')
     renderSettings()
@@ -350,7 +364,7 @@ describe('Settings: accounts', () => {
     await waitFor(async () => expect((await env.db.accounts.get(cash.id))!.archived).toBe(true))
     expect((await env.db.accounts.get(main.id))!.archived).toBe(false)
 
-    click('Вернуть счёт Наличные')
+    fireEvent.click(await screen.findByRole('button', { name: 'Вернуть счёт Наличные' }))
     await waitFor(async () => expect((await env.db.accounts.get(cash.id))!.archived).toBe(false))
   })
 
