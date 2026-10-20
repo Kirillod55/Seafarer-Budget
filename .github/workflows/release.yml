@@ -1,0 +1,82 @@
+name: Release Windows app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Resolve version and release tag
+        id: meta
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) {
+            throw "Pushed tag $env:GITHUB_REF_NAME does not match package.json version ($tag)"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Build installer and create release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        with:
+          tagName: ${{ steps.meta.outputs.tag }}
+          releaseName: 'Seafarer Budget ${{ steps.meta.outputs.tag }}'
+          releaseDraft: false
+          prerelease: false
+          releaseAssetNamePattern: 'Seafarer-Budget-[version][setup][ext]'
+
+      - name: Attach portable zip (and installer name safety net)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          $zip = "Seafarer-Budget-$env:VERSION-portable.zip"
+          Compress-Archive -Path 'src-tauri/target/release/seafarer-budget.exe' -DestinationPath $zip -Force
+          gh release upload $env:TAG $zip --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'portable zip upload failed' }
+
+          # Make sure the installer carries the documented name even if the asset name pattern was ignored.
+          $setup = "Seafarer-Budget-$env:VERSION-setup.exe"
+          $assets = gh release view $env:TAG --json assets --jq '.assets[].name'
+          if ($assets -notcontains $setup) {
+            $built = Get-ChildItem 'src-tauri/target/release/bundle/nsis' -Filter '*-setup.exe' | Select-Object -First 1
+            if (-not $built) { throw 'NSIS installer not found' }
+            Copy-Item $built.FullName $setup
+            gh release upload $env:TAG $setup --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'installer upload failed' }
+          }
+          gh release view $env:TAG --json assets --jq '.assets[].name'
