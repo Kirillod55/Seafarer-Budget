@@ -60,6 +60,32 @@ describe('scheduler', () => {
     expect(sync.syncOnce).toHaveBeenCalledTimes(1)
   })
 
+  it('kicks on visibilitychange (visible) and focus, and not after stop()', async () => {
+    const { sync, s } = setup()
+    await vi.advanceTimersByTimeAsync(2000)
+    sync.syncOnce.mockClear()
+
+    document.dispatchEvent(new Event('visibilitychange')) // jsdom: visibilityState is 'visible'
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(sync.syncOnce).toHaveBeenCalledTimes(1)
+
+    window.dispatchEvent(new Event('focus'))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(sync.syncOnce).toHaveBeenCalledTimes(2)
+
+    const spy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(sync.syncOnce).toHaveBeenCalledTimes(2) // hidden -> no kick
+    spy.mockRestore()
+
+    s.stop()
+    document.dispatchEvent(new Event('visibilitychange'))
+    window.dispatchEvent(new Event('focus'))
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(sync.syncOnce).toHaveBeenCalledTimes(2)
+  })
+
   it('reports status and errors', async () => {
     const sync = { syncOnce: vi.fn(async () => ({ pushed: 0, pulled: 0, error: 'boom' })) }
     const s = startScheduler(sync, { debounceMs: 10, pollMs: 1000, subscribe: () => () => {} })

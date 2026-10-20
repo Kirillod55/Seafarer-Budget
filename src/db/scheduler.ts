@@ -67,7 +67,14 @@ export function startScheduler(
   const poll = setInterval(() => void run(), opts.pollMs)
   const unsubscribe = opts.subscribe(kick)
   const onOnline = () => kick()
-  if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') kick()
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', onOnline)
+    window.addEventListener('focus', onOnline)
+  }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility)
 
   kick() // initial sync shortly after start
 
@@ -78,7 +85,11 @@ export function startScheduler(
       if (debounce) clearTimeout(debounce)
       clearInterval(poll)
       unsubscribe()
-      if (typeof window !== 'undefined') window.removeEventListener('online', onOnline)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', onOnline)
+        window.removeEventListener('focus', onOnline)
+      }
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility)
     },
     status$: {
       get: () => status,

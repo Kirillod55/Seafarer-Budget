@@ -232,6 +232,63 @@ describe('fx rates', () => {
     expect((remote.tables.get('transactions')!.get(tx.id) as { amount_usd: number }).amount_usd).toBe(1.94)
   })
 
+  it('recomputes from the current row when it was edited during the rate fetch', async () => {
+    const a = device()
+    const tx = await a.repo.addTransaction({
+      kind: 'expense',
+      amount: 80,
+      currency: 'UAH',
+      account_id: 'a',
+      to_account_id: null,
+      to_amount: null,
+      to_currency: null,
+      category_id: null,
+      date: '2026-10-21',
+      note: '',
+      source: 'app',
+    })
+    expect(tx.rate_pending).toBe(true)
+    const rates = [
+      { date: '2026-10-21', currency: 'UAH', uah_per_unit: 1 },
+      { date: '2026-10-21', currency: 'EUR', uah_per_unit: 50 },
+      { date: '2026-10-21', currency: 'USD', uah_per_unit: 40 },
+    ]
+    remote.fxRates = async (date) => {
+      // the user changes the transaction while the request is in flight
+      await a.db.transactions.update(tx.id, { amount: 20, currency: 'EUR', dirty: 1 })
+      return date === '2026-10-21' ? rates : []
+    }
+    await a.sync.syncOnce()
+    const after = (await a.db.transactions.get(tx.id))!
+    expect(after).toMatchObject({ amount: 20, currency: 'EUR', rate_usd: 1.25, amount_usd: 25, rate_pending: false, dirty: 1 })
+  })
+
+  it('leaves a transaction deleted during the rate fetch untouched', async () => {
+    const a = device()
+    const tx = await a.repo.addTransaction({
+      kind: 'expense',
+      amount: 80,
+      currency: 'UAH',
+      account_id: 'a',
+      to_account_id: null,
+      to_amount: null,
+      to_currency: null,
+      category_id: null,
+      date: '2026-10-21',
+      note: '',
+      source: 'app',
+    })
+    remote.fxRates = async () => {
+      await a.repo.remove('transactions', tx.id)
+      return [
+        { date: '2026-10-21', currency: 'UAH', uah_per_unit: 1 },
+        { date: '2026-10-21', currency: 'USD', uah_per_unit: 40 },
+      ]
+    }
+    await a.sync.syncOnce()
+    expect(await a.db.transactions.get(tx.id)).toMatchObject({ deleted: true, rate_pending: true, amount_usd: 0 })
+  })
+
   it('fetches and stores today rates when settings currencies lack an exact rate (R15)', async () => {
     const a = device()
     await a.repo.initDefaults('single', [])

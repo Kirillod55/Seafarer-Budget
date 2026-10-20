@@ -101,17 +101,16 @@ export function createSync(
       const fetched = await remote.fxRates(date)
       if (fetched.length) await db.fx_rates.bulkPut(fetched)
     }
-    const rates = await db.fx_rates.toArray()
-    for (const tx of pending) {
-      const found = usdRate(rates, tx.currency, tx.date)
-      if (!found) continue
-      const amount_usd = round2(tx.amount * found.rate)
-      const rate_pending = !found.exact
-      if (found.rate === tx.rate_usd && amount_usd === tx.amount_usd && rate_pending === tx.rate_pending) continue
-      // Re-read inside a transaction so a concurrent edit is not overwritten with stale data.
-      await db.transaction('rw', db.transactions, async () => {
-        const current = await db.transactions.get(tx.id)
-        if (!current) return
+    for (const { id } of pending) {
+      // The fetches above took time: re-read the row and recompute from its CURRENT values.
+      await db.transaction('rw', db.transactions, db.fx_rates, async () => {
+        const current = await db.transactions.get(id)
+        if (!current || current.deleted || !current.rate_pending) return
+        const found = usdRate(await db.fx_rates.toArray(), current.currency, current.date)
+        if (!found) return
+        const amount_usd = round2(current.amount * found.rate)
+        const rate_pending = !found.exact
+        if (found.rate === current.rate_usd && amount_usd === current.amount_usd && rate_pending === current.rate_pending) return
         await db.transactions.put({ ...current, rate_usd: found.rate, amount_usd, rate_pending, dirty: 1 })
       })
     }
