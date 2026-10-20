@@ -81,6 +81,49 @@ describe('parseMessage: transactions', () => {
     expect(tx('ремонт 12 345').amount).toBe(12345)
   })
 
+  it('M3: repeated 3-digit groups merge', () => {
+    expect(tx('квартира 1 200 000 грн')).toMatchObject({ amount: 1200000, currency: 'UAH', note: 'квартира' })
+    expect(tx('квартира 1 200 000')).toMatchObject({ amount: 1200000, note: 'квартира' })
+    expect(tx('машина 12 345 678,50 usd')).toMatchObject({ amount: 12345678.5, currency: 'USD', note: 'машина' })
+    expect(tx('ремонт 1 200 000грн')).toMatchObject({ amount: 1200000, currency: 'UAH' })
+    // a decimal part ends the number: the next group is not merged
+    expect(tx('ремонт 1 200,50 300')).toMatchObject({ amount: 1200.5, note: 'ремонт 300' })
+  })
+
+  it('I5: Авто no longer catches «стоматолог» / «столовая»; «шиномонтаж» and «шины» are Авто', () => {
+    expect(tx('стоматолог 500').categoryId).not.toBe('Авто')
+    expect(tx('столовая 120').categoryId).not.toBe('Авто')
+    expect(tx('шиномонтаж 300').categoryId).toBe('Авто')
+    expect(tx('шины 3000').categoryId).toBe('Авто')
+  })
+
+  describe('I4: trailing punctuation', () => {
+    it('такси 15 eur. -> 15 EUR', () => {
+      expect(tx('такси 15 eur.')).toMatchObject({ amount: 15, currency: 'EUR', note: 'такси' })
+    })
+    it('кофе 80. -> 80 UAH', () => {
+      expect(tx('кофе 80.')).toMatchObject({ amount: 80, currency: 'UAH', note: 'кофе' })
+    })
+    it('кофе 80!', () => {
+      expect(tx('кофе 80!')).toMatchObject({ amount: 80, currency: 'UAH', note: 'кофе' })
+    })
+    it('80 грн, кофе', () => {
+      expect(tx('80 грн, кофе')).toMatchObject({ amount: 80, currency: 'UAH', note: 'кофе', categoryId: 'Кафе и рестораны' })
+    })
+    it('кофе 80 грн,', () => {
+      expect(tx('кофе 80 грн,')).toMatchObject({ amount: 80, currency: 'UAH', note: 'кофе' })
+    })
+    it('glued currency with punctuation: кофе 80грн.', () => {
+      expect(tx('кофе 80грн.')).toMatchObject({ amount: 80, currency: 'UAH' })
+    })
+    it('decimal separators inside numbers still work', () => {
+      expect(tx('обед 12,50 eur')).toMatchObject({ amount: 12.5, currency: 'EUR' })
+      expect(tx('обед 80.5')).toMatchObject({ amount: 80.5 })
+      expect(tx('обед 80.5.')).toMatchObject({ amount: 80.5 })
+      expect(tx('ремонт 1 200.')).toMatchObject({ amount: 1200 })
+    })
+  })
+
   it('a group of 1-3 digits followed by a non-3-digit group is not thousands', () => {
     // amount is the first number; the second one stays in the note
     const p = tx('кофе 80 20')

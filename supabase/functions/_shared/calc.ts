@@ -19,13 +19,22 @@ function sum(values: Iterable<number>): number {
   return total
 }
 
-/** Balance per currency. With `accountId`, only that account's movements are counted. */
-export function balances(txs: Transaction[], accountId?: string): Record<string, number> {
+/**
+ * Balance per currency. With `accountId`, only that account's movements are counted.
+ * `skipAccounts` (e.g. archived accounts) are left out: each leg of a transfer/exchange counts
+ * only on the side whose account is kept.
+ */
+export function balances(
+  txs: Transaction[],
+  accountId?: string,
+  opts: { skipAccounts?: Iterable<string> } = {},
+): Record<string, number> {
   const out: Record<string, number> = {}
   const add = (currency: string, delta: number) => {
     out[currency] = (out[currency] ?? 0) + delta
   }
-  const on = (id: string | null) => accountId === undefined || id === accountId
+  const skip = new Set(opts.skipAccounts ?? [])
+  const on = (id: string | null) => (accountId === undefined || id === accountId) && !(id !== null && skip.has(id))
 
   for (const t of txs) {
     if (t.deleted) continue
@@ -52,6 +61,11 @@ export function balances(txs: Transaction[], accountId?: string): Record<string,
   }
   for (const cur of Object.keys(out)) out[cur] = round2(out[cur])
   return out
+}
+
+/** Balances over every non-archived account (spec §4: free money counts only live accounts). */
+export function activeBalances(txs: Transaction[], accounts: { id: string; archived: boolean }[]): Record<string, number> {
+  return balances(txs, undefined, { skipAccounts: accounts.filter((a) => a.archived).map((a) => a.id) })
 }
 
 /** Total of per-currency balances in USD at the latest known rate; currencies without a rate are skipped. */

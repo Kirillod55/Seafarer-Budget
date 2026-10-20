@@ -174,6 +174,40 @@ describe('handleUpdate', () => {
     expect(s.categoryRows.find((c) => c.name === 'Здоровье')!.keywords.filter((k) => k === 'непонятное')).toHaveLength(1)
   })
 
+  describe('I5: learning skips stopwords and short words', () => {
+    it('«за квартиру 5000» -> Жильё learns «квартиру», not «за»; «заправка» still goes to Авто', async () => {
+      const s = new MemStore()
+      await run(s, msg('за квартиру 5000'))
+      const t = s.txRows[0]
+      const housing = cat('Жильё и коммуналка')
+      const r = await run(s, cb(`c:${t.id}:${housing.sort}`))
+      const kws = s.categoryRows.find((c) => c.name === 'Жильё и коммуналка')!.keywords
+      expect(kws).not.toContain('за')
+      expect(kws).toContain('квартиру')
+      expect(textOf(r)).toContain('Запомнил: «квартиру»')
+      await run(s, msg('заправка 900'))
+      expect(s.txRows[1].category_id).not.toBe(housing.id)
+    })
+
+    it('learns nothing when every note word is a stopword or shorter than 3 letters', async () => {
+      const s = new MemStore()
+      await run(s, msg('на я 50'))
+      const t = s.txRows[0]
+      const before = [...cat('Здоровье').keywords]
+      const r = await run(s, cb(`c:${t.id}:${cat('Здоровье').sort}`))
+      expect(s.categoryRows.find((c) => c.name === 'Здоровье')!.keywords).toEqual(before)
+      expect(textOf(r)).not.toContain('Запомнил')
+    })
+
+    it('does not count digits or punctuation as letters', async () => {
+      const s = new MemStore()
+      await run(s, msg('для 12ab, ремонт 50'))
+      const t = s.txRows[0]
+      await run(s, cb(`c:${t.id}:${cat('Здоровье').sort}`))
+      expect(s.categoryRows.find((c) => c.name === 'Здоровье')!.keywords).toContain('ремонт')
+    })
+  })
+
   it('callback u: soft-deletes the transaction and edits the message', async () => {
     const s = new MemStore()
     await run(s, msg('кофе 80'))
@@ -260,6 +294,20 @@ describe('handleUpdate', () => {
     const r = await run(s, msg('остаток'))
     expect(textOf(r)).toContain('в месяц')
     expect(textOf(r)).toContain('$2 000') // 3000 balance - 1000 reserved
+  })
+
+  it('M1/M2: /left ignores archived accounts and shows whole dollars', async () => {
+    const s = new MemStore()
+    s.settingsRow = { ...SETTINGS, next_contract_date: '2026-12-21' }
+    s.accountRows = [ACCOUNT, { ...ACCOUNT, id: 'old', name: 'Старый', is_default: false, archived: true, sort: 1 }]
+    s.txRows = [
+      seedTx({ kind: 'income', amount: 1000.4, amount_usd: 1000.4, currency: 'USD' }),
+      seedTx({ kind: 'income', amount: 500, amount_usd: 500, currency: 'USD', account_id: 'old' }),
+    ]
+    const t = textOf(await run(s, msg('/left')))
+    expect(t).toContain('Свободно: $1 000 ')
+    expect(t).not.toContain('$1 500')
+    expect(t).not.toContain('$1 000.40')
   })
 
   it('/left asks to set the contract date when it is missing', async () => {

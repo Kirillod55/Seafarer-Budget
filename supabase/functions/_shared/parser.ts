@@ -122,7 +122,7 @@ export function parseMessage(text: string, ctx: ParseContext): Parsed {
     for (let i = amountAt; i < rest.length; i++) order.push(i)
     for (let i = 0; i < amountAt; i++) order.push(i)
     for (const i of order) {
-      const w = rest[i]
+      const w = stripPunct(rest[i]) // "eur." / "грн," are still the currency
       if (GLUED_ONLY.has(w)) continue
       const code = aliasToCode.get(w)
       if (code) {
@@ -179,33 +179,52 @@ export function parseMessage(text: string, ctx: ParseContext): Parsed {
   }
 }
 
+/**
+ * "1 200", "1 200 000 грн", "12 345,50": a 1-3 digit head followed by groups of exactly 3 digits.
+ * Only the last group may carry decimals, a glued currency or trailing punctuation.
+ */
+function thousands(tokens: string[], i: number, aliasToCode: Map<string, string>): Amount | null {
+  const head = THOUSAND_HEAD_RE.exec(tokens[i])
+  if (!head) return null
+  const prefixCode = head[2] ? aliasToCode.get(head[2]) : undefined
+  if (head[2] && !prefixCode) return null
+
+  let number = head[3]
+  let suffixCode: string | undefined
+  let j = i + 1
+  while (j < tokens.length) {
+    const raw = tokens[j]
+    const clean = stripPunct(raw)
+    const tail = THOUSAND_TAIL_RE.exec(clean)
+    if (!tail) break
+    const code = tail[2] ? aliasToCode.get(tail[2]) : undefined
+    if (tail[2] && !code) break
+    number += tail[1]
+    j++
+    // decimals, a currency or punctuation close the number
+    if (code || /[.,]/.test(tail[1]) || clean !== raw) {
+      suffixCode = code
+      break
+    }
+  }
+  if (j === i + 1) return null
+  return {
+    index: i,
+    length: j - i,
+    value: Number(number.replace(',', '.')),
+    negative: head[1] === '-',
+    plus: head[1] === '+',
+    currency: prefixCode ?? suffixCode ?? null,
+  }
+}
+
 function findAmount(tokens: string[], aliasToCode: Map<string, string>): Amount | null {
   for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i]
+    const merged = thousands(tokens, i, aliasToCode)
+    if (merged) return merged
 
-    // "1 200", "1 200 грн", "12 345,50"
-    const head = THOUSAND_HEAD_RE.exec(t)
-    const nextTok = tokens[i + 1]
-    const tail = head && nextTok ? THOUSAND_TAIL_RE.exec(nextTok) : null
-    if (head && tail) {
-      const suffix = tail[2]
-      const suffixCode = suffix ? aliasToCode.get(suffix) : undefined
-      if (!suffix || suffixCode) {
-        const prefixCode = head[2] ? aliasToCode.get(head[2]) : undefined
-        if (!head[2] || prefixCode) {
-          return {
-            index: i,
-            length: 2,
-            value: Number(head[3] + tail[1].replace(',', '.')),
-            negative: head[1] === '-',
-            plus: head[1] === '+',
-            currency: prefixCode ?? suffixCode ?? null,
-          }
-        }
-      }
-    }
-
-    const m = AMOUNT_RE.exec(t)
+    // trailing punctuation is not part of the number or the currency: "80.", "15eur!", "12,50,"
+    const m = AMOUNT_RE.exec(stripPunct(tokens[i]))
     if (!m) continue
     const prefixCode = m[2] ? aliasToCode.get(m[2]) : undefined
     const suffixCode = m[4] ? aliasToCode.get(m[4]) : undefined

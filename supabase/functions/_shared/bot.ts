@@ -1,6 +1,6 @@
 // Telegram bot logic: pure, storage and transport are injected (BotStore, BotReply).
 // Runs in Deno (Edge Function) and in vitest. No npm imports.
-import { allowance, balanceUsd, balances, contractStats, limitCrossing, limitStatus, monthReport, reservedUsd } from './calc.ts'
+import { activeBalances, allowance, balanceUsd, contractStats, limitCrossing, limitStatus, monthReport, reservedUsd } from './calc.ts'
 import { localDate, monthOf } from './dates.ts'
 import { round2, usdRate } from './fx.ts'
 import { money } from './format.ts'
@@ -80,9 +80,20 @@ function undoButton(txId: string) {
   return { text: 'Отменить', callback_data: `u:${txId}` }
 }
 
-function firstToken(note: string): string {
-  const w = note.trim().split(/\s+/)[0] ?? ''
-  return w.replace(/^[.,!?;:()"'«»]+|[.,!?;:()"'«»]+$/gu, '').toLowerCase()
+// Prepositions and conjunctions: «за квартиру» must not teach «за» (it would then catch «заправка»).
+const STOPWORDS = new Set([
+  'за', 'на', 'в', 'во', 'с', 'со', 'для', 'по', 'к', 'от', 'из', 'и', 'а', 'у', 'о', 'об', 'до', 'при', 'про',
+])
+const MIN_LETTERS = 3
+
+/** The note word worth learning as a keyword: the first one with >= 3 letters that is not a stopword. */
+function learnableWord(note: string): string | null {
+  for (const raw of note.trim().split(/\s+/)) {
+    const w = raw.replace(/^[.,!?;:()"'«»]+|[.,!?;:()"'«»]+$/gu, '').toLowerCase()
+    if (STOPWORDS.has(w)) continue
+    if ((w.match(/\p{L}/gu) ?? []).length >= MIN_LETTERS) return w
+  }
+  return null
 }
 
 function activeExpenseCategories(categories: Category[]): Category[] {
@@ -321,9 +332,14 @@ async function runCommand(
     }
 
     case 'left': {
-      const [txs, moves, rates] = await Promise.all([store.transactions(), store.goalMoves(), store.rates()])
-      const free = round2(balanceUsd(balances(txs), rates, today) - reservedUsd(moves))
-      const lines = [`Свободно: ${usd(free)} (баланс за вычетом целей)`]
+      const [txs, moves, rates, accounts] = await Promise.all([
+        store.transactions(),
+        store.goalMoves(),
+        store.rates(),
+        store.accounts(),
+      ])
+      const free = round2(balanceUsd(activeBalances(txs, accounts), rates, today) - reservedUsd(moves))
+      const lines = [`Свободно: ${money(free, 'USD', { whole: true })} (баланс за вычетом целей)`]
       if (settings.status === 'contract') {
         const st = contractStats(txs, settings, today)
         lines.push(`Заработано за контракт: ${usd(st.earnedUsd)}`)
@@ -397,7 +413,7 @@ async function handleCallback(
   const updated: Transaction = { ...tx, category_id: target.id }
 
   let learned = ''
-  const word = firstToken(tx.note)
+  const word = learnableWord(tx.note)
   if (word && !target.keywords.some((k) => k.toLowerCase().trim() === word)) {
     await store.updateCategory(target.id, { keywords: [...target.keywords, word] })
     learned = `\nЗапомнил: «${word}» → ${target.name}`

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { allowance, balanceUsd, balances, contractStats, reservedUsd } from '@shared/calc.ts'
+import { activeBalances, allowance, balanceUsd, contractStats, reservedUsd } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { round2, usdRate } from '@shared/fx.ts'
@@ -50,24 +50,25 @@ function ContractDate({ settings }: { settings: Settings }) {
 export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}) {
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
-    const [settings, txs, rates, moves, categories] = await Promise.all([
+    const [settings, txs, rates, moves, categories, accounts] = await Promise.all([
       db.settings.filter((s) => !s.deleted).first(),
       db.transactions.filter((t) => !t.deleted).toArray(),
       db.fx_rates.toArray(),
       db.goal_moves.filter((m) => !m.deleted).toArray(),
       db.categories.toArray(),
+      db.accounts.toArray(),
     ])
-    return { settings, txs, rates, moves, categories }
+    return { settings, txs, rates, moves, categories, accounts }
   }, [db])
 
   if (!data) return <p className="muted pad">Загрузка…</p>
-  const { settings, txs, rates, moves, categories } = data
+  const { settings, txs, rates, moves, categories, accounts } = data
 
   const quick = <QuickInput />
   if (!settings) return <div className="stack">{quick}</div>
 
   const today = localDate(now(), settings.timezone)
-  const bal = balances(txs)
+  const bal = activeBalances(txs, accounts) // archived accounts are not free money
   const reserved = reservedUsd(moves)
   const freeUsd = round2(balanceUsd(bal, rates, today) - reserved)
   const noRate = Object.keys(bal).filter((cur) => bal[cur] !== 0 && !usdRate(rates, cur, today))

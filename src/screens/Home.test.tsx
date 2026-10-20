@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from './Home.tsx'
 import { makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
-import type { Settings } from '@shared/types.ts'
+import type { Account, Settings } from '@shared/types.ts'
 
 // "Example" settings: contract ends payout 2026-11-20 + 30 days lag = 2026-12-20, i.e. 60 days from 2026-10-21.
 // Free money $3 040 -> $50.67 per day (~$51) -> $1 540.27 per 30.4 days (~$1 540).
@@ -20,6 +20,27 @@ beforeEach(() => {
 })
 
 describe('Home', () => {
+  it('M1: free money leaves out archived accounts', async () => {
+    await seed({ next_contract_date: '2026-11-20' })
+    const old = await env.repo.put<Account>('accounts', { name: 'Старый', aliases: [], is_default: false, archived: true, sort: 5 })
+    await env.repo.addTransaction({
+      kind: 'adjustment',
+      amount: 1000,
+      currency: 'USD',
+      account_id: old.id,
+      to_account_id: null,
+      to_amount: null,
+      to_currency: null,
+      category_id: null,
+      date: '2026-10-21',
+      note: '',
+      source: 'app',
+    })
+    const { container } = renderWithApp(<Home />, env)
+    expect(await screen.findByText('$1 540 в месяц')).toBeTruthy()
+    expect(container.querySelector('.big')!.textContent).toBe('$3 040')
+  })
+
   it('shows the allowance per month and per day', async () => {
     await seed({ next_contract_date: '2026-11-20' })
     renderWithApp(<Home />, env)

@@ -100,6 +100,19 @@ describe('balances', () => {
     expect(balances(txs, 'other')).toEqual({})
   })
 
+  it('M1: skipAccounts leaves out archived accounts; transfer semantics unchanged', () => {
+    const all = [
+      tx({ kind: 'adjustment', amount: 1000, currency: 'USD', account_id: 'a1' }),
+      tx({ kind: 'income', amount: 500, currency: 'USD', account_id: 'old' }),
+      tx({ kind: 'transfer', amount: 200, currency: 'USD', account_id: 'old', to_account_id: 'a1' }),
+      tx({ kind: 'exchange', amount: 100, currency: 'USD', account_id: 'old', to_amount: 4000, to_currency: 'UAH' }),
+    ]
+    // only a1 counts: 1000 + 200 received from the archived account
+    expect(balances(all, undefined, { skipAccounts: ['old'] })).toEqual({ USD: 1200 })
+    expect(balances(all)).toEqual({ USD: 1400, UAH: 4000 })
+    expect(balances(all, 'a1', { skipAccounts: ['old'] })).toEqual({ USD: 1200 })
+  })
+
   it('rounds floating point drift', () => {
     const b = balances([
       tx({ kind: 'income', amount: 0.1 }),
