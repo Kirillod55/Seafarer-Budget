@@ -9,11 +9,19 @@
 create sequence public.rev_seq;
 
 -- Runs as the caller (SECURITY INVOKER), so callers need USAGE on rev_seq (granted below).
+--
+-- Commit-ordered rev: a sequence hands out values at statement time, but rows become visible at
+-- commit time. Without serialisation, writer A (rev 10) could commit after writer B (rev 11);
+-- a client that already pulled rev 11 would then skip rev 10 forever. The transaction-level
+-- advisory lock below is taken before nextval and held until commit/rollback, so concurrent
+-- writers queue up and revs become visible in increasing order. Write volume is tiny (one user),
+-- so the serialisation cost is irrelevant. The constant is an arbitrary fixed key for this app.
 create function public.set_rev() returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
+  perform pg_advisory_xact_lock(5201021000001);
   new.rev := nextval('public.rev_seq');
   if tg_op = 'UPDATE' then
     -- ownership and identity are immutable: an upsert can never move a row to another user
@@ -161,15 +169,29 @@ begin
     );
 
     -- Be explicit regardless of the project's "auto-expose new tables" setting.
-    -- No anon access; no hard delete (the app soft-deletes via `deleted`, so deletes sync).
+    -- No anon access. DELETE is allowed for the owner only (RLS owner_all); the app itself
+    -- soft-deletes via `deleted` so deletions sync, hard delete is for cleanup (e.g. verify-db).
     execute format('revoke all on public.%I from anon, authenticated', t);
-    execute format('grant select, insert, update on public.%I to authenticated', t);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
   end loop;
 end;
 $$;
 
 -- rev_seq is used by the column default and by the trigger, both evaluated as the caller.
 grant usage on sequence public.rev_seq to authenticated, service_role;
+
+-- Edge Functions (bot, fx-rates) use the service role: do not rely on auto-expose defaults.
+grant all on
+  public.settings,
+  public.accounts,
+  public.categories,
+  public.transactions,
+  public.goals,
+  public.goal_moves,
+  public.limits,
+  public.fx_rates,
+  public.bot_updates
+to service_role;
 
 -- fx_rates: read-only for signed-in users; writes only through the service role (bypasses RLS).
 alter table public.fx_rates enable row level security;

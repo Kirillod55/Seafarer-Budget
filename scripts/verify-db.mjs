@@ -85,9 +85,30 @@ try {
 
   // 4. user_id is immutable: trying to reassign it is ignored by the trigger
   const other = randomUUID()
-  await owner.from('categories').update({ user_id: other }).eq('id', id)
-  const afterMove = ensure(await owner.from('categories').select('user_id').eq('id', id).single(), 'select after user_id change')
-  check(afterMove.user_id === userId, 'user_id cannot be reassigned')
+  ensure(await owner.from('categories').update({ user_id: other }).eq('id', id), 'update with foreign user_id')
+  const afterMove = ensure(
+    await owner.from('categories').select('user_id, rev').eq('id', id).single(),
+    'select after user_id change',
+  )
+  check(Number(afterMove.rev) > Number(up[0].rev), `user_id update went through and bumped rev (${up[0].rev} -> ${afterMove.rev})`)
+  check(afterMove.user_id === userId, 'user_id cannot be reassigned (trigger keeps the old owner)')
+
+  // 4b. RLS probe: inserting a row owned by somebody else must be rejected, and leave nothing behind
+  const foreignId = randomUUID()
+  const foreign = await owner.from('categories').insert({
+    id: foreignId,
+    user_id: randomUUID(),
+    deleted: false,
+    name: 'verify-db foreign',
+    kind: 'expense',
+    icon: '',
+    keywords: [],
+    archived: false,
+    sort: 0,
+  })
+  check(foreign.error?.code === PERMISSION_DENIED, `insert with a foreign user_id is rejected by RLS (code ${foreign.error?.code})`)
+  const leftover = ensure(await owner.from('categories').select('id').eq('id', foreignId), 'select foreign probe row')
+  check(leftover.length === 0, 'rejected foreign insert left nothing behind')
 
   // 5. signed-out client sees nothing (0 rows, or no privilege at all)
   const anonRead = await anon.from('categories').select('id')
@@ -106,12 +127,11 @@ try {
   const botWrite = await owner.from('bot_updates').insert({ update_id: 1 })
   check(!!botWrite.error, 'authenticated cannot insert into bot_updates')
 } finally {
-  // Clean up. Clients have no DELETE privilege by design (deletes are soft, so they sync),
-  // so the test row is tombstoned instead of removed.
+  // Clean up: hard-delete the test row (the owner has DELETE under RLS), leaving no tombstone.
   if (created) {
-    const del = await owner.from('categories').update({ deleted: true }).eq('id', id)
-    if (del.error) console.error('cleanup failed: ' + del.error.message)
-    else console.log('ok   test row soft-deleted (deleted = true)')
+    const del = await owner.from('categories').delete().eq('id', id)
+    if (del.error) console.error('cleanup failed, test row may remain: ' + del.error.message)
+    else console.log('ok   test row deleted')
   }
   await owner.auth.signOut()
 }
