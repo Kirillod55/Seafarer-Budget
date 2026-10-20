@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { SyncBadge } from './components/SyncBadge.tsx'
 import { Home } from './screens/Home.tsx'
+import { RecordScreen } from './screens/Record.tsx'
+import { Report } from './screens/Report.tsx'
 
 export type Screen = 'home' | 'record' | 'report' | 'goals' | 'limits' | 'accounts' | 'settings'
 
@@ -24,7 +26,9 @@ function Soon({ title }: { title: string }) {
 }
 
 export function Shell({ onSignOut }: { onSignOut(): void }) {
-  const [screen, setScreen] = useState<Screen>('home')
+  const [view, setView] = useState<{ screen: Screen; recordId?: string }>({ screen: 'home' })
+  const { screen } = view
+  const go = (next: Screen, recordId?: string) => setView({ screen: next, recordId })
 
   return (
     <div className="shell">
@@ -35,7 +39,15 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
         </button>
       </header>
       <main className="page">
-        {screen === 'home' ? <Home /> : <Soon title={NAV.find((n) => n.id === screen)!.label} />}
+        {screen === 'home' ? (
+          <Home onOpenRecord={(id) => go('record', id)} />
+        ) : screen === 'record' ? (
+          <RecordScreen id={view.recordId} onDone={() => go('home')} />
+        ) : screen === 'report' ? (
+          <Report />
+        ) : (
+          <Soon title={NAV.find((n) => n.id === screen)!.label} />
+        )}
       </main>
       <nav className="tabbar" aria-label="Разделы">
         {NAV.map((n) => (
@@ -44,7 +56,7 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
             type="button"
             className={`tab${screen === n.id ? ' active' : ''}`}
             aria-current={screen === n.id ? 'page' : undefined}
-            onClick={() => setScreen(n.id)}
+            onClick={() => go(n.id)}
           >
             <span className="tab-icon" aria-hidden="true">
               {n.icon}

@@ -97,6 +97,28 @@ describe('addTransaction', () => {
   })
 })
 
+describe('updateTransaction', () => {
+  it('recomputes the rate and amount_usd from the edited amount/currency/date and marks dirty', async () => {
+    await db.fx_rates.bulkPut([rate(TODAY, 'UAH', 1), rate(TODAY, 'USD', 40), rate('2026-10-10', 'UAH', 1), rate('2026-10-10', 'USD', 50)])
+    const tx = await repo.addTransaction(baseTx)
+    expect(tx.amount_usd).toBe(2)
+    await db.transactions.update(tx.id, { dirty: 0, rev: 3 })
+    onChange.mockClear()
+
+    const updated = await repo.updateTransaction(tx.id, { amount: 120 })
+    expect(updated).toMatchObject({ id: tx.id, amount: 120, amount_usd: 3, rate_pending: false })
+    expect(await db.transactions.get(tx.id)).toMatchObject({ amount: 120, amount_usd: 3, dirty: 1, rev: 3, note: 'кофе' })
+    expect(onChange).toHaveBeenCalledTimes(1)
+
+    const moved = await repo.updateTransaction(tx.id, { date: '2026-10-10', currency: 'USD', amount: 10 })
+    expect(moved).toMatchObject({ currency: 'USD', rate_usd: 1, amount_usd: 10, date: '2026-10-10' })
+  })
+
+  it('fails loudly for an unknown id', async () => {
+    await expect(repo.updateTransaction('nope', { amount: 1 })).rejects.toThrow()
+  })
+})
+
 describe('initDefaults', () => {
   it('single mode: one default account, 15 categories, one adjustment, settings', async () => {
     await repo.initDefaults('single', [{ currency: 'UAH', amount: 5000 }])

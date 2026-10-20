@@ -39,7 +39,16 @@ function title(t: Transaction, category: Category | undefined): string {
   }
 }
 
-export function TxList({ txs, categories }: { txs: Transaction[]; categories: Category[] }) {
+export function TxList({
+  txs,
+  categories,
+  onSelect,
+}: {
+  txs: Transaction[]
+  categories: Category[]
+  /** When given, rows are tappable and report the transaction id. */
+  onSelect?(id: string): void
+}) {
   const byId = new Map(categories.map((c) => [c.id, c]))
   const rows = sortRecent(txs.filter((t) => !t.deleted)).slice(0, SHOWN)
 
@@ -50,8 +59,8 @@ export function TxList({ txs, categories }: { txs: Transaction[]; categories: Ca
       {rows.map((t) => {
         const category = t.category_id ? byId.get(t.category_id) : undefined
         const amount = signedAmount(t)
-        return (
-          <li key={t.id} className="tx">
+        const content = (
+          <>
             <span className="tx-icon" aria-hidden="true">
               {category?.icon ?? '•'}
             </span>
@@ -63,6 +72,17 @@ export function TxList({ txs, categories }: { txs: Transaction[]; categories: Ca
               </span>
             </span>
             <span className={`tx-amount ${amount.cls}`}>{amount.text}</span>
+          </>
+        )
+        return (
+          <li key={t.id} className="tx">
+            {onSelect ? (
+              <button type="button" className="tx-btn" onClick={() => onSelect(t.id)}>
+                {content}
+              </button>
+            ) : (
+              content
+            )}
           </li>
         )
       })}

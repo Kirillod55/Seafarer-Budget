@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from './Home.tsx'
 import { makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
@@ -113,5 +113,31 @@ describe('Home', () => {
     expect(await screen.findByText('кофе')).toBeTruthy()
     expect(screen.getByText('-80 ₴')).toBeTruthy()
     expect(screen.getByText(/Кафе и рестораны/)).toBeTruthy()
+  })
+
+  it('«+ Запись» opens an empty record and tapping a row opens that transaction', async () => {
+    await seed({ next_contract_date: '2026-11-20' })
+    const account = (await env.db.accounts.toCollection().first())!
+    const tx = await env.repo.addTransaction({
+      kind: 'expense',
+      amount: 80,
+      currency: 'UAH',
+      account_id: account.id,
+      to_account_id: null,
+      to_amount: null,
+      to_currency: null,
+      category_id: null,
+      date: '2026-10-21',
+      note: 'кофе',
+      source: 'app',
+    })
+    const onOpenRecord = vi.fn()
+    renderWithApp(<Home onOpenRecord={onOpenRecord} />, env)
+
+    fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
+    expect(onOpenRecord).toHaveBeenLastCalledWith(undefined)
+
+    fireEvent.click(await screen.findByRole('button', { name: /кофе/ }))
+    expect(onOpenRecord).toHaveBeenLastCalledWith(tx.id)
   })
 })

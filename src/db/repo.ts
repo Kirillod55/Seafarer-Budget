@@ -2,7 +2,7 @@ import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '@shared/defaults.ts'
 import { localDate } from '@shared/dates.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import type { Account, Base, Settings, SyncTable, Transaction } from '@shared/types.ts'
-import type { LocalDb } from './local.ts'
+import type { LocalDb, Row } from './local.ts'
 
 export interface RepoDeps {
   now(): Date
@@ -19,6 +19,8 @@ export interface Repo {
   put<T extends Base>(table: SyncTable, row: Partial<T>): Promise<T>
   remove(table: SyncTable, id: string): Promise<void>
   addTransaction(input: NewTransaction): Promise<Transaction>
+  /** Edit a transaction; rate_usd / amount_usd / rate_pending are recomputed from the merged row. */
+  updateTransaction(id: string, patch: Partial<NewTransaction>): Promise<Transaction>
   initDefaults(
     mode: 'single' | 'multi',
     opening: { currency: string; amount: number; accountName?: string }[],
@@ -58,17 +60,26 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     deps.onChange()
   }
 
+  /** USD conversion of an amount on a date: zeros + pending when no rate is known at all. */
+  async function usdFields(
+    amount: number,
+    currency: string,
+    date: string,
+  ): Promise<Pick<Transaction, 'rate_usd' | 'amount_usd' | 'rate_pending'>> {
+    const found = usdRate(await db.fx_rates.toArray(), currency, date)
+    return {
+      rate_usd: found ? found.rate : 0,
+      amount_usd: found ? round2(amount * found.rate) : 0,
+      rate_pending: found ? !found.exact : true,
+    }
+  }
+
   async function buildTransaction(input: NewTransaction): Promise<Transaction> {
-    const rates = await db.fx_rates.toArray()
-    const found = usdRate(rates, input.currency, input.date)
-    const rate_usd = found ? found.rate : 0
     return {
       ...input,
       id: deps.uuid(),
       deleted: false,
-      rate_usd,
-      amount_usd: found ? round2(input.amount * found.rate) : 0,
-      rate_pending: found ? !found.exact : true,
+      ...(await usdFields(input.amount, input.currency, input.date)),
       created_at: deps.now().toISOString(),
     }
   }
@@ -80,6 +91,19 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     return tx
   }
 
+  async function updateTransaction(id: string, patch: Partial<NewTransaction>): Promise<Transaction> {
+    const existing = await db.transactions.get(id)
+    if (!existing) throw new Error(`Transaction  not found`)
+    const merged = { ...existing, ...patch }
+    const updated: Row<Transaction> = {
+      ...merged,
+      ...(await usdFields(merged.amount, merged.currency, merged.date)),
+      dirty: 1,
+    }
+    await db.transactions.put(updated)
+    deps.onChange()
+    return updated
+  }
   async function initDefaults(
     mode: 'single' | 'multi',
     opening: { currency: string; amount: number; accountName?: string }[],
@@ -136,6 +160,6 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     deps.onChange()
   }
 
-  return { put, remove, addTransaction, initDefaults }
+  return { put, remove, addTransaction, updateTransaction, initDefaults }
 }
 

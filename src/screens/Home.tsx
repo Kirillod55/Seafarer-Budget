@@ -47,7 +47,7 @@ function ContractDate({ settings }: { settings: Settings }) {
   )
 }
 
-export function Home() {
+export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}) {
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
     const [settings, txs, rates, moves, categories] = await Promise.all([
@@ -78,6 +78,10 @@ export function Home() {
   return (
     <div className="stack">
       {quick}
+
+      <button type="button" className="btn btn-block" onClick={() => onOpenRecord?.(undefined)}>
+        + Запись
+      </button>
 
       <section className="card">
         <p className="label">Свободные деньги</p>
@@ -133,7 +137,7 @@ export function Home() {
 
       <section>
         <h2>Последние записи</h2>
-        <TxList txs={txs} categories={categories} />
+        <TxList txs={txs} categories={categories} onSelect={onOpenRecord} />
       </section>
     </div>
   )
