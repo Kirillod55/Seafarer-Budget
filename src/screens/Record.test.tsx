@@ -149,4 +149,140 @@ describe('Record', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
     expect(addTransaction).not.toHaveBeenCalled()
   })
-})
+
+  it('a record whose category was deleted shows «Без категории» and saves category_id null', async () => {
+    await seed()
+    await env.repo.remove('categories', existing.category_id!)
+    renderWithApp(<RecordScreen id={existing.id} onDone={() => {}} />, env)
+
+    const select = (await screen.findByLabelText('Категория')) as HTMLSelectElement
+    expect(select.selectedOptions[0].textContent).toBe('Без категории')
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(async () => expect((await env.db.transactions.get(existing.id))!.dirty).toBe(1))
+    expect((await env.db.transactions.get(existing.id))!.category_id).toBeNull()
+  })
+
+  it('an empty date is rejected with «Укажите дату»', async () => {
+    await seed()
+    const addTransaction = vi.spyOn(env.repo, 'addTransaction')
+    renderWithApp(<RecordScreen onDone={() => {}} />, env)
+
+    fireEvent.change(await screen.findByLabelText('Сумма'), { target: { value: '5' } })
+    fireEvent.change(screen.getByLabelText('Дата'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    expect(await screen.findByText('Укажите дату')).toBeTruthy()
+    expect(addTransaction).not.toHaveBeenCalled()
+  })
+
+  it('adjustment: a negative amount -50 -> -70 saves signed with recomputed amount_usd; currency and account are locked', async () => {
+    await seed('multi')
+    const account = (await env.db.accounts.toCollection().first())!
+    const adj = await env.repo.addTransaction({
+      kind: 'adjustment',
+      amount: -50,
+      currency: 'USD',
+      account_id: account.id,
+      to_account_id: null,
+      to_amount: null,
+      to_currency: null,
+      category_id: null,
+      date: TEST_TODAY,
+      note: 'корректировка',
+      source: 'app',
+    })
+    expect(adj.amount_usd).toBe(-50)
+    await env.db.transactions.update(adj.id, { dirty: 0 })
+    const onDone = vi.fn()
+    renderWithApp(<RecordScreen id={adj.id} onDone={onDone} />, env)
+
+    const amount = (await screen.findByLabelText('Сумма')) as HTMLInputElement
+    expect(amount.readOnly).toBe(false)
+    expect((screen.getByLabelText('Валюта') as HTMLInputElement).readOnly).toBe(true)
+    expect((screen.getByLabelText('Счёт') as HTMLInputElement).readOnly).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Расход' })).toBeNull()
+
+    fireEvent.change(amount, { target: { value: '-70' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(await env.db.transactions.get(adj.id)).toMatchObject({
+      kind: 'adjustment',
+      amount: -70,
+      amount_usd: -70,
+      currency: 'USD',
+      account_id: account.id,
+      dirty: 1,
+    })
+  })
+
+  it('adjustment: a zero amount is rejected with «Введите сумму»', async () => {
+    await seed()
+    const account = (await env.db.accounts.toCollection().first())!
+    const adj = await env.repo.addTransaction({
+      kind: 'adjustment',
+      amount: -50,
+      currency: 'USD',
+      account_id: account.id,
+      to_account_id: null,
+      to_amount: null,
+      to_currency: null,
+      category_id: null,
+      date: TEST_TODAY,
+      note: '',
+      source: 'app',
+    })
+    renderWithApp(<RecordScreen id={adj.id} onDone={() => {}} />, env)
+    fireEvent.change(await screen.findByLabelText('Сумма'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Введите сумму')).toBeTruthy()
+    expect((await env.db.transactions.get(adj.id))!.amount).toBe(-50)
+  })
+
+  it('transfer: only date and note are editable; amount, currency, accounts and to_* stay unchanged', async () => {
+    await seed('multi')
+    const from = (await env.db.accounts.toCollection().first())!
+    const to = await env.repo.put<Account>('accounts', { name: 'Карта', aliases: [], is_default: false, archived: false, sort: 1 })
+    const transfer = await env.repo.addTransaction({
+      kind: 'exchange',
+      amount: 4000,
+      currency: 'UAH',
+      account_id: from.id,
+      to_account_id: to.id,
+      to_amount: 100,
+      to_currency: 'USD',
+      category_id: null,
+      date: TEST_TODAY,
+      note: 'обмен',
+      source: 'app',
+    })
+    await env.db.transactions.update(transfer.id, { dirty: 0 })
+    const onDone = vi.fn()
+    renderWithApp(<RecordScreen id={transfer.id} onDone={onDone} />, env)
+
+    const amount = (await screen.findByLabelText('Сумма')) as HTMLInputElement
+    expect(amount.readOnly).toBe(true)
+    expect((screen.getByLabelText('Валюта') as HTMLInputElement).readOnly).toBe(true)
+    expect((screen.getByLabelText('Счёт') as HTMLInputElement).readOnly).toBe(true)
+    expect((screen.getByLabelText('Счёт зачисления') as HTMLInputElement).readOnly).toBe(true)
+    expect((screen.getByLabelText('Получено') as HTMLInputElement).readOnly).toBe(true)
+    expect(screen.queryByLabelText('Категория')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Расход' })).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Заметка'), { target: { value: 'обмен в банке' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(await env.db.transactions.get(transfer.id)).toMatchObject({
+      kind: 'exchange',
+      note: 'обмен в банке',
+      amount: 4000,
+      currency: 'UAH',
+      account_id: from.id,
+      to_account_id: to.id,
+      to_amount: 100,
+      to_currency: 'USD',
+      dirty: 1,
+    })
+  })})

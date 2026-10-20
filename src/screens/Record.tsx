@@ -12,7 +12,7 @@ interface Props {
 
 type Kind = 'expense' | 'income'
 
-/** «12,5» and «12.5» both work; anything that is not a positive number gives NaN/0. */
+/** «12,5» and «12.5» both work; anything that is not a number gives NaN. */
 function parseAmount(text: string): number {
   const n = Number(text.trim().replace(/\s/g, '').replace(',', '.'))
   return Number.isFinite(n) ? n : NaN
@@ -36,19 +36,30 @@ function RecordForm({
   const { repo } = useApp()
   const multi = settings.accounts_mode === 'multi'
   const isEdit = existing !== null
-  // transfer / exchange / adjustment keep their own kind: only amount, date, note and delete make sense for them
+  // Editing rules by kind (ruling R22):
+  //   expense / income - everything editable, the kind switch toggles between the two;
+  //   adjustment       - signed non-zero amount, date, note; currency and account are locked;
+  //   transfer/exchange - only date and note; every money field is shown read-only.
   const plain = !existing || existing.kind === 'expense' || existing.kind === 'income'
+  const adjustment = existing?.kind === 'adjustment'
+  const fixed = !plain && !adjustment
+  const accountName = (id: string | null) => accounts.find((a) => a.id === id)?.name ?? ''
 
   const [kind, setKind] = useState<Kind>(existing?.kind === 'income' ? 'income' : 'expense')
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '')
   const [currency, setCurrency] = useState(existing?.currency ?? settings.default_currency)
-  const [categoryId, setCategoryId] = useState(existing?.category_id ?? '')
+  // a category that is gone (deleted) or does not fit the kind is not offered, so it must not be saved either
+  const [categoryId, setCategoryId] = useState(() => {
+    const id = existing?.category_id
+    const startKind = existing?.kind === 'income' ? 'income' : 'expense'
+    return id && categories.some((c) => c.id === id && c.kind === startKind) ? id : ''
+  })
   const [date, setDate] = useState(existing?.date ?? today)
   const [accountId, setAccountId] = useState(
     existing?.account_id ?? (accounts.find((a) => a.is_default) ?? accounts[0])?.id ?? '',
   )
   const [note, setNote] = useState(existing?.note ?? '')
-  const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<{ amount?: string; date?: string; save?: string }>({})
   const [busy, setBusy] = useState(false)
 
   const currencies = settings.currencies.includes(currency) ? settings.currencies : [...settings.currencies, currency]
@@ -62,26 +73,35 @@ function RecordForm({
 
   async function save() {
     const value = parseAmount(amount)
-    if (!(value > 0)) {
-      setError('Введите сумму')
-      return
-    }
-    setError(null)
+    const next: typeof errors = {}
+    if (!fixed && (adjustment ? !(Number.isFinite(value) && value !== 0) : !(value > 0))) next.amount = 'Введите сумму'
+    if (!date) next.date = 'Укажите дату'
+    setErrors(next)
+    if (next.amount || next.date) return
     setBusy(true)
     try {
-      const fields = {
-        amount: value,
-        currency,
-        date,
-        note: note.trim(),
-        account_id: accountId,
-        ...(plain ? { kind, category_id: categoryId || null } : {}),
-      }
       if (existing) {
-        await repo.updateTransaction(existing.id, fields)
+        const patch = fixed
+          ? { date, note: note.trim() }
+          : adjustment
+            ? { amount: value, date, note: note.trim() }
+            : {
+                amount: value,
+                currency,
+                date,
+                note: note.trim(),
+                account_id: accountId,
+                kind,
+                category_id: categoryId || null,
+              }
+        await repo.updateTransaction(existing.id, patch)
       } else {
         await repo.addTransaction({
-          ...fields,
+          amount: value,
+          currency,
+          date,
+          note: note.trim(),
+          account_id: accountId,
           kind,
           category_id: categoryId || null,
           to_account_id: null,
@@ -92,7 +112,7 @@ function RecordForm({
       }
       onDone()
     } catch {
-      setError('Не удалось сохранить')
+      setErrors({ save: 'Не удалось сохранить' })
     } finally {
       setBusy(false)
     }
@@ -144,25 +164,43 @@ function RecordForm({
             type="text"
             inputMode="decimal"
             autoComplete="off"
+            readOnly={fixed}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
         </div>
         <div className="w-cur">
           <label htmlFor="rec-currency">Валюта</label>
-          <select id="rec-currency" className="field" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            {currencies.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          {plain ? (
+            <select id="rec-currency" className="field" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {currencies.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input id="rec-currency" className="field" type="text" readOnly value={currency} />
+          )}
         </div>
       </div>
-      {error && (
+      {errors.amount && (
         <p className="error" role="alert">
-          {error}
+          {errors.amount}
         </p>
+      )}
+
+      {existing && fixed && existing.to_amount !== null && (
+        <div className="row">
+          <div className="grow">
+            <label htmlFor="rec-to-amount">Получено</label>
+            <input id="rec-to-amount" className="field" type="text" readOnly value={String(existing.to_amount)} />
+          </div>
+          <div className="w-cur">
+            <label htmlFor="rec-to-currency">Валюта получения</label>
+            <input id="rec-to-currency" className="field" type="text" readOnly value={existing.to_currency ?? ''} />
+          </div>
+        </div>
       )}
 
       {plain && (
@@ -182,18 +220,36 @@ function RecordForm({
       <div>
         <label htmlFor="rec-date">Дата</label>
         <input id="rec-date" className="field" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        {errors.date && (
+          <p className="error" role="alert">
+            {errors.date}
+          </p>
+        )}
       </div>
 
-      {multi && (
+      {(multi || fixed) &&
+        (plain ? (
+          <div>
+            <label htmlFor="rec-account">Счёт</label>
+            <select id="rec-account" className="field" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              {accountOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="rec-account">Счёт</label>
+            <input id="rec-account" className="field" type="text" readOnly value={accountName(accountId)} />
+          </div>
+        ))}
+
+      {existing && fixed && existing.to_account_id && (
         <div>
-          <label htmlFor="rec-account">Счёт</label>
-          <select id="rec-account" className="field" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-            {accountOptions.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          <label htmlFor="rec-to-account">Счёт зачисления</label>
+          <input id="rec-to-account" className="field" type="text" readOnly value={accountName(existing.to_account_id)} />
         </div>
       )}
 
@@ -201,6 +257,12 @@ function RecordForm({
         <label htmlFor="rec-note">Заметка</label>
         <input id="rec-note" className="field" type="text" value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
+
+      {errors.save && (
+        <p className="error" role="alert">
+          {errors.save}
+        </p>
+      )}
 
       <div className="row">
         <button type="submit" className="btn btn-primary grow" disabled={busy}>
