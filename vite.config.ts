@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  base: process.env.BUILD_TARGET === 'pages' ? '/seafarer-budget/' : './',
+  base: process.env.BUILD_TARGET === 'pages' ? '/Seafarer-Budget/' : './',
   plugins: [
     react(),
     VitePWA({
