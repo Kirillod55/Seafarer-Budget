@@ -52,7 +52,8 @@ function amounts(tx: Transaction): { main: string; sub: string | null; inc: bool
   const fmt = (v: number, cur: string) => (inc ? '+' : '') + money(neg ? -Math.abs(v) : Math.abs(v), cur)
   if (tx.currency === 'USD') return { main: fmt(tx.amount, 'USD'), sub: null, inc }
   if (tx.rate_pending) return { main: fmt(tx.amount, tx.currency), sub: 'курс уточняется', inc }
-  return { main: fmt(tx.amount_usd, 'USD'), sub: money(Math.abs(tx.amount), tx.currency), inc }
+  // the original amount below carries the same sign as the USD line
+  return { main: fmt(tx.amount_usd, 'USD'), sub: fmt(tx.amount, tx.currency), inc }
 }
 
 /*

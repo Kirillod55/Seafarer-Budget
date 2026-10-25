@@ -1,9 +1,10 @@
-import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, Category, Transaction } from '@shared/types.ts'
 import { useApp, type AppContextValue } from '../context.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { SwipeRow } from '../ui/SwipeRow.tsx'
 import { ToastHost } from '../ui/Toast.tsx'
 import { DayGroups } from './DayGroups.tsx'
 
@@ -532,5 +533,116 @@ describe('SwipeRow input', () => {
     expect(x(row)).toBe('translateX(-120px)')
     fireEvent.pointerUp(el, { ...f1, clientX: 220 })
     await waitFor(() => expect(x(row)).toBe('translateX(-222px)'))
+  })
+})
+
+describe('SwipeRow, fix round 2', () => {
+  it('a mouse pressed on the row, moved off it and released outside does not lock the row', async () => {
+    await seed([tx({ id: 't1' })])
+    setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+    const el = fgOf(row)
+    const mouse = { pointerId: 1, pointerType: 'mouse', button: 0, clientY: 20 }
+
+    fireEvent.pointerDown(el, { ...mouse, clientX: 200 })
+    fireEvent.pointerMove(el, { ...mouse, clientX: 202, clientY: 60 }) // mostly vertical: not a swipe
+    fireEvent.pointerLeave(el, { ...mouse, clientX: 202, clientY: 90 })
+    fireEvent.pointerUp(document.body, { ...mouse, clientX: 202, clientY: 90 }) // released outside the row
+
+    swipe(row, -120, 'mouse')
+    await waitFor(() => expect(x(row)).toBe('translateX(-222px)'))
+  })
+
+  it('the same pointer going down again starts afresh, even if its release was never seen', async () => {
+    await seed([tx({ id: 't1' })])
+    setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+    fireEvent.pointerDown(fgOf(row), { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 200, clientY: 20 })
+    // no up, no leave reaches the row
+    swipe(row, -120, 'mouse')
+    await waitFor(() => expect(x(row)).toBe('translateX(-222px)'))
+  })
+
+  it('a touch that left the row before dragging is forgotten: the next finger can swipe', async () => {
+    await seed([tx({ id: 't1' })])
+    setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+    const el = fgOf(row)
+    fireEvent.pointerDown(el, { pointerId: 7, pointerType: 'touch', button: 0, clientX: 200, clientY: 20 })
+    fireEvent.pointerLeave(el, { pointerId: 7, pointerType: 'touch', clientX: 200, clientY: 20 })
+
+    swipe(row, -120) // pointerId 1
+    await waitFor(() => expect(x(row)).toBe('translateX(-222px)'))
+  })
+
+  it('an action that throws never leaves the row collapsed and deaf: it comes back and swipes again', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const actions = [
+        { key: 'edit' as const, label: 'Изменить', run: vi.fn() },
+        {
+          key: 'delete' as const,
+          label: 'Удалить',
+          run: () => {
+            throw new Error('boom')
+          },
+        },
+      ]
+      render(
+        <div className="days">
+          <SwipeRow actions={actions} onOpen={vi.fn()}>
+            <span className="t2">Ломается</span>
+          </SwipeRow>
+        </div>,
+      )
+      const row = rowOf('Ломается')
+      swipe(row, -120)
+      await waitFor(() => expect(x(row)).toBe('translateX(-168px)')) // two actions: 2 × 84
+      fireEvent.click(within(row).getByRole('button', { name: 'Удалить' }))
+      expect(error).toHaveBeenCalled()
+
+      // after the restore delay the row is back at rest and takes input again
+      await waitFor(() => expect(x(row)).toBe('translateX(0px)'), { timeout: 3000 })
+      expect(row.classList.contains('collapse')).toBe(false)
+      swipe(row, -120)
+      await waitFor(() => expect(x(row)).toBe('translateX(-168px)'))
+    } finally {
+      error.mockRestore()
+    }
+  })
+
+  it('«В архив» from the keyboard moves focus to the next row, or the previous one for the last row', async () => {
+    await seed([
+      tx({ id: 't1', note: 'первая', created_at: '2026-10-21T11:00:00.000Z' }),
+      tx({ id: 't2', note: 'вторая', created_at: '2026-10-21T10:00:00.000Z' }),
+      tx({ id: 't3', note: 'третья', date: '2026-10-20' }),
+    ])
+    setup()
+    const first = await waitFor(() => rowOf('Первая'))
+
+    fgOf(first).focus()
+    fireEvent.keyDown(fgOf(first), { key: 'ArrowLeft' })
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Изменить'))
+    fireEvent.click(within(first).getByRole('button', { name: 'В архив' }), { detail: 0 })
+    expect(document.activeElement).toBe(fgOf(rowOf('Вторая')))
+    await waitFor(() => expect(screen.queryByText('Первая')).toBeNull())
+
+    // the last row (in the next day's card) hands focus back to the row before it
+    const last = rowOf('Третья')
+    fgOf(last).focus()
+    fireEvent.keyDown(fgOf(last), { key: 'ArrowLeft' })
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Изменить'))
+    fireEvent.click(within(last).getByRole('button', { name: 'Удалить' }), { detail: 0 })
+    expect(document.activeElement).toBe(fgOf(rowOf('Вторая')))
+  })
+
+  it('a negative adjustment in another currency shows the minus on both lines', async () => {
+    await seed([
+      tx({ id: 't1', kind: 'adjustment', amount: -200, currency: 'UAH', amount_usd: -4.85, category_id: null, note: 'сверка' }),
+    ])
+    setup()
+    const a = (await waitFor(() => rowOf('Сверка'))).querySelector('.a')!
+    expect(a.firstChild?.textContent).toBe('-$4.85')
+    expect(a.querySelector('small')?.textContent).toBe('-₴200')
   })
 })

@@ -45,6 +45,25 @@ const RESTORE_MS = 1200
 /** the one open (or opening) row on the page */
 let openRow: { close(): void } | null = null
 
+/**
+ * Focus the next row of the same list (or the previous one); with no other row, the list itself (made focusable
+ * for this). The list is the nearest `.days` (DayGroups) or else the row's parent.
+ */
+function focusNeighbour(root: HTMLElement) {
+  const list = root.closest<HTMLElement>('.days') ?? root.parentElement
+  if (!list) return
+  const rows = [...list.querySelectorAll<HTMLElement>('[data-swipe-row]:not(.collapse)')]
+  const i = rows.indexOf(root)
+  const to = rows[i + 1] ?? rows[i - 1]
+  const fg = to && to !== root ? to.querySelector<HTMLElement>('.tx') : null
+  if (fg) {
+    fg.focus()
+    return
+  }
+  if (!list.hasAttribute('tabindex')) list.tabIndex = -1
+  list.focus()
+}
+
 export function SwipeRow({
   actions,
   onOpen,
@@ -154,20 +173,28 @@ export function SwipeRow({
     g.pid = null
     g.x0 = null
     const root = rootRef.current
+    // keyboard («В архив» / «Удалить» with Enter): focus must not fall to <body> when this row goes
+    if (root?.contains(document.activeElement)) focusNeighbour(root)
     const later = () => {
-      a.run()
-      // the action normally takes the row off the list; if it is still here, show it again
-      g.timers.push(
-        setTimeout(() => {
-          g.leaving = false
-          setCollapsing(false)
-          if (rootRef.current) rootRef.current.style.height = ''
-          g.sp?.stop()
-          g.sp = null
-          place(0)
-          settle()
-        }, RESTORE_MS),
-      )
+      try {
+        a.run()
+      } catch (err) {
+        // a failing action must not leave the row collapsed and deaf: it comes back below
+        console.error('SwipeRow: action failed', err)
+      } finally {
+        // the action normally takes the row off the list; if it is still here, show it again
+        g.timers.push(
+          setTimeout(() => {
+            g.leaving = false
+            setCollapsing(false)
+            if (rootRef.current) rootRef.current.style.height = ''
+            g.sp?.stop()
+            g.sp = null
+            place(0)
+            settle()
+          }, RESTORE_MS),
+        )
+      }
     }
     if (!root || prefersReducedMotion()) {
       later()
@@ -203,7 +230,8 @@ export function SwipeRow({
   )
 
   const down = (e: ReactPointerEvent) => {
-    if (g.leaving || g.pid !== null || (e.pointerType === 'mouse' && e.button !== 0)) return
+    // a second finger is ignored; the same pointer going down again (a mouse is always one id) starts afresh
+    if (g.leaving || (g.pid !== null && g.pid !== e.pointerId) || (e.pointerType === 'mouse' && e.button !== 0)) return
     g.pid = e.pointerId
     g.x0 = e.clientX
     g.y0 = e.clientY
@@ -279,6 +307,13 @@ export function SwipeRow({
     }
   }
 
+  /** the pointer left the row before any drag began (a mouse pressed, then moved off): forget it */
+  const leave = (e: ReactPointerEvent) => {
+    if (e.pointerId !== g.pid || g.drag) return
+    g.pid = null
+    g.x0 = null
+  }
+
   const click = (e: ReactMouseEvent) => {
     if (g.leaving) return
     if (g.dragged) {
@@ -334,6 +369,9 @@ export function SwipeRow({
         onPointerMove={move}
         onPointerUp={(e) => up(e, false)}
         onPointerCancel={(e) => up(e, true)}
+        onPointerLeave={leave}
+        // capture lost without a pointerup reaching the row (after a normal up the pointer is already forgotten)
+        onLostPointerCapture={(e) => up(e, true)}
         onClick={click}
       >
         {children}
