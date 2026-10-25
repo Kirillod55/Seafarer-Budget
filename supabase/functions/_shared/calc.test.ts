@@ -33,6 +33,10 @@ function tx(p: Partial<Transaction>): Transaction {
     note: '',
     source: 'app',
     created_at: '2026-10-10T00:00:00Z',
+    author: 'owner',
+    archived: false,
+    deleted_at: null,
+    deleted_batch: null,
     ...p,
   }
 }
@@ -51,12 +55,20 @@ function settings(p: Partial<Settings> = {}): Settings {
     contract_end_date: null,
     salary_lag_days: 0,
     timezone: 'UTC',
+    reserve_usd: 0,
+    partner_name: null,
+    partner_seen_at: null,
+    remind_after_days: 2,
+    last_reminder_at: null,
+    keepalive_at: null,
+    daily_summary_owner: false,
+    daily_summary_partner: false,
     ...p,
   }
 }
 
 function move(p: Partial<GoalMove>): GoalMove {
-  return { id: `m${++seq}`, deleted: false, goal_id: 'g1', amount_usd: 0, date: '2026-10-01', note: '', ...p }
+  return { id: `m${++seq}`, deleted: false, goal_id: 'g1', amount_usd: 0, date: '2026-10-01', note: '', author: 'owner', source: 'app', created_at: '2026-10-01T12:00:00.000Z', ...p }
 }
 
 describe('balances', () => {
@@ -302,7 +314,7 @@ describe('contractStats', () => {
 
 describe('goalProgress', () => {
   const today = '2026-10-21'
-  const goal: Goal = { id: 'g1', deleted: false, name: 'Car', target_usd: 1000, deadline: null, archived: false }
+  const goal: Goal = { id: 'g1', deleted: false, deleted_at: null, deleted_batch: null, name: 'Car', target_usd: 1000, deadline: null, archived: false }
 
   it('share and eta from the 90-day pace', () => {
     // 250 saved evenly over the last 90 days -> 2.777/day, 750 left -> 270 days
@@ -362,7 +374,7 @@ describe('goalProgress', () => {
 })
 
 describe('limitStatus', () => {
-  const limit: Limit = { id: 'l1', deleted: false, category_id: 'c1', monthly_usd: 100 }
+  const limit: Limit = { id: 'l1', deleted: false, deleted_at: null, deleted_batch: null, category_id: 'c1', monthly_usd: 100 }
   const spend = (n: number) => [tx({ amount_usd: n, category_id: 'c1' })]
 
   it('ok below 80%', () => {

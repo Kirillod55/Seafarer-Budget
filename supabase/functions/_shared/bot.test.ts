@@ -56,7 +56,8 @@ function seedTx(over: Partial<Transaction>): Transaction {
   return {
     id: `seed-${Math.random()}`, deleted: false, kind: 'expense', amount: 0, currency: 'USD', rate_usd: 1,
     amount_usd: 0, rate_pending: false, account_id: 'acc1', to_account_id: null, to_amount: null, to_currency: null,
-    category_id: null, date: TODAY, note: '', source: 'app', created_at: '2026-10-01T00:00:00.000Z', ...over,
+    category_id: null, date: TODAY, note: '', source: 'app', created_at: '2026-10-01T00:00:00.000Z',
+    author: 'owner', archived: false, deleted_at: null, deleted_batch: null, ...over,
   }
 }
 
@@ -221,7 +222,7 @@ describe('handleUpdate', () => {
   it('warns when a limit crosses 80%', async () => {
     const s = new MemStore()
     const kafe = cat('Кафе и рестораны')
-    s.limitRows = [{ id: 'l1', deleted: false, category_id: kafe.id, monthly_usd: 100 }]
+    s.limitRows = [{ id: 'l1', deleted: false, deleted_at: null, deleted_batch: null, category_id: kafe.id, monthly_usd: 100 }]
     s.txRows = [seedTx({ category_id: kafe.id, amount: 79, amount_usd: 79, date: '2026-10-05' })]
     const r = await run(s, msg('кофе 80'))
     expect(textOf(r)).toContain('⚠️')
@@ -231,11 +232,11 @@ describe('handleUpdate', () => {
   it('marks 🔴 when a limit is exceeded and no emoji when nothing is crossed', async () => {
     const s = new MemStore()
     const kafe = cat('Кафе и рестораны')
-    s.limitRows = [{ id: 'l1', deleted: false, category_id: kafe.id, monthly_usd: 100 }]
+    s.limitRows = [{ id: 'l1', deleted: false, deleted_at: null, deleted_batch: null, category_id: kafe.id, monthly_usd: 100 }]
     s.txRows = [seedTx({ category_id: kafe.id, amount: 99, amount_usd: 99, date: '2026-10-05' })]
     expect(textOf(await run(s, msg('кофе 80')))).toContain('🔴 Кафе и рестораны за месяц: $100.94 из $100')
     const s2 = new MemStore()
-    s2.limitRows = [{ id: 'l1', deleted: false, category_id: kafe.id, monthly_usd: 100 }]
+    s2.limitRows = [{ id: 'l1', deleted: false, deleted_at: null, deleted_batch: null, category_id: kafe.id, monthly_usd: 100 }]
     const t2 = textOf(await run(s2, msg('кофе 80')))
     expect(t2).toContain('Кафе и рестораны за месяц: $1.94 из $100')
     expect(t2).not.toContain('⚠️')
@@ -255,7 +256,7 @@ describe('handleUpdate', () => {
 
   it('adds money to a goal by name prefix, converted to USD', async () => {
     const s = new MemStore()
-    s.goalRows = [{ id: 'g1', deleted: false, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
+    s.goalRows = [{ id: 'g1', deleted: false, deleted_at: null, deleted_batch: null, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
     const r = await run(s, msg('цель маш 500'))
     expect(s.moveRows).toHaveLength(1)
     expect(s.moveRows[0]).toMatchObject({ goal_id: 'g1', amount_usd: 12.14, date: TODAY, deleted: false })
@@ -265,7 +266,7 @@ describe('handleUpdate', () => {
 
   it('reports an unknown goal with the list of goals', async () => {
     const s = new MemStore()
-    s.goalRows = [{ id: 'g1', deleted: false, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
+    s.goalRows = [{ id: 'g1', deleted: false, deleted_at: null, deleted_batch: null, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
     const r = await run(s, msg('цель дом 100'))
     expect(s.moveRows).toHaveLength(0)
     expect(textOf(r)).toContain('Цель «дом» не найдена')
@@ -279,7 +280,7 @@ describe('handleUpdate', () => {
 
   it('refuses a goal amount in a currency without a rate', async () => {
     const s = new MemStore()
-    s.goalRows = [{ id: 'g1', deleted: false, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
+    s.goalRows = [{ id: 'g1', deleted: false, deleted_at: null, deleted_batch: null, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
     const r = await run(s, msg('цель машина 100 лей'))
     expect(s.moveRows).toHaveLength(0)
     expect(textOf(r)).toContain('Нет курса для этой валюты')
@@ -289,8 +290,8 @@ describe('handleUpdate', () => {
     const s = new MemStore()
     s.settingsRow = { ...SETTINGS, next_contract_date: '2026-12-21' }
     s.txRows = [seedTx({ kind: 'income', amount: 3000, amount_usd: 3000, currency: 'USD', category_id: cat('Зарплата').id })]
-    s.goalRows = [{ id: 'g1', deleted: false, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
-    s.moveRows = [{ id: 'm1', deleted: false, goal_id: 'g1', amount_usd: 1000, date: TODAY, note: '' }]
+    s.goalRows = [{ id: 'g1', deleted: false, deleted_at: null, deleted_batch: null, name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
+    s.moveRows = [{ id: 'm1', deleted: false, goal_id: 'g1', amount_usd: 1000, date: TODAY, note: '', author: 'owner', source: 'app', created_at: '2026-10-01T12:00:00.000Z' }]
     const r = await run(s, msg('остаток'))
     expect(textOf(r)).toContain('в месяц')
     expect(textOf(r)).toContain('$2 000') // 3000 balance - 1000 reserved

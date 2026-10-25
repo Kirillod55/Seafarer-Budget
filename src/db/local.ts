@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { DEFAULT_SETTINGS } from '@shared/defaults.ts'
 import type {
   Account,
   Category,
@@ -44,6 +45,44 @@ export class LocalDb extends Dexie {
       fx_rates: '[date+currency]',
       meta: 'key',
     })
+    // v2 (Seafarer Budget 1.1): same indexes; the upgrade fills the new fields into old rows.
+    this.version(2)
+      .stores({
+        settings: 'id, dirty, rev',
+        accounts: 'id, dirty, rev',
+        categories: 'id, dirty, rev',
+        transactions: 'id, dirty, rev',
+        goals: 'id, dirty, rev',
+        goal_moves: 'id, dirty, rev',
+        limits: 'id, dirty, rev',
+        fx_rates: '[date+currency]',
+        meta: 'key',
+      })
+      .upgrade(async (tx) => {
+        const fill = (row: Record<string, unknown>, defaults: Record<string, unknown>) => {
+          for (const [k, v] of Object.entries(defaults)) if (row[k] === undefined) row[k] = v
+        }
+        const soft = { deleted_at: null, deleted_batch: null }
+        const newSettings = {
+          reserve_usd: DEFAULT_SETTINGS.reserve_usd,
+          partner_name: DEFAULT_SETTINGS.partner_name,
+          partner_seen_at: DEFAULT_SETTINGS.partner_seen_at,
+          remind_after_days: DEFAULT_SETTINGS.remind_after_days,
+          last_reminder_at: DEFAULT_SETTINGS.last_reminder_at,
+          keepalive_at: DEFAULT_SETTINGS.keepalive_at,
+          daily_summary_owner: DEFAULT_SETTINGS.daily_summary_owner,
+          daily_summary_partner: DEFAULT_SETTINGS.daily_summary_partner,
+        }
+        await tx.table('settings').toCollection().modify((r) => fill(r, newSettings))
+        await tx.table('transactions').toCollection().modify((r) => fill(r, { author: 'owner', archived: false, ...soft }))
+        await tx.table('goals').toCollection().modify((r) => fill(r, soft))
+        await tx.table('limits').toCollection().modify((r) => fill(r, soft))
+        await tx.table('categories').toCollection().modify((r) => fill(r, { color: null, glyph: null, ...soft }))
+        await tx.table('goal_moves').toCollection().modify((r) =>
+          // Same value as the SQL backfill: noon UTC of the move's own date.
+          fill(r, { author: 'owner', source: 'app', created_at: `${r.date}T12:00:00.000Z` }),
+        )
+      })
   }
 
   /** Untyped access to a synced table by name. */

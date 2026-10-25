@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, FxRate, Settings, Transaction } from '@shared/types.ts'
 import { createDb, type LocalDb } from './local.ts'
@@ -187,5 +188,50 @@ describe('initDefaults', () => {
     const accounts = (await db.accounts.toArray()) as Account[]
     expect(accounts).toHaveLength(1)
     expect(accounts[0]).toMatchObject({ name: 'Основной', is_default: true })
+  })
+})
+
+describe('Dexie upgrade', () => {
+  it('v1 database upgrades to v2 with defaults', async () => {
+    const name = `repo-test-upgrade-${++n}`
+    const v1 = new Dexie(name)
+    v1.version(1).stores({
+      settings: 'id, dirty, rev',
+      accounts: 'id, dirty, rev',
+      categories: 'id, dirty, rev',
+      transactions: 'id, dirty, rev',
+      goals: 'id, dirty, rev',
+      goal_moves: 'id, dirty, rev',
+      limits: 'id, dirty, rev',
+      fx_rates: '[date+currency]',
+      meta: 'key',
+    })
+    await v1.table('transactions').put({ id: 't1', deleted: false, dirty: 0, rev: 5, kind: 'expense', amount: 80, currency: 'UAH', date: '2026-10-01', note: 'кофе' })
+    await v1.table('goals').put({ id: 'g1', deleted: false, dirty: 0, name: 'Отпуск', target_usd: 1000, deadline: null, archived: false })
+    await v1.table('goal_moves').put({ id: 'm1', deleted: false, dirty: 0, goal_id: 'g1', amount_usd: 50, date: '2026-10-02', note: '' })
+    await v1.table('categories').put({ id: 'c1', deleted: false, dirty: 0, name: 'Продукты', kind: 'expense', icon: '🛒', keywords: [], archived: false, sort: 0 })
+    await v1.table('limits').put({ id: 'l1', deleted: false, dirty: 0, category_id: 'c1', monthly_usd: 100 })
+    await v1.table('settings').put({ id: 's1', deleted: false, dirty: 0, base_currency: 'USD', timezone: 'Europe/Kyiv' })
+    v1.close()
+
+    const upgraded = createDb(name)
+    try {
+      expect(await upgraded.transactions.get('t1')).toMatchObject({
+        author: 'owner', archived: false, deleted_at: null, deleted_batch: null, amount: 80, rev: 5,
+      })
+      expect(await upgraded.goals.get('g1')).toMatchObject({ deleted_at: null, deleted_batch: null })
+      expect(await upgraded.limits.get('l1')).toMatchObject({ deleted_at: null, deleted_batch: null })
+      expect(await upgraded.categories.get('c1')).toMatchObject({ deleted_at: null, deleted_batch: null, color: null, glyph: null })
+      expect(await upgraded.goal_moves.get('m1')).toMatchObject({
+        author: 'owner', source: 'app', created_at: '2026-10-02T12:00:00.000Z',
+      })
+      expect(await upgraded.settings.get('s1')).toMatchObject({
+        base_currency: 'USD', reserve_usd: 0, partner_name: null, partner_seen_at: null, remind_after_days: 2,
+        last_reminder_at: null, keepalive_at: null, daily_summary_owner: false, daily_summary_partner: false,
+      })
+    } finally {
+      upgraded.close()
+      await Dexie.delete(name)
+    }
   })
 })

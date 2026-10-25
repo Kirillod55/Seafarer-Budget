@@ -2,8 +2,18 @@ export interface Base {
   id: string
   user_id?: string
   rev?: number
+  /** The rev the writer had seen when it made the edit; only the server's set_rev() reads it. Not sent yet. */
+  base_rev?: number | null
   deleted: boolean
 }
+
+/** Soft delete with a 24 h undo: `deleted_at` set = in the bin, `deleted_batch` groups one delete action. */
+export interface SoftDeletable {
+  deleted_at: string | null
+  deleted_batch: string | null
+}
+
+export type Author = 'owner' | 'partner'
 
 export interface Settings extends Base {
   base_currency: string
@@ -16,6 +26,14 @@ export interface Settings extends Base {
   contract_end_date: string | null
   salary_lag_days: number
   timezone: string
+  reserve_usd: number
+  partner_name: string | null
+  partner_seen_at: string | null
+  remind_after_days: 0 | 2 | 3 | 5 | 7
+  last_reminder_at: string | null
+  keepalive_at: string | null
+  daily_summary_owner: boolean
+  daily_summary_partner: boolean
 }
 
 export interface Account extends Base {
@@ -26,18 +44,20 @@ export interface Account extends Base {
   sort: number
 }
 
-export interface Category extends Base {
+export interface Category extends Base, SoftDeletable {
   name: string
   kind: 'expense' | 'income'
   icon: string
   keywords: string[]
   archived: boolean
   sort: number
+  color: string | null
+  glyph: string | null
 }
 
 export type TxKind = 'expense' | 'income' | 'transfer' | 'exchange' | 'adjustment'
 
-export interface Transaction extends Base {
+export interface Transaction extends Base, SoftDeletable {
   kind: TxKind
   amount: number
   currency: string
@@ -53,9 +73,11 @@ export interface Transaction extends Base {
   note: string
   source: 'app' | 'bot'
   created_at: string
+  author: Author
+  archived: boolean
 }
 
-export interface Goal extends Base {
+export interface Goal extends Base, SoftDeletable {
   name: string
   target_usd: number
   deadline: string | null
@@ -67,9 +89,12 @@ export interface GoalMove extends Base {
   amount_usd: number
   date: string
   note: string
+  author: Author
+  source: 'app' | 'bot'
+  created_at: string
 }
 
-export interface Limit extends Base {
+export interface Limit extends Base, SoftDeletable {
   category_id: string
   monthly_usd: number
 }

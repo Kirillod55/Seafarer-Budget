@@ -166,7 +166,7 @@ async function handleText(
     case 'command':
       return runCommand(parsed.command, chatId, settings, categories, store, today)
     case 'goal':
-      return runGoal(parsed, chatId, store, uuid)
+      return runGoal(parsed, chatId, store, now, uuid)
     case 'tx':
       return saveTx(parsed, chatId, categories, accounts, store, now, today, uuid)
   }
@@ -217,6 +217,10 @@ async function saveTx(
     note: p.note,
     source: 'bot',
     created_at: now.toISOString(),
+    author: 'owner',
+    archived: false,
+    deleted_at: null,
+    deleted_batch: null,
   }
 
   // limit check needs the spending before this transaction
@@ -263,6 +267,7 @@ async function runGoal(
   p: Extract<Parsed, { type: 'goal' }>,
   chatId: number,
   store: BotStore,
+  now: Date,
   uuid: () => string,
 ): Promise<BotReply[]> {
   const goals = (await store.goals()).filter((g) => !g.deleted && !g.archived)
@@ -288,6 +293,9 @@ async function runGoal(
     amount_usd: amountUsd,
     date: p.date,
     note: '',
+    author: 'owner',
+    source: 'bot',
+    created_at: now.toISOString(),
   })
   const saved = round2(reservedUsd(await store.goalMoves(), goal.id))
   const sign = amountUsd >= 0 ? '+' : ''

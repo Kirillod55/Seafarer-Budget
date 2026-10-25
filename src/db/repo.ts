@@ -12,8 +12,18 @@ export interface RepoDeps {
 
 export type NewTransaction = Omit<
   Transaction,
-  'id' | 'deleted' | 'rate_usd' | 'amount_usd' | 'rate_pending' | 'created_at'
->
+  | 'id'
+  | 'deleted'
+  | 'rate_usd'
+  | 'amount_usd'
+  | 'rate_pending'
+  | 'created_at'
+  | 'author'
+  | 'archived'
+  | 'deleted_at'
+  | 'deleted_batch'
+> &
+  Partial<Pick<Transaction, 'author' | 'archived'>>
 
 export interface Repo {
   put<T extends Base>(table: SyncTable, row: Partial<T>): Promise<T>
@@ -76,9 +86,13 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
 
   async function buildTransaction(input: NewTransaction): Promise<Transaction> {
     return {
+      author: 'owner',
+      archived: false,
       ...input,
       id: deps.uuid(),
       deleted: false,
+      deleted_at: null,
+      deleted_batch: null,
       ...(await usdFields(input.amount, input.currency, input.date)),
       created_at: deps.now().toISOString(),
     }

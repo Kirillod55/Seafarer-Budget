@@ -4,7 +4,7 @@ import { csvFileName, downloadCsv, toCsv } from './export.ts'
 
 const HEADER = 'Дата;Тип;Сумма;Валюта;Сумма USD;Категория;Счёт;Заметка'
 
-const cafe = { id: 'c1', name: 'Кафе и рестораны', kind: 'expense', icon: '☕', keywords: [], archived: false, sort: 1, deleted: false } as Category
+const cafe = { id: 'c1', name: 'Кафе и рестораны', kind: 'expense', icon: '☕', keywords: [], archived: false, sort: 1, deleted: false, color: null, glyph: null, deleted_at: null, deleted_batch: null } as Category
 const main = { id: 'a1', name: 'Основной', aliases: [], is_default: true, archived: false, sort: 0, deleted: false } as Account
 const cash = { id: 'a2', name: 'Наличные', aliases: [], is_default: false, archived: false, sort: 1, deleted: false } as Account
 
@@ -26,6 +26,10 @@ function tx(patch: Partial<Transaction>): Transaction {
     note: '',
     source: 'app',
     created_at: '2026-10-21T12:00:00Z',
+    author: 'owner',
+    archived: false,
+    deleted_at: null,
+    deleted_batch: null,
     deleted: false,
     ...patch,
   }
