@@ -76,6 +76,22 @@ describe('pull (D1: keyset paging)', () => {
 })
 
 describe('push', () => {
+  it('returns the deletion fields the server stored (soft tables also deleted_at / deleted_batch)', async () => {
+    const { client, queries } = fakeClient((q) =>
+      q.table === 'transactions'
+        ? { data: [{ id: 't1', rev: 7, deleted: false, deleted_at: '2026-10-21T10:00:00+00:00', deleted_batch: 'b1' }], error: null, status: 201 }
+        : { data: [{ id: 'a1', rev: 8, deleted: false }], error: null, status: 201 },
+    )
+    const remote = createSupabaseRemote(client)
+    expect(await remote.push('transactions', [{ id: 't1' }])).toEqual([
+      { id: 't1', rev: 7, deleted: false, deleted_at: '2026-10-21T10:00:00+00:00', deleted_batch: 'b1' },
+    ])
+    expect(await remote.push('accounts', [{ id: 'a1' }])).toEqual([{ id: 'a1', rev: 8, deleted: false }])
+    expect(arg(queries[0], 'select')).toEqual(['id, rev, deleted, deleted_at, deleted_batch'])
+    // accounts have no deleted_at column: asking for it would fail the whole push
+    expect(arg(queries[1], 'select')).toEqual(['id, rev, deleted'])
+  })
+
   it('maps a 4xx server refusal to RowRejectedError', async () => {
     const { client } = fakeClient(() => ({ data: null, error: { message: 'violates check constraint', code: '23514' }, status: 400 }))
     await expect(createSupabaseRemote(client).push('accounts', [{ id: 'a' }])).rejects.toBeInstanceOf(RowRejectedError)

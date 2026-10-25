@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
 import type { Account, Category, Settings, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
@@ -292,12 +293,12 @@ export function RecordScreen({ id, onDone }: Props) {
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
     const [settings, categories, accounts, tx] = await Promise.all([
-      db.settings.filter((s) => !s.deleted).first(),
-      db.categories.filter((c) => !c.deleted).toArray(),
-      db.accounts.filter((a) => !a.deleted).sortBy('sort'),
+      db.settings.filter(alive).first(),
+      db.categories.filter(alive).toArray(),
+      db.accounts.filter(alive).sortBy('sort'),
       id ? db.transactions.get(id) : Promise.resolve(undefined),
     ])
-    return { settings, categories, accounts, tx: tx && !tx.deleted ? tx : null }
+    return { settings, categories, accounts, tx: tx && alive(tx) ? tx : null }
   }, [db, id])
 
   if (!data) return <p className="muted pad">Загрузка…</p>

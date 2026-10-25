@@ -96,7 +96,7 @@ describe('Record', () => {
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith('transactions', existing.id))
     await waitFor(() => expect(onDone).toHaveBeenCalled())
-    expect(await env.db.transactions.get(existing.id)).toMatchObject({ deleted: true, dirty: 1 })
+    expect(await env.db.transactions.get(existing.id)).toMatchObject({ deleted: false, deleted_at: expect.any(String), dirty: 1 })
   })
 
   it('«Счёт» is hidden in single mode and shown in multi mode (non-archived accounts only)', async () => {

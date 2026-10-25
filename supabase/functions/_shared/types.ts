@@ -116,3 +116,12 @@ export const SYNC_TABLES = [
 ] as const
 
 export type SyncTable = typeof SYNC_TABLES[number]
+
+/** Synced tables with `deleted_at` / `deleted_batch` (the 24 h undo bin); the others only know the final `deleted`. */
+export const SOFT_TABLES = ['categories', 'transactions', 'goals', 'limits'] as const satisfies readonly SyncTable[]
+
+export type SoftTable = typeof SOFT_TABLES[number]
+
+export function isSoftTable(table: SyncTable): table is SoftTable {
+  return (SOFT_TABLES as readonly SyncTable[]).includes(table)
+}

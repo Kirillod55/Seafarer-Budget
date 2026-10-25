@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { alive } from '@shared/alive.ts'
 import { balances } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { round2 } from '@shared/fx.ts'
@@ -718,7 +719,7 @@ function ExportSection({ today, partnerName }: { today: string; partnerName: str
   const exportCsv = () =>
     run(async () => {
       const [txs, categories, accounts] = await Promise.all([
-        db.transactions.filter((t) => !t.deleted).toArray(),
+        db.transactions.filter(alive).toArray(),
         db.categories.toArray(),
         db.accounts.toArray(),
       ])
@@ -743,10 +744,10 @@ export function Settings({ onSignOut }: { onSignOut(): void }) {
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
     const [settings, accounts, categories, txs] = await Promise.all([
-      db.settings.filter((s) => !s.deleted).first(),
-      db.accounts.filter((a) => !a.deleted).toArray(),
-      db.categories.filter((c) => !c.deleted).toArray(),
-      db.transactions.filter((t) => !t.deleted).toArray(),
+      db.settings.filter(alive).first(),
+      db.accounts.filter(alive).toArray(),
+      db.categories.filter(alive).toArray(),
+      db.transactions.filter(alive).toArray(),
     ])
     return { settings, accounts, categories, txs }
   }, [db])

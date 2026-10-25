@@ -1,3 +1,4 @@
+import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import { SYNC_TABLES, type FxRate, type Settings, type SyncTable } from '@shared/types.ts'
@@ -18,9 +19,22 @@ export interface RatePatch {
   amount_usd: number
 }
 
+/**
+ * What the server stored for a pushed row. The deletion fields come back because the server may keep a
+ * deletion over the pushed edit (deletion wins), and the pushing device never pulls its own row back.
+ * `deleted_at` / `deleted_batch` only for tables that have them (SOFT_TABLES).
+ */
+export interface PushResult {
+  id: string
+  rev: number
+  deleted?: boolean
+  deleted_at?: string | null
+  deleted_batch?: string | null
+}
+
 export interface Remote {
   /** Upsert rows; throws RowRejectedError when the server refuses them, any other error when it is unreachable. */
-  push(table: SyncTable, rows: object[]): Promise<{ id: string; rev: number }[]>
+  push(table: SyncTable, rows: object[]): Promise<PushResult[]>
   pull(table: SyncTable, sinceRev: number): Promise<object[]>
   fxRates(date: string, currencies: string[]): Promise<FxRate[]>
   /** Sets rate_usd / amount_usd / rate_pending=false only on rows that are still rate_pending on the server. */
@@ -53,15 +67,35 @@ const parkedKey = (table: SyncTable, id: string) => `${PARKED_PREFIX}${table}:${
 // dirty: 0 = in sync, 1 = waiting to be pushed, 2 = parked (the server refused it)
 type AnyRow = Record<string, unknown> & { id: string; rev?: number; dirty?: 0 | 1 | 2 }
 
-// What the server gets: no local-only `dirty`, no server-owned `rev` / `user_id`.
-function toWire(row: AnyRow): object {
-  const { dirty: _dirty, rev: _rev, user_id: _user, ...rest } = row
+// The row's own content: no local-only `dirty`, no server-owned `rev` / `user_id`, no per-request `base_rev`.
+function content(row: AnyRow): object {
+  const { dirty: _dirty, rev: _rev, user_id: _user, base_rev: _base, ...rest } = row
   return rest
 }
 
-function sameContent(a: AnyRow, b: AnyRow): boolean {
-  return JSON.stringify(toWire(a)) === JSON.stringify(toWire(b))
+// What the server gets: the content plus `base_rev` = the rev this edit was made on (null for a new row).
+// The server keeps a soft deletion unless base_rev = its current rev, so a restore needs it on every push.
+function toWire(row: AnyRow): object {
+  return { ...content(row), base_rev: row.rev ?? null }
 }
+
+function sameContent(a: AnyRow, b: AnyRow): boolean {
+  return JSON.stringify(content(a)) === JSON.stringify(content(b))
+}
+
+const DELETION_FIELDS = ['deleted', 'deleted_at', 'deleted_batch'] as const
+
+// Postgres answers `2026-10-21T10:00:00+00:00` for the `…T10:00:00.000Z` the app sent: same instant, same value.
+function sameValue(a: unknown, b: unknown): boolean {
+  if (typeof a === 'string' && typeof b === 'string' && a !== b) {
+    const [x, y] = [Date.parse(a), Date.parse(b)]
+    return !Number.isNaN(x) && x === y
+  }
+  return a === b
+}
+
+/** A server row that is deleted for good or sits in the undo bin. */
+const isDeletion = (row: AnyRow) => row.deleted === true || (row.deleted_at ?? null) !== null
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -83,18 +117,25 @@ export function createSync(
     })
   }
 
-  /** Record what the server stored; a row edited while the push was in flight stays dirty. */
-  async function applyPushed(table: SyncTable, sent: AnyRow[], results: { id: string; rev: number }[]): Promise<void> {
+  /**
+   * Record what the server stored; a row edited while the push was in flight stays dirty. Where the server
+   * stored other deletion fields than were sent (it kept a deletion), they are taken over: deletion wins.
+   */
+  async function applyPushed(table: SyncTable, sent: AnyRow[], results: PushResult[]): Promise<void> {
     const t = db.syncTable(table)
     const snapshot = new Map(sent.map((r) => [r.id, r]))
     await db.transaction('rw', t, db.meta, async () => {
-      for (const { id, rev } of results) {
-        const current = (await t.get(id)) as AnyRow | undefined
-        const row = snapshot.get(id)
+      for (const result of results) {
+        const current = (await t.get(result.id)) as AnyRow | undefined
+        const row = snapshot.get(result.id)
         if (!current || !row) continue
         const unchanged = sameContent(current, row)
-        await t.put({ ...current, rev, dirty: unchanged ? 0 : 1 } as never)
-        await db.meta.delete(parkedKey(table, id))
+        const server: Record<string, unknown> = {}
+        for (const k of DELETION_FIELDS) {
+          if (result[k] !== undefined && !sameValue(result[k], row[k] ?? null)) server[k] = result[k]
+        }
+        await t.put({ ...current, ...server, rev: result.rev, dirty: unchanged ? 0 : 1 } as never)
+        await db.meta.delete(parkedKey(table, result.id))
       }
     })
   }
@@ -155,9 +196,12 @@ export function createSync(
         const rev = Number(row.rev ?? 0)
         if (rev > maxRev) maxRev = rev
         const local = (await t.get(row.id)) as AnyRow | undefined
-        if (local?.dirty === 1 || local?.dirty === 2) continue // local edit wins until it is pushed
         if (local && local.rev === rev) continue // already have this version (our own push echoed back)
+        const pending = local?.dirty === 1 || local?.dirty === 2
+        // a local edit wins until it is pushed, except over a deletion made elsewhere: that edit is dropped
+        if (pending && !isDeletion(row)) continue
         await t.put({ ...row, rev, dirty: 0 } as never)
+        if (pending) await db.meta.delete(parkedKey(table, row.id))
         applied++
       }
       await db.meta.put({ key: metaKey, value: maxRev })
@@ -166,7 +210,7 @@ export function createSync(
   }
 
   async function currentSettings(): Promise<Settings | undefined> {
-    return (await db.settings.toCollection().filter((s) => !s.deleted).first()) as Settings | undefined
+    return (await db.settings.toCollection().filter(alive).first()) as Settings | undefined
   }
 
   // Make sure there is an exact rate set for today for every currency in settings.
@@ -187,7 +231,7 @@ export function createSync(
    * `rate_fix` marker and the fix is sent as a column-scoped patch.
    */
   async function resolvePendingRates(settings: Settings | undefined): Promise<void> {
-    const pending = await db.transactions.filter((t) => t.rate_pending && !t.deleted).toArray()
+    const pending = await db.transactions.filter((t) => t.rate_pending && alive(t)).toArray()
     if (pending.length === 0) return
     const dates = [...new Set(pending.map((t) => t.date))].sort()
     for (const date of dates) {
@@ -200,7 +244,7 @@ export function createSync(
       // The fetches above took time: re-read the row and recompute from its CURRENT values.
       await db.transaction('rw', db.transactions, db.fx_rates, db.meta, async () => {
         const current = await db.transactions.get(id)
-        if (!current || current.deleted || !current.rate_pending) return
+        if (!current || !alive(current) || !current.rate_pending) return
         const found = usdRate(await db.fx_rates.toArray(), current.currency, current.date)
         if (!found) return
         const amount_usd = round2(current.amount * found.rate)
@@ -223,7 +267,7 @@ export function createSync(
     for (const id of ids) {
       const row = await db.transactions.get(id)
       // gone, deleted, pending again (server copy pulled) or edited locally (its push carries the rate): drop
-      if (!row || row.deleted || row.rate_pending || row.dirty !== 0) continue
+      if (!row || !alive(row) || row.rate_pending || row.dirty !== 0) continue
       patches.push({ id, rate_usd: row.rate_usd, amount_usd: row.amount_usd })
     }
     if (patches.length) await remote.patchRates(patches)

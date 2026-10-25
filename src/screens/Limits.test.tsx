@@ -136,7 +136,7 @@ describe('Limits', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Убрать лимит' }))
 
     await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull())
-    expect(await env.db.limits.get(limit.id)).toMatchObject({ deleted: true, dirty: 1 })
+    expect(await env.db.limits.get(limit.id)).toMatchObject({ deleted: false, deleted_at: expect.any(String), dirty: 1 })
   })
 
   it('a removed limit can be set again for the same category without a duplicate row', async () => {
@@ -151,7 +151,7 @@ describe('Limits', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
     expect(await screen.findByText('$0 из $80')).toBeTruthy()
-    expect(await env.db.limits.toArray()).toMatchObject([{ id: limit.id, monthly_usd: 80, deleted: false }])
+    expect(await env.db.limits.toArray()).toMatchObject([{ id: limit.id, monthly_usd: 80, deleted: false, deleted_at: null, deleted_batch: null }])
   })
 
   it('a limit on an archived category is not shown', async () => {

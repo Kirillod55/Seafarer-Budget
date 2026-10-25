@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { alive } from '@shared/alive.ts'
 import { activeBalances, allowance, balanceUsd, contractStats, reservedUsd } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
@@ -51,10 +52,10 @@ export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
     const [settings, txs, rates, moves, categories, accounts] = await Promise.all([
-      db.settings.filter((s) => !s.deleted).first(),
-      db.transactions.filter((t) => !t.deleted).toArray(),
+      db.settings.filter(alive).first(),
+      db.transactions.filter(alive).toArray(),
       db.fx_rates.toArray(),
-      db.goal_moves.filter((m) => !m.deleted).toArray(),
+      db.goal_moves.filter(alive).toArray(),
       db.categories.toArray(),
       db.accounts.toArray(),
     ])

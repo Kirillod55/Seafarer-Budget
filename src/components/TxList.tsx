@@ -1,3 +1,4 @@
+import { alive } from '@shared/alive.ts'
 import type { Category, Transaction } from '@shared/types.ts'
 import { money } from '@shared/format.ts'
 
@@ -50,7 +51,7 @@ export function TxList({
   onSelect?(id: string): void
 }) {
   const byId = new Map(categories.map((c) => [c.id, c]))
-  const rows = sortRecent(txs.filter((t) => !t.deleted)).slice(0, SHOWN)
+  const rows = sortRecent(txs.filter(alive)).slice(0, SHOWN)
 
   if (rows.length === 0) return <p className="muted empty">Записей пока нет</p>
 

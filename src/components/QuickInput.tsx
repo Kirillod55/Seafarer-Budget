@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { parseMessage } from '@shared/parser.ts'
@@ -26,7 +27,7 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
     if (!value || busy) return
     setBusy(true)
     try {
-      const settings = await db.settings.filter((s) => !s.deleted).first()
+      const settings = await db.settings.filter(alive).first()
       if (!settings) {
         setFeedback({ kind: 'hint', text: NO_SETTINGS_HINT })
         return
@@ -54,7 +55,7 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
         return
       }
 
-      const live = accounts.filter((a) => !a.deleted && !a.archived).sort((a, b) => a.sort - b.sort)
+      const live = accounts.filter((a) => alive(a) && !a.archived).sort((a, b) => a.sort - b.sort)
       const account = live.find((a) => a.id === parsed.accountId) ?? live.find((a) => a.is_default) ?? live[0]
       if (!account) {
         setFeedback({ kind: 'hint', text: NO_SETTINGS_HINT })
@@ -65,7 +66,7 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
       const categoryId =
         parsed.categoryId ??
         (parsed.kind === 'expense'
-          ? (categories.find((c) => c.name === 'Прочее' && c.kind === 'expense' && !c.deleted && !c.archived)?.id ?? null)
+          ? (categories.find((c) => c.name === 'Прочее' && c.kind === 'expense' && alive(c) && !c.archived)?.id ?? null)
           : null)
 
       await repo.addTransaction({

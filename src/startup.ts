@@ -1,9 +1,10 @@
+import { alive } from '@shared/alive.ts'
 import type { LocalDb } from './db/local.ts'
 
 export type StartupState = 'ready' | 'wizard' | 'need_internet'
 
 async function hasSettings(db: LocalDb): Promise<boolean> {
-  return (await db.settings.filter((s) => !s.deleted).count()) > 0
+  return (await db.settings.filter(alive).count()) > 0
 }
 
 /**

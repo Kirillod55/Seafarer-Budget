@@ -30,10 +30,22 @@ class FakeRemote implements Remote {
     if (bad) throw new RowRejectedError(this.reject.get((bad as { id: string }).id)!)
     return rows.map((r) => {
       this.pushLog.push(r)
-      const row = r as { id: string }
+      const { base_rev, ...incoming } = r as Record<string, unknown> & { id: string; base_rev?: number | null }
+      const prev = this.t(table).get(incoming.id)
       const rev = this.nextRev++
-      this.t(table).set(row.id, { ...r, rev })
-      return { id: row.id, rev }
+      const stored: Record<string, unknown> = { ...incoming, rev }
+      // like the v1.1 set_rev() trigger: `deleted` is final; a soft deletion stays unless base_rev = current rev
+      if (prev) {
+        if (prev.deleted === true) stored.deleted = true
+        const lifts = prev.deleted_at != null && incoming.deleted_at === null
+        if (lifts && (base_rev == null || base_rev < (prev.rev as number))) {
+          stored.deleted_at = prev.deleted_at
+          stored.deleted_batch = prev.deleted_batch
+        }
+      }
+      this.t(table).set(incoming.id, stored)
+      const soft = 'deleted_at' in stored ? { deleted_at: stored.deleted_at as string | null, deleted_batch: stored.deleted_batch as string | null } : {}
+      return { id: incoming.id, rev, deleted: stored.deleted as boolean, ...soft }
     })
   }
   async pull(table: SyncTable, sinceRev: number) {
@@ -129,6 +141,18 @@ describe('push', () => {
     expect(Object.keys(remote.pushLog[0])).not.toContain('dirty')
     expect(Object.keys(remote.pushLog[0])).not.toContain('rev')
     expect(Object.keys(remote.pushLog[0])).not.toContain('user_id')
+  })
+
+  it('toWire sends base_rev: null for a new row, the last seen rev for an edit', async () => {
+    const a = device()
+    const row = await a.repo.put<Account>('accounts', acc)
+    await a.sync.syncOnce()
+    expect(remote.pushLog[0]).toMatchObject({ id: row.id, base_rev: null })
+    await a.repo.put<Account>('accounts', { id: row.id, name: 'Новая' })
+    await a.sync.syncOnce()
+    expect(remote.pushLog[1]).toMatchObject({ id: row.id, name: 'Новая', base_rev: 1 })
+    expect(Object.keys(remote.pushLog[1])).not.toContain('rev')
+    expect(await a.db.accounts.get(row.id)).toMatchObject({ rev: 2, dirty: 0 })
   })
 
   it('keeps dirty and reports error when push fails', async () => {
@@ -458,7 +482,13 @@ describe('fx rates', () => {
       ]
     }
     await a.sync.syncOnce()
-    expect(await a.db.transactions.get(tx.id)).toMatchObject({ deleted: true, rate_pending: true, amount_usd: 0 })
+    // remove() is soft now: the row sits in the undo bin, and a row in the bin is not rate-fixed either
+    expect(await a.db.transactions.get(tx.id)).toMatchObject({
+      deleted: false,
+      deleted_at: '2026-10-21T10:00:00.000Z',
+      rate_pending: true,
+      amount_usd: 0,
+    })
   })
 
   it('fetches and stores today rates when settings currencies lack an exact rate (R15)', async () => {
@@ -578,5 +608,105 @@ describe('field reality (stage 0)', () => {
     expect(remote.t('transactions').get(row.id)).toMatchObject({ note: 'from pc' })
     expect(await phone.db.transactions.get(row.id)).toMatchObject({ note: 'from pc', dirty: 0 })
     expect(await pc.db.transactions.get(row.id)).toMatchObject({ note: 'from pc', dirty: 0 })
+  })
+})
+
+describe('deletion wins (1.1)', () => {
+  const tx = {
+    kind: 'expense' as const,
+    amount: 10,
+    currency: 'USD',
+    account_id: 'a',
+    to_account_id: null,
+    to_amount: null,
+    to_currency: null,
+    category_id: null,
+    date: '2026-10-21',
+    note: 'first',
+    source: 'app' as const,
+  }
+
+  /** phone and pc share one synced record; the phone then deletes it and syncs. */
+  async function deletedOnPhone() {
+    const phone = device()
+    const pc = device()
+    const row = await phone.repo.addTransaction(tx)
+    await phone.sync.syncOnce()
+    await pc.sync.syncOnce()
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({ deleted_at: null, dirty: 0 })
+    const batch = await phone.repo.remove('transactions', row.id)
+    await phone.sync.syncOnce()
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ deleted_at: '2026-10-21T10:00:00.000Z', deleted_batch: batch })
+    return { phone, pc, row, batch }
+  }
+
+  it('remote deletion beats a local dirty edit: the pull brings it, the edit is not sent again (Review Focus 1)', async () => {
+    const { pc, row, batch } = await deletedOnPhone()
+    // pc, offline, edits the same record
+    await pc.repo.updateTransaction(row.id, { note: 'from pc' })
+    remote.failPush = true // the push cannot get out, the pull can
+    await pc.sync.syncOnce()
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({
+      deleted_at: '2026-10-21T10:00:00.000Z',
+      deleted_batch: batch,
+      note: 'first',
+      dirty: 0,
+    })
+
+    remote.failPush = false
+    const sent = remote.pushLog.length
+    await pc.sync.syncOnce()
+    expect(remote.pushLog).toHaveLength(sent)
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ note: 'first', deleted_at: '2026-10-21T10:00:00.000Z' })
+  })
+
+  it('push echo: when the server keeps a deletion, the pushing device shows it again', async () => {
+    const { pc, row, batch } = await deletedOnPhone()
+    await pc.repo.updateTransaction(row.id, { note: 'from pc' })
+    await pc.sync.syncOnce() // push first: base_rev is older than the deletion, the server keeps it
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ note: 'from pc', deleted_at: '2026-10-21T10:00:00.000Z' })
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({
+      note: 'from pc',
+      deleted_at: '2026-10-21T10:00:00.000Z',
+      deleted_batch: batch,
+      dirty: 0,
+    })
+    const sent = remote.pushLog.length
+    await pc.sync.syncOnce()
+    expect(remote.pushLog).toHaveLength(sent)
+  })
+
+  it('a restore made after seeing the deletion goes through (base_rev = current rev) and reaches the other device', async () => {
+    const { phone, pc, row, batch } = await deletedOnPhone()
+    await pc.sync.syncOnce()
+    expect(await pc.repo.restore(batch)).toBe(1)
+    await pc.sync.syncOnce()
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ deleted_at: null, deleted_batch: null })
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({ deleted_at: null, dirty: 0 })
+    await phone.sync.syncOnce()
+    expect(await phone.db.transactions.get(row.id)).toMatchObject({ deleted_at: null, dirty: 0 })
+  })
+
+  it('a local restore is not undone by re-pulling the deletion it has already seen (overlap)', async () => {
+    const { pc, row, batch } = await deletedOnPhone()
+    await pc.sync.syncOnce()
+    await pc.repo.restore(batch)
+    remote.failPush = true
+    await pc.sync.syncOnce()
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({ deleted_at: null, dirty: 1 })
+    remote.failPush = false
+    await pc.sync.syncOnce()
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ deleted_at: null })
+  })
+
+  it('a final deletion on the server also wins over a local dirty edit', async () => {
+    const pc = device()
+    remote.seed('transactions', botTx('bot-1'))
+    await pc.sync.syncOnce()
+    await pc.repo.updateTransaction('bot-1', { note: 'from pc' })
+    remote.seed('transactions', { ...remote.t('transactions').get('bot-1')!, deleted: true })
+    remote.failPush = true
+    await pc.sync.syncOnce()
+    expect(await pc.db.transactions.get('bot-1')).toMatchObject({ deleted: true, note: 'bot', dirty: 0 })
   })
 })

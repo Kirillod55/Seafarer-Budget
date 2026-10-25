@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { alive } from '@shared/alive.ts'
 import { monthReport } from '@shared/calc.ts'
 import { localDate, monthOf, prevMonth } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
@@ -59,8 +60,8 @@ export function Report() {
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
     const [settings, txs, categories] = await Promise.all([
-      db.settings.filter((s) => !s.deleted).first(),
-      db.transactions.filter((t) => !t.deleted).toArray(),
+      db.settings.filter(alive).first(),
+      db.transactions.filter(alive).toArray(),
       db.categories.toArray(),
     ])
     return { settings, txs, categories }

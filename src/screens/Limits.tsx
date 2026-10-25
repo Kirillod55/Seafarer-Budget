@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { alive } from '@shared/alive.ts'
 import { limitStatus } from '@shared/calc.ts'
 import { localDate, monthOf } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
@@ -34,7 +35,8 @@ function LimitForm({
     try {
       // a category whose limit was removed earlier reuses that (soft-deleted) row instead of adding a second one
       const id = limit?.id ?? (await db.limits.filter((l) => l.category_id === categoryId).first())?.id
-      await repo.put<Limit>('limits', { id, category_id: categoryId, monthly_usd: value, deleted: false })
+      // remove() is soft since 1.1: bring the row out of the undo bin (the push carries base_rev = rev)
+      await repo.put<Limit>('limits', { id, category_id: categoryId, monthly_usd: value, deleted: false, deleted_at: null, deleted_batch: null })
       onClose()
     } finally {
       setBusy(false)
@@ -113,10 +115,10 @@ export function Limits() {
   const [editing, setEditing] = useState<Editing>(null)
   const data = useLiveQuery(async () => {
     const [settings, categories, limits, txs] = await Promise.all([
-      db.settings.filter((s) => !s.deleted).first(),
-      db.categories.filter((c) => !c.deleted && !c.archived && c.kind === 'expense').sortBy('sort'),
-      db.limits.filter((l) => !l.deleted).toArray(),
-      db.transactions.filter((t) => !t.deleted).toArray(),
+      db.settings.filter(alive).first(),
+      db.categories.filter((c) => alive(c) && !c.archived && c.kind === 'expense').sortBy('sort'),
+      db.limits.filter(alive).toArray(),
+      db.transactions.filter(alive).toArray(),
     ])
     return { settings, categories, limits, txs }
   }, [db])

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SYNC_TABLES, type FxRate, type SyncTable } from '@shared/types.ts'
-import { RowRejectedError, type RatePatch, type Remote } from './sync.ts'
+import { isSoftTable, SYNC_TABLES, type FxRate, type SyncTable } from '@shared/types.ts'
+import { RowRejectedError, type PushResult, type RatePatch, type Remote } from './sync.ts'
 
 const PUSH_CHUNK = 500
 const PAGE = 1000
@@ -20,15 +20,25 @@ function isRejection(status: number): boolean {
 
 export function createSupabaseRemote(client: SupabaseClient): SupabaseRemote {
   return {
+    // The deletion fields come back too: the trigger may keep a deletion over the pushed edit.
     async push(table: SyncTable, rows: object[]) {
-      const out: { id: string; rev: number }[] = []
+      const soft = isSoftTable(table)
+      const columns = soft ? 'id, rev, deleted, deleted_at, deleted_batch' : 'id, rev, deleted'
+      const out: PushResult[] = []
       for (let i = 0; i < rows.length; i += PUSH_CHUNK) {
         const { data, error, status } = await client
           .from(table)
           .upsert(rows.slice(i, i + PUSH_CHUNK), { onConflict: 'id' })
-          .select('id, rev')
+          .select(columns)
         if (error) throw isRejection(status) ? new RowRejectedError(error.message) : new Error(error.message)
-        for (const r of data ?? []) out.push({ id: r.id as string, rev: Number(r.rev) })
+        for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
+          const result: PushResult = { id: r.id as string, rev: Number(r.rev), deleted: r.deleted === true }
+          if (soft) {
+            result.deleted_at = (r.deleted_at as string | null) ?? null
+            result.deleted_batch = (r.deleted_batch as string | null) ?? null
+          }
+          out.push(result)
+        }
       }
       return out
     },
