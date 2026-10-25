@@ -20,5 +20,5 @@
       "@shared/*": ["./supabase/functions/_shared/*"]
     }
   },
-  "include": ["src", "supabase/functions/_shared", "supabase/functions/fx-rates/handler.ts", "supabase/functions/fx-rates/handler.test.ts", "vite.config.ts"]
+  "include": ["src", "supabase/functions/_shared", "supabase/functions/fx-rates/handler.ts", "supabase/functions/fx-rates/handler.test.ts", "supabase/sql.test.ts", "vite.config.ts"]
 }
