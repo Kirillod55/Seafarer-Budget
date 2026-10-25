@@ -25,10 +25,8 @@ const MAX_V = 6000 // px/s: synthetic or glitchy touch samples must not fling th
 
 export interface BackSwipeOptions {
   enabled: boolean
-  /** The layer with the previous page (rendered after onStart); moved with parallax and dimmed. */
+  /** The previous page (mounted, hidden under this one): revealed while dragging, moved with parallax, dimmed. */
   underRef?: RefObject<HTMLElement | null>
-  onStart?(): void
-  onCancel?(): void
   /** The page has slid fully off: navigate back without another transition. */
   onCommit(): void
 }
@@ -58,10 +56,18 @@ export function useBackSwipe(el: HTMLElement | null, opts: BackSwipeOptions): vo
         under.style.setProperty('--dim', String(0.18 * (1 - p)))
       }
     }
+    const resetUnder = () => {
+      const under = o.current.underRef?.current
+      if (!under) return
+      under.classList.remove('peek')
+      under.style.transform = ''
+      under.style.removeProperty('--dim')
+    }
     const release = () => {
       el.classList.remove('backdrag')
       el.style.transform = ''
       el.style.transition = ''
+      resetUnder()
     }
 
     const start = (e: TouchEvent) => {
@@ -99,10 +105,12 @@ export function useBackSwipe(el: HTMLElement | null, opts: BackSwipeOptions): vo
         mode = mx > 0 && Math.abs(mx) > Math.abs(my) * 1.2 ? 'back' : 'none'
         if (mode === 'back') {
           W = el.getBoundingClientRect().width || window.innerWidth
+          // a push / tab animation still running would hold the page: stop it, the finger takes over
+          for (const a of el.getAnimations?.() ?? []) a.cancel()
           el.classList.add('backdrag')
           el.style.transition = 'none'
+          o.current.underRef?.current?.classList.add('peek')
           x0 = t.clientX // start from here, so the page does not jump by the 10 px dead zone
-          o.current.onStart?.()
         }
       }
       if (mode !== 'back') return
@@ -113,7 +121,8 @@ export function useBackSwipe(el: HTMLElement | null, opts: BackSwipeOptions): vo
       place(raw < 0 ? -rubber(-raw, W) : raw)
     }
 
-    const end = () => {
+    /** Lift (touchend) decides by distance and speed; touchcancel always springs back. */
+    const finish = (e: TouchEvent, cancelled: boolean) => {
       if (x0 === null) return
       x0 = null
       if (mode !== 'back') {
@@ -122,37 +131,40 @@ export function useBackSwipe(el: HTMLElement | null, opts: BackSwipeOptions): vo
       }
       mode = null
       // a finger held still before lifting has no speed left: sample the release moment too
-      tr.add(lastX)
+      tr.add(e.changedTouches?.[0]?.clientX ?? lastX)
       const v = Math.max(-MAX_V, Math.min(MAX_V, tr.velocity()))
-      const commit = v > -100 && (dx > W * 0.35 || dx + project(v) > W * 0.5)
+      const commit = !cancelled && v > -100 && (dx > W * 0.35 || dx + project(v) > W * 0.5)
       sp = spring({
         from: dx,
         to: commit ? W : 0,
         velocity: v,
         damping: 1,
         response: 0.33,
-        onUpdate: place,
+        // never past the screen edge on the way home, nor beyond the width on the way out
+        onUpdate: (x) => place(Math.max(0, Math.min(W, x))),
         onDone: () => {
           sp = null
           if (commit) {
+            resetUnder()
             o.current.onCommit()
           } else {
             release()
-            o.current.onCancel?.()
           }
         },
       })
     }
+    const end = (e: TouchEvent) => finish(e, false)
+    const cancel = (e: TouchEvent) => finish(e, true)
 
     el.addEventListener('touchstart', start, { passive: true })
     el.addEventListener('touchmove', move, { passive: false })
     el.addEventListener('touchend', end)
-    el.addEventListener('touchcancel', end)
+    el.addEventListener('touchcancel', cancel)
     return () => {
       el.removeEventListener('touchstart', start)
       el.removeEventListener('touchmove', move)
       el.removeEventListener('touchend', end)
-      el.removeEventListener('touchcancel', end)
+      el.removeEventListener('touchcancel', cancel)
       sp?.stop()
       if (el.isConnected) release()
     }

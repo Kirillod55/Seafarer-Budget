@@ -70,6 +70,26 @@ describe('Shell navigation', () => {
     expect(screen.queryByLabelText('Сумма')).toBeNull()
   })
 
+  it('back from «Лимиты» shows the same, already loaded «Ещё» — no «Загрузка…» at any point', async () => {
+    await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Ещё' }))
+    await screen.findByRole('button', { name: 'Выйти' })
+    fireEvent.click(screen.getByRole('button', { name: 'Лимиты' }))
+    await screen.findByRole('button', { name: 'Задать лимит' })
+
+    let flashed = false
+    const watch = new MutationObserver(() => {
+      if (document.body.textContent?.includes('Загрузка')) flashed = true
+    })
+    watch.observe(document.body, { subtree: true, childList: true, characterData: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Назад, Ещё' }))
+    expect(screen.getByRole('button', { name: 'Выйти' })).toBeTruthy() // there at once, not after a reload
+    await new Promise((r) => setTimeout(r, 50))
+    watch.disconnect()
+    expect(flashed).toBe(false)
+    expect(screen.queryByText(/Загрузка/)).toBeNull()
+  })
+
   it('«Ещё» rows open Лимиты, Счета, Категории and Архив under «‹ Ещё», which goes back', async () => {
     await setup()
     fireEvent.click(screen.getByRole('button', { name: 'Ещё' }))

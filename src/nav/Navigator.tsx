@@ -38,9 +38,14 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
 ]
 
 type Transition = 'push' | 'pop' | 'tab' | 'none'
-/** A stack entry keeps the page's scroll position, so going back lands on the same spot. */
+/**
+ * A stack entry stays mounted while deeper screens are on top of it (hidden, inert, out of flow), so going back
+ * shows the same page with its data, local state and scroll position — and the back swipe reveals it underneath.
+ */
 interface Entry {
+  id: number
   route: Route
+  /** window scroll position saved when a deeper screen was pushed over it */
   y: number
 }
 interface State {
@@ -53,6 +58,8 @@ interface State {
 const ANIM: Record<Transition, string> = { push: ' v-push', pop: ' v-pop', tab: ' v-tab', none: '' }
 
 const NavContext = createContext<Nav | null>(null)
+/** false while a screen is hidden under a deeper one: its window listeners (scroll, resize) stay off. */
+const ActiveContext = createContext(true)
 
 export function useNav(): Nav {
   const nav = useContext(NavContext)
@@ -60,16 +67,8 @@ export function useNav(): Nav {
   return nav
 }
 
-const scrollY = () => (typeof window === 'undefined' ? 0 : window.scrollY || 0)
-
-function scrollToY(y: number) {
-  // jsdom has no layout: scrolling there only prints «not implemented»
-  if (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent)) return
-  window.scrollTo(0, y)
-}
-
-function keyOf(r: Route, depth: number): string {
-  return r.screen === 'records' ? `${depth}:${r.tab}:records:${r.month}:${r.category ?? ''}:${r.from}` : `${depth}:${r.tab}:${r.screen}`
+export function useScreenActive(): boolean {
+  return useContext(ActiveContext)
 }
 
 export function Navigator({
@@ -80,24 +79,26 @@ export function Navigator({
   /** Called on every push / back / tab tap (the shell drops its open record form). */
   onNavigate?(): void
 }) {
+  const seq = useRef(0)
   const [state, setState] = useState<State>({
-    stack: [{ route: { tab: 'home', screen: 'root' }, y: 0 }],
+    stack: [{ id: 0, route: { tab: 'home', screen: 'root' }, y: 0 }],
     transition: 'none',
     tabChanges: 0,
   })
-  const [peek, setPeek] = useState(false)
-  const [screenEl, setScreenEl] = useState<HTMLElement | null>(null)
-  const underRef = useRef<HTMLDivElement>(null)
+  const els = useRef(new Map<number, HTMLElement>())
+  const underRef = useRef<HTMLElement | null>(null)
+  const [topEl, setTopEl] = useState<HTMLElement | null>(null)
   const navigated = useRef(onNavigate)
   navigated.current = onNavigate
 
   const push = useCallback((route: Route) => {
     navigated.current?.()
-    const y = scrollY()
+    const y = window.scrollY || 0
+    const id = ++seq.current
     setState((s) => {
       const stack = s.stack.slice()
       stack[stack.length - 1] = { ...stack[stack.length - 1], y }
-      return { ...s, stack: [...stack, { route, y: 0 }], transition: 'push' }
+      return { ...s, stack: [...stack, { id, route, y: 0 }], transition: 'push' }
     })
   }, [])
 
@@ -109,52 +110,63 @@ export function Navigator({
 
   const switchTab = useCallback((tab: Tab) => {
     navigated.current?.()
+    const id = ++seq.current
     setState((s) => {
       const cur = s.stack[s.stack.length - 1].route
-      if (cur.tab === tab && s.stack.length === 1) return s // already on that root
-      return {
-        stack: [{ route: { tab, screen: 'root' }, y: 0 }],
-        // a tap on the current tab from a deeper screen returns to its root like «‹ …»
-        transition: cur.tab === tab ? 'pop' : 'tab',
-        tabChanges: s.tabChanges + (cur.tab === tab ? 0 : 1),
-      }
+      if (cur.tab !== tab) return { stack: [{ id, route: { tab, screen: 'root' }, y: 0 }], transition: 'tab', tabChanges: s.tabChanges + 1 }
+      // the current tab from a deeper screen: back to its root (still mounted, with its scroll), like «‹ …»
+      return s.stack.length === 1 ? s : { ...s, stack: s.stack.slice(0, 1), transition: 'pop' }
     })
   }, [])
 
-  const top = state.stack[state.stack.length - 1]
-  const prev = state.stack.length > 1 ? state.stack[state.stack.length - 2] : null
+  const { stack, transition } = state
+  const top = stack[stack.length - 1]
   const route = top.route
   const nav = useMemo<Nav>(() => ({ route, push, back, switchTab }), [route, push, back, switchTab])
+  underRef.current = stack.length > 1 ? (els.current.get(stack[stack.length - 2].id) ?? null) : null
 
-  // a new screen starts at the top; going back restores where the previous one was
-  const key = keyOf(route, state.stack.length)
+  // When the top screen changes: lower screens keep showing their saved spot inside their fixed box (that is what
+  // the back swipe reveals), the top one gets the window scroll back, and after push/back focus moves to its title.
+  const shown = useRef(top.id)
   useLayoutEffect(() => {
-    scrollToY(top.y)
-    setPeek(false)
-  }, [key])
+    for (const e of stack.slice(0, -1)) {
+      const el = els.current.get(e.id)
+      if (el) el.scrollTop = e.y
+    }
+    window.scrollTo(0, top.y)
+    const el = els.current.get(top.id) ?? null
+    setTopEl(el)
+    if (shown.current === top.id) return // first mount
+    shown.current = top.id
+    if (transition !== 'tab') el?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true })
+  }, [top.id])
 
-  useBackSwipe(screenEl, {
-    enabled: prev !== null,
+  useBackSwipe(topEl, {
+    enabled: stack.length > 1,
     underRef,
-    onStart: () => setPeek(true),
-    onCancel: () => setPeek(false),
     onCommit: () => pop('none'), // the page has already slid away: no second animation
   })
 
   return (
     <NavContext.Provider value={nav}>
       <div className="app">
-        {peek && prev && (
-          // the previous page shows underneath while the finger drags this one away
-          <div className="under" ref={underRef} aria-hidden="true" inert style={{ transform: 'translateX(-30%)' }}>
-            <section className="screen" style={{ marginTop: -prev.y }}>
-              {renderScreen(prev.route)}
+        {stack.map((e, i) => {
+          const isTop = i === stack.length - 1
+          return (
+            <section
+              key={e.id}
+              ref={(el) => {
+                if (el) els.current.set(e.id, el)
+                else els.current.delete(e.id)
+              }}
+              className={isTop ? `screen${ANIM[transition]}` : 'screen below'}
+              inert={!isTop}
+              aria-hidden={isTop ? undefined : true}
+            >
+              <ActiveContext.Provider value={isTop}>{renderScreen(e.route)}</ActiveContext.Provider>
             </section>
-          </div>
-        )}
-        <section key={key} ref={setScreenEl} className={`screen${ANIM[state.transition]}`}>
-          {renderScreen(route)}
-        </section>
+          )
+        })}
         <nav className="tabs" aria-label="Разделы">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = route.tab === id

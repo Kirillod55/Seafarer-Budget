@@ -146,7 +146,23 @@
   height: 26px;
 }
 
-/* ---------- swipe back: the page follows the finger, the previous page shows underneath ---------- */
+/* ---------- lower stack entries and swipe back ---------- */
+
+/* a screen under a deeper one stays mounted: out of flow, invisible, its saved spot kept by scrollTop (Navigator) */
+.screen.below {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* while the finger drags the top page away, the previous one shows underneath with parallax and a fading dim */
+.screen.below.peek {
+  visibility: visible;
+  filter: brightness(calc(1 - var(--dim, 0.18)));
+}
 
 .screen.backdrag {
   position: relative;
@@ -154,21 +170,9 @@
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.28);
 }
 
-.under {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  overflow: hidden;
-  background: var(--bg);
-  pointer-events: none;
-}
-
-.under::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--scrim);
-  opacity: calc(var(--dim, 0.18) / 0.18 * 0.6);
+/* the title takes focus after push / back (for VoiceOver), without a ring */
+.screen h1[tabindex='-1']:focus {
+  outline: none;
 }
 
 /* ---------- motion (Reduce Motion: none of it) ---------- */

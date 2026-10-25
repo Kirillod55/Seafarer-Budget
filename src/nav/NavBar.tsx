@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronLeft } from '../ui/icons.ts'
-import { useNav } from './Navigator.tsx'
+import { useNav, useScreenActive } from './Navigator.tsx'
 
 /*
  * iOS navigation bar (spec §6 «Назад как в iOS», «Компактная полоса навигации»): the «‹ Ещё» pill and an optional
@@ -12,8 +12,11 @@ export function NavBar({ back, title, trailing }: { back?: { label: string }; ti
   const barRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const [solid, setSolid] = useState(false)
+  // a screen hidden under a deeper one keeps its look and listens to nothing
+  const active = useScreenActive()
 
   useEffect(() => {
+    if (!active) return
     // two rect reads per scroll event; React skips the render when the state does not change
     const sync = () => {
       const bar = barRef.current
@@ -27,13 +30,13 @@ export function NavBar({ back, title, trailing }: { back?: { label: string }; ti
       window.removeEventListener('scroll', sync)
       window.removeEventListener('resize', sync)
     }
-  }, [])
+  }, [active])
 
   return (
     <>
       <div ref={barRef} className={`navbar stick${solid ? ' solid' : ''}`}>
         {back ? (
-          <button type="button" className="navback" onClick={nav.back}>
+          <button type="button" className="navback" aria-label={`Назад, ${back.label}`} onClick={nav.back}>
             <ChevronLeft aria-hidden="true" strokeWidth={2.4} />
             {back.label}
           </button>
@@ -45,7 +48,7 @@ export function NavBar({ back, title, trailing }: { back?: { label: string }; ti
           {title}
         </span>
       </div>
-      <h1 ref={titleRef} className="large">
+      <h1 ref={titleRef} className="large" tabIndex={-1}>
         {title}
       </h1>
     </>
