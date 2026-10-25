@@ -148,9 +148,12 @@ describe('Home', () => {
     })
     renderWithApp(<Home />, env)
 
-    expect(await screen.findByText('кофе')).toBeTruthy()
-    expect(screen.getByText('-₴80')).toBeTruthy()
-    expect(screen.getByText(/Кафе и рестораны/)).toBeTruthy()
+    // the note with a capital letter, the amount without «−» (no rate yet: the original currency first)
+    expect(await screen.findByText('Кофе')).toBeTruthy()
+    expect(screen.getByText('₴80')).toBeTruthy()
+    expect(screen.queryByText('-₴80')).toBeNull()
+    expect(screen.getByText('Кафе и рестораны')).toBeTruthy()
+    expect(screen.getByText('Сегодня')).toBeTruthy()
   })
 
   it('«+ Запись» opens an empty record and tapping a row opens that transaction', async () => {
@@ -175,7 +178,7 @@ describe('Home', () => {
     fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
     expect(onOpenRecord).toHaveBeenLastCalledWith(undefined)
 
-    fireEvent.click(await screen.findByRole('button', { name: /кофе/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /кофе/i }))
     expect(onOpenRecord).toHaveBeenLastCalledWith(tx.id)
   })
 })

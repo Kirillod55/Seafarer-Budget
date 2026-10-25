@@ -7,7 +7,7 @@ import { money } from '@shared/format.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import type { Settings } from '@shared/types.ts'
 import { QuickInput } from '../components/QuickInput.tsx'
-import { TxList } from '../components/TxList.tsx'
+import { DayGroups } from '../components/DayGroups.tsx'
 import { useApp } from '../context.tsx'
 
 const usd = (n: number, whole = true) => money(n, 'USD', { whole })
@@ -140,7 +140,15 @@ export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}
 
       <section>
         <h2>Последние записи</h2>
-        <TxList txs={txs} categories={categories} onSelect={onOpenRecord} />
+        <DayGroups
+          txs={txs}
+          categories={categories}
+          accounts={accounts}
+          partnerName={settings.partner_name}
+          today={today}
+          maxDays={3}
+          onOpen={(id) => onOpenRecord?.(id)}
+        />
       </section>
     </div>
   )
