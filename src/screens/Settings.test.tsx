@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, Category, Settings as SettingsRow } from '@shared/types.ts'
-import { RecordScreen } from './Record.tsx'
+import { RecordSheet } from './RecordSheet.tsx'
 import { Settings } from './Settings.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
@@ -287,10 +287,13 @@ describe('Settings: categories', () => {
     expect((await env.db.transactions.get(old.id))!.category_id).toBe(cafe.id)
 
     view.unmount()
-    renderWithApp(<RecordScreen onDone={vi.fn()} />, env)
-    const picker = (await screen.findByLabelText('Категория')) as HTMLSelectElement
-    expect([...picker.options].some((o) => (o.textContent ?? '').includes('Кафе и рестораны'))).toBe(false)
-    expect([...picker.options].some((o) => (o.textContent ?? '').includes('Продукты'))).toBe(true)
+    renderWithApp(<RecordSheet open onClose={vi.fn()} />, env)
+    const picker = await screen.findByRole('group', { name: 'Категория' })
+    const names = within(picker)
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '')
+    expect(names).not.toContain('Кафе и рестораны')
+    expect(names).toContain('Продукты')
   })
 
   it('an archived category is listed with «Вернуть», which unarchives it', async () => {

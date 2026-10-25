@@ -9,6 +9,7 @@ import type { Settings } from '@shared/types.ts'
 import { QuickInput } from '../components/QuickInput.tsx'
 import { DayGroups } from '../components/DayGroups.tsx'
 import { useApp } from '../context.tsx'
+import { useRecordSheet } from './RecordSheet.tsx'
 
 const usd = (n: number, whole = true) => money(n, 'USD', { whole })
 
@@ -48,8 +49,9 @@ function ContractDate({ settings }: { settings: Settings }) {
   )
 }
 
-export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}) {
+export function Home() {
   const { db, now } = useApp()
+  const { openRecord } = useRecordSheet()
   const data = useLiveQuery(async () => {
     const [settings, txs, rates, moves, goals, categories, accounts] = await Promise.all([
       db.settings.filter(alive).first(),
@@ -82,7 +84,7 @@ export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}
     <div className="stack">
       {quick}
 
-      <button type="button" className="btn btn-block" onClick={() => onOpenRecord?.(undefined)}>
+      <button type="button" className="btn btn-block" onClick={() => openRecord()}>
         + Запись
       </button>
 
@@ -147,7 +149,7 @@ export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}
           partnerName={settings.partner_name}
           today={today}
           maxDays={3}
-          onOpen={(id) => onOpenRecord?.(id)}
+          onOpen={openRecord}
         />
       </section>
     </div>

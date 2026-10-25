@@ -1,0 +1,202 @@
+/*
+ * The record sheet's content (prototype v60 recordSheet(): .field, .grid2, .chips/.chip with .stagger, .btn-gray).
+ * Fields are 17 px or more (iOS never zooms the page on focus); colours only from tokens.
+ */
+
+.rec {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rec .fld {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rec .fld > label,
+.rec .flabel {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+}
+
+/* the narrow column (currency, account) is wide enough for «USD $» */
+.rec .grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.rec .inp {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: max(17px, 1rem);
+  line-height: 1.2;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.rec .inp:focus {
+  outline: none;
+  border-color: var(--accent-text);
+}
+
+.rec .inp[aria-invalid='true'] {
+  border-color: var(--warn);
+}
+
+.rec .inp[readonly] {
+  background: var(--track);
+  color: var(--muted);
+}
+
+.rec .inp[readonly]:focus {
+  border-color: var(--line);
+}
+
+.rec input[type='date'].inp {
+  display: block;
+  font-size: max(17px, 1rem);
+  text-align: left;
+}
+
+.rec .inp::placeholder {
+  color: var(--muted);
+}
+
+/* ---------- category pills ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.882rem; /* 15 */
+  cursor: pointer;
+  transition:
+    background-color 0.25s var(--ios),
+    border-color 0.25s var(--ios),
+    color 0.25s var(--ios);
+}
+
+.chip .chip-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:active {
+  transform: scale(0.96);
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.chip[aria-pressed='true'] .ic {
+  background: color-mix(in srgb, var(--on-accent) 12%, transparent);
+  color: var(--on-accent);
+}
+
+.chip .ic {
+  transition:
+    background-color 0.25s var(--ios),
+    color 0.25s var(--ios);
+}
+
+/* the wave: on opening and on «Расход/Доход» (the list is mounted anew), not on a choice */
+.chips.stagger > * {
+  animation: chipIn 0.42s var(--ios) both;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+
+@keyframes chipIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+}
+
+/* ---------- actions ---------- */
+
+.btn-gray {
+  min-height: 44px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: var(--track);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.882rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-gray.danger {
+  color: var(--danger);
+}
+
+.rec-acts {
+  display: flex;
+  gap: 8px;
+}
+
+.rec-acts > button {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  font-size: 0.882rem;
+  animation: chipIn 0.3s var(--ios);
+}
+
+.rec-confirm-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.rec-err {
+  color: var(--warn);
+  font-size: 0.882rem;
+}

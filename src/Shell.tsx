@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, type CSSProperties } from 'react'
+import { Suspense, lazy, type CSSProperties } from 'react'
 import { SyncBadge } from './components/SyncBadge.tsx'
 import { NavBar } from './nav/NavBar.tsx'
 import { Navigator, useNav, type Route } from './nav/Navigator.tsx'
@@ -6,7 +6,7 @@ import { Accounts } from './screens/Accounts.tsx'
 import { Goals } from './screens/Goals.tsx'
 import { Home } from './screens/Home.tsx'
 import { Limits } from './screens/Limits.tsx'
-import { RecordScreen } from './screens/Record.tsx'
+import { RecordSheetHost, useRecordSheet } from './screens/RecordSheet.tsx'
 import { Settings } from './screens/Settings.tsx'
 import { Archive, ChevronRight, CreditCard, Gauge, Tag, type LucideIcon } from './ui/icons.ts'
 import { ToastHost } from './ui/Toast.tsx'
@@ -16,12 +16,21 @@ const Report = lazy(() => import('./screens/Report.tsx').then((m) => ({ default:
 
 /*
  * The signed-in app: the four-tab navigator with the screens in it. Stage 2 replaces the 1.0 screens one by one;
- * until then they sit inside the new navigation (the record form still opens in place of Home — Task 5 makes it
- * a sheet; «Категории» and «Архив» are placeholders — Tasks 11/12; «Ещё» is redone in Task 10).
+ * until then they sit inside the new navigation («Категории» and «Архив» are placeholders — Tasks 11/12; «Ещё» is
+ * redone in Task 10). The record sheet is one for the whole app: RecordSheetHost around the navigator, screens open
+ * it with useRecordSheet().openRecord(id?).
  */
 export function Shell({ onSignOut }: { onSignOut(): void }) {
-  // the 1.0 record form, opened from Home's «+ Запись» or a tap on a record; any navigation drops it
-  const [record, setRecord] = useState<{ id?: string } | null>(null)
+  return (
+    <RecordSheetHost>
+      <ShellNav onSignOut={onSignOut} />
+    </RecordSheetHost>
+  )
+}
+
+function ShellNav({ onSignOut }: { onSignOut(): void }) {
+  // any navigation closes an open record sheet (as «Отмена»)
+  const { closeRecord } = useRecordSheet()
 
   const renderScreen = (route: Route) => {
     switch (route.screen) {
@@ -32,11 +41,7 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
               <header className="topbar">
                 <SyncBadge />
               </header>
-              {record ? (
-                <RecordScreen id={record.id} onDone={() => setRecord(null)} />
-              ) : (
-                <Home onOpenRecord={(id) => setRecord({ id })} />
-              )}
+              <Home />
             </>
           )
         if (route.tab === 'report')
@@ -85,7 +90,7 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
 
   return (
     <>
-      <Navigator renderScreen={renderScreen} onNavigate={() => setRecord(null)} />
+      <Navigator renderScreen={renderScreen} onNavigate={closeRecord} />
       {/* the one toast host: screens call useToast() */}
       <ToastHost />
     </>

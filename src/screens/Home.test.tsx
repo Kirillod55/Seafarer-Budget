@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { Home } from './Home.tsx'
+import { RecordSheetHost } from './RecordSheet.tsx'
 import { makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
 import type { Account, Goal, GoalMove, Settings } from '@shared/types.ts'
@@ -172,13 +173,21 @@ describe('Home', () => {
       note: 'кофе',
       source: 'app',
     })
-    const onOpenRecord = vi.fn()
-    renderWithApp(<Home onOpenRecord={onOpenRecord} />, env)
+    renderWithApp(
+      <RecordSheetHost>
+        <Home />
+      </RecordSheetHost>,
+      env,
+    )
 
     fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
-    expect(onOpenRecord).toHaveBeenLastCalledWith(undefined)
+    expect(await screen.findByRole('dialog', { name: 'Новая запись' })).toBeTruthy()
+    expect((screen.getByLabelText('Сумма') as HTMLInputElement).value).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
     fireEvent.click(await screen.findByRole('button', { name: /кофе/i }))
-    expect(onOpenRecord).toHaveBeenLastCalledWith(tx.id)
+    expect(await screen.findByRole('dialog', { name: 'Запись' })).toBeTruthy()
+    await waitFor(() => expect((screen.getByLabelText('Сумма') as HTMLInputElement).value).toBe(String(tx.amount)))
   })
 })

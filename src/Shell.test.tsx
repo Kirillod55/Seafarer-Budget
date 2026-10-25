@@ -29,24 +29,29 @@ async function setup() {
 }
 
 describe('Shell navigation', () => {
-  it('«+ Запись» on Home opens an empty form; «Отмена» returns home', async () => {
+  it('«+ Запись» on Home opens the empty record sheet over Home; «Отмена» closes it', async () => {
     await setup()
     fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
-    expect(((await screen.findByLabelText('Сумма')) as HTMLInputElement).value).toBe('')
+    expect(await screen.findByRole('dialog', { name: 'Новая запись' })).toBeTruthy()
+    expect((screen.getByLabelText('Сумма') as HTMLInputElement).value).toBe('')
+    expect(document.documentElement.dataset.editing).toBe('1')
 
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
-    expect(await screen.findByRole('button', { name: '+ Запись' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.documentElement.dataset.editing).toBeUndefined()
+    expect(screen.getByRole('button', { name: '+ Запись' })).toBeTruthy()
   })
 
-  it('tapping a transaction opens it for editing; «Удалить» → «Точно удалить?» returns home without it', async () => {
+  it('tapping a transaction opens it in the sheet; «Удалить запись» → «Удалить» removes it from Home', async () => {
     await setup()
     fireEvent.click(await screen.findByRole('button', { name: /кофе/i }))
-    expect(((await screen.findByLabelText('Сумма')) as HTMLInputElement).value).toBe('80')
+    await waitFor(() => expect((screen.getByLabelText('Сумма') as HTMLInputElement).value).toBe('80'))
 
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить запись' }))
     fireEvent.click(screen.getByRole('button', { name: 'Удалить' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Точно удалить?' }))
-    await waitFor(() => expect(screen.queryByText('Кофе')).toBeNull())
-    expect(await screen.findByRole('button', { name: '+ Запись' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /кофе/i })).toBeNull())
+    expect(await screen.findByText('Запись удалена')).toBeTruthy()
   })
 
   it('has four tabs «Главная · Отчёт · Цели · Ещё» (no «Запись» tab); the sync state shows on «Главная»', async () => {
@@ -62,14 +67,14 @@ describe('Shell navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Цели' })).toBeTruthy()
   })
 
-  it('leaving «Главная» drops a half-filled record; coming back shows Home', async () => {
-    await setup()
+  it('a navigation closes an open record sheet without saving it', async () => {
+    const { env } = await setup()
+    const before = await env.db.transactions.count()
     fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
-    await screen.findByLabelText('Сумма')
+    fireEvent.change(await screen.findByLabelText('Сумма'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Главная' }))
-    expect(await screen.findByRole('button', { name: '+ Запись' })).toBeTruthy()
-    expect(screen.queryByLabelText('Сумма')).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(await env.db.transactions.count()).toBe(before)
   })
 
   it('back from «Лимиты» shows the same, already loaded «Ещё» — no «Загрузка…» at any point', async () => {
