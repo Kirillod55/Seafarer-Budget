@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NavBar } from './NavBar.tsx'
-import { Navigator, depthOf, useNav, type Route } from './Navigator.tsx'
+import { Navigator, depthOf, useNav, useRoute, type Route } from './Navigator.tsx'
 
 type Nav = ReturnType<typeof useNav>
 let nav: Nav
@@ -18,14 +18,20 @@ const TITLES: Record<Route['screen'], string> = {
 }
 const TAB_TITLES = { home: 'Главная', report: 'Отчёт', goals: 'Цели', more: 'Ещё' } as const
 
-/** Stub screens: a NavBar with the route's title, a counter (local state), a swipeable row, a field, a switch. */
+/**
+ * Stub screens: a NavBar with the route's title (none on «Календарь»), the screen's own route, a counter (local
+ * state), a swipeable row, a field, a switch; the «Цели» root also has a menu open on it.
+ */
 function Stub({ route }: { route: Route }) {
   nav = useNav()
+  const own = useRoute()
   const [count, setCount] = useState(0)
   const title = route.screen === 'root' ? TAB_TITLES[route.tab] : TITLES[route.screen]
   return (
     <>
-      <NavBar back={route.screen === 'root' ? undefined : { label: 'Ещё' }} title={title} />
+      {route.screen !== 'calendar' && <NavBar back={route.screen === 'root' ? undefined : { label: 'Ещё' }} title={title} />}
+      <p data-testid="own">{own.screen}</p>
+      {route.tab === 'goals' && route.screen === 'root' && <div role="menu" aria-label="Меню" />}
       <button type="button" onClick={() => setCount((c) => c + 1)}>{`Счёт ${count}`}</button>
       <div data-swipe-row="" data-testid="row">
         строка
@@ -188,6 +194,22 @@ describe('Navigator', () => {
     expect(window.scrollY).toBe(900)
   })
 
+  it('each mounted screen reads its own route with useRoute(); useNav().route is the top one', () => {
+    setup()
+    act(() => nav.switchTab('more'))
+    act(() => nav.push({ tab: 'more', screen: 'cats' }))
+    act(() => nav.push({ tab: 'more', screen: 'records', month: '2026-10', category: 'c1', from: 'cats' }))
+    const own = [...document.querySelectorAll('.app > .screen')].map((el) => el.querySelector('[data-testid="own"]')!.textContent)
+    expect(own).toEqual(['root', 'cats', 'records'])
+    expect(nav.route.screen).toBe('records')
+  })
+
+  it('focuses the screen itself when it has no title', () => {
+    setup()
+    act(() => nav.push({ tab: 'home', screen: 'calendar' }))
+    expect(document.activeElement).toBe(top())
+  })
+
   it('moves focus to the new screen’s title on push and back', () => {
     setup()
     act(() => nav.switchTab('more'))
@@ -222,6 +244,28 @@ describe('back swipe', () => {
     expect(heading()).toBe('Ещё')
   })
 
+  it('a committed swipe never shows the page below hidden while the dragged page is off-screen', async () => {
+    reduceMotion()
+    setup()
+    toCats()
+    const dragged = top()
+    const below = document.querySelector<HTMLElement>('.screen.below')!
+    let blank = false
+    const watch = new MutationObserver(() => {
+      const offScreen = dragged.isConnected && tx(dragged) > 0
+      const hidden = below.classList.contains('below') && !below.classList.contains('peek')
+      if (offScreen && hidden) blank = true
+    })
+    watch.observe(document.body, { subtree: true, attributes: true, childList: true })
+    swipe(inTop().getByTestId('body'), 60, 60 + window.innerWidth * 0.6)
+    await waitFor(() => expect(nav.route.screen).toBe('root'))
+    await pause()
+    watch.disconnect()
+    expect(blank).toBe(false)
+    expect(top()).toBe(below)
+    expect(below.style.transform).toBe('')
+  })
+
   it('reveals the mounted page below while dragging, and hides it again when cancelled', async () => {
     reduceMotion()
     setup()
@@ -234,10 +278,15 @@ describe('back swipe', () => {
     expect(below.className).toContain('peek')
     expect(below.style.transform).toMatch(/translateX\(-\d/)
     expect(document.querySelectorAll('.app > .screen')).toHaveLength(2) // no second copy of it
+    // dimmed by the scrim's opacity alone, no per-frame filter on the page
+    const scrim = document.querySelector<HTMLElement>('.backscrim')!
+    expect(Number(scrim.style.opacity)).toBeGreaterThan(0)
+    expect(below.style.filter).toBe('')
     fireEvent.touchCancel(body, { touches: [], changedTouches: at(120) })
     await pause()
     expect(below.className).not.toContain('peek')
     expect(below.style.transform).toBe('')
+    expect(scrim.style.opacity).toBe('')
   })
 
   it('a swipe that starts on a swipeable row does not go back', async () => {
@@ -292,6 +341,37 @@ describe('back swipe', () => {
     } finally {
       menu.remove()
     }
+  })
+
+  it('a menu open on a hidden lower screen does not block it', async () => {
+    reduceMotion()
+    setup()
+    act(() => nav.switchTab('goals'))
+    act(() => nav.push({ tab: 'goals', screen: 'archive' }))
+    expect(document.querySelector('.screen.below [role="menu"]')).not.toBeNull()
+    swipe(inTop().getByTestId('body'), 60, 60 + window.innerWidth * 0.6)
+    await waitFor(() => expect(nav.route.screen).toBe('root'))
+  })
+
+  it('released while rubber-banded left of the edge, it eases back instead of jumping', () => {
+    fakeFrames()
+    setup()
+    toCats()
+    const el = top()
+    const body = inTop().getByTestId('body')
+    fireEvent.touchStart(body, { touches: at(100) })
+    fireEvent.touchMove(body, { touches: at(120) })
+    vi.advanceTimersByTime(200)
+    fireEvent.touchMove(body, { touches: at(20) })
+    const pulled = tx(el)
+    expect(pulled).toBeLessThan(-20)
+    vi.advanceTimersByTime(200)
+    fireEvent.touchEnd(body, { touches: [], changedTouches: at(20) })
+    vi.advanceTimersByTime(16)
+    expect(tx(el)).toBeLessThan(0)
+    expect(tx(el)).toBeGreaterThan(pulled)
+    vi.advanceTimersByTime(2000)
+    expect(el.style.transform).toBe('')
   })
 
   it('a short slow drag springs back and stays', async () => {

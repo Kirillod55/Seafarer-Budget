@@ -158,10 +158,19 @@
   pointer-events: none;
 }
 
-/* while the finger drags the top page away, the previous one shows underneath with parallax and a fading dim */
+/* while the finger drags the top page away, the previous one shows underneath with parallax */
 .screen.below.peek {
   visibility: visible;
-  filter: brightness(calc(1 - var(--dim, 0.18)));
+}
+
+/* its dim: a scrim between the two pages, faded by opacity alone (useBackSwipe sets 1 → 0 with the drag) */
+.backscrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: var(--scrim);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .screen.backdrag {
@@ -170,7 +179,8 @@
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.28);
 }
 
-/* the title takes focus after push / back (for VoiceOver), without a ring */
+/* the title (or the screen itself) takes focus after push / back (for VoiceOver), without a ring */
+.screen:focus,
 .screen h1[tabindex='-1']:focus {
   outline: none;
 }

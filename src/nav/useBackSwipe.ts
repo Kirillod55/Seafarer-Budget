@@ -3,7 +3,7 @@ import { createTracker, project, rubber, spring } from '../ui/motion.ts'
 
 /*
  * Swipe right = back, like on iPhone (spec §6 «Назад — свайпом вправо», «Второй проход»). The page follows the
- * finger with a shadow on its left, the previous page shows underneath sliding from −30 % to 0 with a fading dim.
+ * finger with a shadow on its left, the previous page shows underneath sliding from −30 % to 0 under a fading scrim.
  * Released past 35 % of the width, or flicked so that Apple's projection lands past half — back, with no second
  * animation; otherwise a spring brings it home. The spring can be caught mid-flight.
  * Starts anywhere except on swipeable rows, fields and switches (from those only at the left 28 px edge);
@@ -13,20 +13,25 @@ import { createTracker, project, rubber, spring } from '../ui/motion.ts'
 /** Where a back swipe may not start (unless from the left edge): their own horizontal gestures live there. */
 const OWN_GESTURES = '[data-swipe-row], input, select, textarea, [role="switch"], [role="slider"], .seg, [data-no-back-swipe]'
 const EDGE = 28
-/** The record sheet sets data-editing="1" on <html>; menus are role="menu" / .glass, modal sheets aria-modal. */
+const OVERLAYS = '[role="menu"], .glass, [aria-modal="true"]'
+/**
+ * The record sheet sets data-editing="1" on <html>; menus are role="menu" / .glass, modal sheets aria-modal — open
+ * on the top screen or in a portal. Screens hidden under the top one do not count.
+ */
 function blocked(): boolean {
-  return (
-    document.documentElement.dataset.editing === '1' ||
-    document.querySelector('[role="menu"], .glass, [aria-modal="true"]') !== null
-  )
+  if (document.documentElement.dataset.editing === '1') return true
+  for (const m of document.querySelectorAll(OVERLAYS)) if (!m.closest('.screen.below')) return true
+  return false
 }
 
 const MAX_V = 6000 // px/s: synthetic or glitchy touch samples must not fling the spring
 
 export interface BackSwipeOptions {
   enabled: boolean
-  /** The previous page (mounted, hidden under this one): revealed while dragging, moved with parallax, dimmed. */
+  /** The previous page (mounted, hidden under this one): revealed while dragging, moved with parallax. */
   underRef?: RefObject<HTMLElement | null>
+  /** The layer between the two pages that dims the revealed one (opacity only). */
+  scrimRef?: RefObject<HTMLElement | null>
   /** The page has slid fully off: navigate back without another transition. */
   onCommit(): void
 }
@@ -51,17 +56,18 @@ export function useBackSwipe(el: HTMLElement | null, opts: BackSwipeOptions): vo
       const p = Math.max(0, Math.min(1, x / W))
       el.style.transform = `translateX(${x}px)`
       const under = o.current.underRef?.current
-      if (under) {
-        under.style.transform = `translateX(${-30 + 30 * p}%)`
-        under.style.setProperty('--dim', String(0.18 * (1 - p)))
-      }
+      if (under) under.style.transform = `translateX(${-30 + 30 * p}%)`
+      const scrim = o.current.scrimRef?.current
+      if (scrim) scrim.style.opacity = String(0.6 * (1 - p))
     }
     const resetUnder = () => {
       const under = o.current.underRef?.current
-      if (!under) return
-      under.classList.remove('peek')
-      under.style.transform = ''
-      under.style.removeProperty('--dim')
+      if (under) {
+        under.classList.remove('peek')
+        under.style.transform = ''
+      }
+      const scrim = o.current.scrimRef?.current
+      if (scrim) scrim.style.opacity = ''
     }
     const release = () => {
       el.classList.remove('backdrag')
@@ -134,6 +140,9 @@ export function useBackSwipe(el: HTMLElement | null, opts: BackSwipeOptions): vo
       tr.add(e.changedTouches?.[0]?.clientX ?? lastX)
       const v = Math.max(-MAX_V, Math.min(MAX_V, tr.velocity()))
       const commit = !cancelled && v > -100 && (dx > W * 0.35 || dx + project(v) > W * 0.5)
+      // Released while rubber-banded left of the edge: ease back from there; the clamp only stops an overshoot
+      // once the page has reached the edge.
+      let reached = dx >= 0
       sp = spring({
         from: dx,
         to: commit ? W : 0,
@@ -141,11 +150,15 @@ export function useBackSwipe(el: HTMLElement | null, opts: BackSwipeOptions): vo
         damping: 1,
         response: 0.33,
         // never past the screen edge on the way home, nor beyond the width on the way out
-        onUpdate: (x) => place(Math.max(0, Math.min(W, x))),
+        onUpdate: (x) => {
+          if (x >= 0) reached = true
+          place(Math.min(W, reached ? Math.max(0, x) : x))
+        },
         onDone: () => {
           sp = null
           if (commit) {
-            resetUnder()
+            // Leave the revealed page as it is: the Navigator re-renders it as the top screen in one commit
+            // (and clears the drag's leftovers there), so no frame shows it hidden behind an off-screen page.
             o.current.onCommit()
           } else {
             release()

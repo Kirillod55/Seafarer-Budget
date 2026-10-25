@@ -60,6 +60,8 @@ const ANIM: Record<Transition, string> = { push: ' v-push', pop: ' v-pop', tab: 
 const NavContext = createContext<Nav | null>(null)
 /** false while a screen is hidden under a deeper one: its window listeners (scroll, resize) stay off. */
 const ActiveContext = createContext(true)
+/** The route of the stack entry a screen belongs to (a lower screen keeps its own while a deeper one is on top). */
+const RouteContext = createContext<Route | null>(null)
 
 export function useNav(): Nav {
   const nav = useContext(NavContext)
@@ -69,6 +71,13 @@ export function useNav(): Nav {
 
 export function useScreenActive(): boolean {
   return useContext(ActiveContext)
+}
+
+/** This screen's own route and params; `useNav().route` is the top route (for actions). */
+export function useRoute(): Route {
+  const route = useContext(RouteContext)
+  if (!route) throw new Error('useRoute() outside a Navigator screen')
+  return route
 }
 
 export function Navigator({
@@ -87,6 +96,7 @@ export function Navigator({
   })
   const els = useRef(new Map<number, HTMLElement>())
   const underRef = useRef<HTMLElement | null>(null)
+  const scrimRef = useRef<HTMLDivElement>(null)
   const [topEl, setTopEl] = useState<HTMLElement | null>(null)
   const navigated = useRef(onNavigate)
   navigated.current = onNavigate
@@ -133,17 +143,24 @@ export function Navigator({
       const el = els.current.get(e.id)
       if (el) el.scrollTop = e.y
     }
-    window.scrollTo(0, top.y)
     const el = els.current.get(top.id) ?? null
+    // after a committed back swipe the revealed page still carries the drag's parallax; React has already dropped
+    // its `below peek` classes in this same commit, so it is never hidden for a frame
+    if (el) {
+      el.style.transform = ''
+    }
+    if (scrimRef.current) scrimRef.current.style.opacity = ''
+    window.scrollTo(0, top.y)
     setTopEl(el)
     if (shown.current === top.id) return // first mount
     shown.current = top.id
-    if (transition !== 'tab') el?.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true })
+    if (transition !== 'tab') (el?.querySelector<HTMLElement>('h1') ?? el)?.focus({ preventScroll: true })
   }, [top.id])
 
   useBackSwipe(topEl, {
     enabled: stack.length > 1,
     underRef,
+    scrimRef,
     onCommit: () => pop('none'), // the page has already slid away: no second animation
   })
 
@@ -160,13 +177,18 @@ export function Navigator({
                 else els.current.delete(e.id)
               }}
               className={isTop ? `screen${ANIM[transition]}` : 'screen below'}
+              tabIndex={-1}
               inert={!isTop}
               aria-hidden={isTop ? undefined : true}
             >
-              <ActiveContext.Provider value={isTop}>{renderScreen(e.route)}</ActiveContext.Provider>
+              <RouteContext.Provider value={e.route}>
+                <ActiveContext.Provider value={isTop}>{renderScreen(e.route)}</ActiveContext.Provider>
+              </RouteContext.Provider>
             </section>
           )
         })}
+        {/* dims the page revealed by the back swipe (opacity only); between it (z 1) and the dragged page (z 2) */}
+        <div ref={scrimRef} className="backscrim" aria-hidden="true" />
         <nav className="tabs" aria-label="Разделы">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = route.tab === id
