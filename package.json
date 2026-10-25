@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:timing": "vitest run --reporter=verbose",
     "tauri": "tauri"
   },
   "devDependencies": {
