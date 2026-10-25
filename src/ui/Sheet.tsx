@@ -108,7 +108,7 @@ export function Sheet({
 
   const close = useCallback(
     (after?: () => void): boolean => {
-      if (closingRef.current) return false
+      if (closingRef.current || busyRef.current) return false // a save in flight: no closing under it
       closingRef.current = true
       afterRef.current = after
       springRef.current?.stop()
@@ -210,7 +210,7 @@ export function Sheet({
     }
 
     const start = (x: number, py: number) => {
-      if (finishedRef.current || menuOpen()) return
+      if (finishedRef.current || busyRef.current || menuOpen()) return
       if (closingRef.current && !dragClose) return // closing by a button: no catching
       tr.reset()
       tr.add(py)
@@ -294,7 +294,7 @@ export function Sheet({
           from: y,
           to: 0,
           velocity: v,
-          damping: 0.8,
+          damping: 1, // «Закрытие/возврат — без отскока»
           response: 0.3,
           onUpdate: place,
           onDone: () => {

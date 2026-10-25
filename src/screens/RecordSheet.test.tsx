@@ -4,9 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, Category, FxRate, Settings, Transaction } from '@shared/types.ts'
 import { RecordSheet, RecordSheetHost, useRecordSheet } from './RecordSheet.tsx'
 import { lockScroll } from '../ui/scrollLock.ts'
+import { spring } from '../ui/motion.ts'
 import { ToastHost } from '../ui/Toast.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
+
+// the real springs, watched: the return spring's parameters are asserted
+vi.mock('../ui/motion.ts', async (orig) => {
+  const m = await orig<typeof import('../ui/motion.ts')>()
+  return { ...m, spring: vi.fn(m.spring) }
+})
 
 const rate = (date: string, currency: string, uah_per_unit: number): FxRate => ({ date, currency, uah_per_unit })
 
@@ -204,6 +211,8 @@ describe('Sheet behaviour', () => {
     ])
     await act(async () => {})
     expect(sheet.style.transform).toMatch(/translateY\(0(px)?\)|^$/)
+    // «Закрытие/возврат — без отскока»: the spring back to the open place has damping 1
+    expect(vi.mocked(spring)).toHaveBeenLastCalledWith(expect.objectContaining({ to: 0, damping: 1, response: 0.3 }))
     drag(amount, [100, 200], [
       [160, 210],
       [300, 400],
@@ -228,6 +237,28 @@ describe('Sheet behaviour', () => {
     ])
     fireEvent.click(chip)
     expect(chip.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('while a save is in flight, a backdrop tap, Esc and a pull do not close it; it closes once after the save', async () => {
+    await seed()
+    let done: (v: Transaction) => void = () => {}
+    vi.spyOn(env.repo, 'addTransaction').mockImplementation(() => new Promise<Transaction>((r) => (done = r)))
+    const onClose = renderSheet()
+    const amount = await screen.findByLabelText('Сумма')
+    fireEvent.change(amount, { target: { value: '9' } })
+    fireEvent.click(button('Добавить'))
+    await act(async () => {})
+    fireEvent.click(document.querySelector('.backdrop')!)
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    drag(amount, [100, 200], [
+      [100, 215],
+      [100, 215 + SHEET_H * 0.5],
+    ])
+    await act(async () => {})
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog').style.transform).toBe('')
+    await act(async () => done(existing))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
   })
 
   it('a tap on the dimmed backdrop and Esc close it', async () => {
@@ -370,12 +401,20 @@ describe('RecordSheet', () => {
     expect(await env.db.transactions.count()).toBe(2)
   })
 
-  it('editing a record whose category is in the bin keeps its category_id', async () => {
+  it('editing a record whose category is in the bin keeps its category_id and shows it as a muted selected pill', async () => {
     await seed()
     await env.repo.remove('categories', cafe.id)
     const onClose = renderSheet(existing.id)
     const amount = (await screen.findByLabelText('Сумма')) as HTMLInputElement
     await waitFor(() => expect(amount.value).toBe('80'))
+    const pill = screen.getByRole('button', { name: 'Кафе и рестораны' })
+    expect(pill.getAttribute('aria-pressed')).toBe('true')
+    expect(pill.classList.contains('gone')).toBe(true)
+    // a tap clears it, the pill stays to be chosen again; a second tap brings it back
+    fireEvent.click(pill)
+    expect(screen.getByRole('button', { name: 'Кафе и рестораны' }).getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Кафе и рестораны' }))
+    expect(screen.getByRole('button', { name: 'Продукты' }).classList.contains('gone')).toBe(false)
     fireEvent.change(amount, { target: { value: '81' } })
     fireEvent.click(button('Готово'))
     await waitFor(() => expect(onClose).toHaveBeenCalled())
@@ -458,8 +497,9 @@ describe('RecordSheet', () => {
     const onClose = renderSheet(existing.id)
     fireEvent.click(await screen.findByLabelText('Счёт'))
     const names = (await screen.findAllByRole('option')).map((o) => o.textContent)
-    expect(names).toEqual(['Основной', 'Карта'])
-    fireEvent.click(screen.getByRole('option', { name: 'Карта' }))
+    // each account with its balance in whole dollars: $100 opening − ₴80 (= $2) on «Основной»
+    expect(names).toEqual(['Основной≈ $98', 'Карта≈ $0'])
+    fireEvent.click(screen.getByRole('option', { name: /Карта/ }))
     fireEvent.click(button('Готово'))
     await waitFor(() => expect(onClose).toHaveBeenCalled())
     const card = (await env.db.accounts.toArray()).find((a) => a.name === 'Карта')!

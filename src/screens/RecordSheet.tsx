@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
+import { balanceUsd, balances } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
-import type { Account, Author, Category, Settings, Transaction } from '@shared/types.ts'
+import { money } from '@shared/format.ts'
+import type { Account, Author, Category, FxRate, Settings, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
 import { parseAmount } from '../lib/amount.ts'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
@@ -78,13 +80,15 @@ export function RecordSheetHost({ children }: { children: ReactNode }) {
 export function RecordSheet({ id, open = true, onClose }: { id?: string; open?: boolean; onClose(): void }) {
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
-    const [settings, categories, accounts, tx] = await Promise.all([
+    const [settings, categories, accounts, tx, txs, rates] = await Promise.all([
       db.settings.filter(alive).first(),
       db.categories.toArray(), // all of them: a record may point at one in the bin
       db.accounts.filter(alive).sortBy('sort'),
       id ? db.transactions.get(id) : Promise.resolve(undefined),
+      db.transactions.filter(alive).toArray(), // for the account balances in the «Счёт» menu
+      db.fx_rates.toArray(),
     ])
-    return { settings, categories, accounts, tx: tx && alive(tx) ? tx : null }
+    return { settings, categories, accounts, tx: tx && alive(tx) ? tx : null, txs, rates }
   }, [db, id])
 
   // the record as it was when the sheet opened: deleting it from the sheet must not swap the closing sheet's content
@@ -97,7 +101,7 @@ export function RecordSheet({ id, open = true, onClose }: { id?: string; open?: 
   }, [data, open, onClose])
 
   if (!data || !first.current) return null
-  const { settings, categories, accounts } = data
+  const { settings, categories, accounts, txs, rates } = data
   const tx = first.current.tx
   if (!settings || (id && !tx)) {
     return (
@@ -112,6 +116,8 @@ export function RecordSheet({ id, open = true, onClose }: { id?: string; open?: 
       settings={settings}
       categories={categories}
       accounts={accounts}
+      txs={txs}
+      rates={rates}
       today={localDate(now(), settings.timezone)}
       open={open}
       onClose={onClose}
@@ -124,6 +130,8 @@ function RecordForm({
   settings,
   categories,
   accounts,
+  txs,
+  rates,
   today,
   open,
   onClose,
@@ -133,6 +141,9 @@ function RecordForm({
   /** every category, the deleted ones too (for the record's own) */
   categories: Category[]
   accounts: Account[]
+  /** alive records and the rates: each account's balance «≈ $1,475» in the «Счёт» menu */
+  txs: Transaction[]
+  rates: FxRate[]
   today: string
   open: boolean
   onClose(): void
@@ -168,13 +179,16 @@ function RecordForm({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const byId = new Map(categories.map((c) => [c.id, c]))
-  const current = categoryId ? byId.get(categoryId) : undefined
-  // alive, not archived, of the chosen kind — plus the record's own one if it is archived or in the bin
+  // alive, not archived, of the chosen kind — plus the record's own one when it is archived or in the bin: a muted
+  // pill, so the saved category is visible (and kept); it stays there after a tap clears it, to be chosen again
   const offered = categories.filter((c) => alive(c) && !c.archived && c.kind === kind).sort((a, b) => a.sort - b.sort)
-  if (current && current.kind === kind && !current.deleted && !offered.includes(current)) offered.push(current)
+  const own = existing?.category_id ? byId.get(existing.category_id) : undefined
+  const ownGone = !!own && own.kind === kind && !own.deleted && !offered.includes(own)
+  if (ownGone) offered.push(own)
 
   const currencies = settings.currencies.includes(currency) ? settings.currencies : [...settings.currencies, currency]
   const accountOptions = accounts.filter((a) => !a.archived || a.id === accountId)
+  const accountSub = (id: string) => `≈ ${money(balanceUsd(balances(txs, id), rates, today), 'USD', { whole: true })}`
 
   function chooseKind(next: Kind) {
     setKind(next)
@@ -348,7 +362,7 @@ function RecordForm({
                 <button
                   key={c.id}
                   type="button"
-                  className="chip"
+                  className={`chip${ownGone && c === own ? ' gone' : ''}`}
                   style={{ '--i': i } as CSSProperties}
                   aria-pressed={c.id === categoryId}
                   onClick={() => setCategoryId((cur) => (cur === c.id ? '' : c.id))}
@@ -381,7 +395,7 @@ function RecordForm({
                   id="rec-account"
                   label="Счёт"
                   value={accountId}
-                  options={accountOptions.map((a) => ({ value: a.id, label: a.name }))}
+                  options={accountOptions.map((a) => ({ value: a.id, label: a.name, sub: accountSub(a.id) }))}
                   onChange={setAccountId}
                 />
               ) : (

@@ -200,3 +200,21 @@
   color: var(--warn);
   font-size: 0.882rem;
 }
+
+/* the record's own category that is archived or in the bin: shown (and kept) but muted */
+.chip.gone {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.chip.gone[aria-pressed='true'] {
+  border-color: var(--line);
+  background: var(--track);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.chip.gone[aria-pressed='true'] .ic {
+  background: color-mix(in srgb, var(--muted) 17%, transparent);
+  color: var(--muted);
+}
