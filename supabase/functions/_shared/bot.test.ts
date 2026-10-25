@@ -116,7 +116,7 @@ describe('handleUpdate', () => {
     expect(t.created_at).toBe(NOW.toISOString())
     expect(r[0].method).toBe('sendMessage')
     expect(r[0].payload.chat_id).toBe(OWNER)
-    expect(textOf(r)).toContain('☕ Кафе и рестораны · 80 ₴ ($1.94)')
+    expect(textOf(r)).toContain('☕ Кафе и рестораны · ₴80 ($1.94)')
     expect(buttons(r).map((b) => b.callback_data)).toContain(`u:${t.id}`)
   })
 
@@ -124,15 +124,15 @@ describe('handleUpdate', () => {
     const s = new MemStore()
     const r = await run(s, msg('такси 15 eur'))
     expect(s.txRows[0]).toMatchObject({ currency: 'EUR', amount_usd: 16.35 })
-    expect(textOf(r)).toContain('Транспорт и такси · 15 € ($16.35)')
+    expect(textOf(r)).toContain('Транспорт и такси · €15 ($16.35)')
   })
 
   it('does not repeat USD for USD-only amounts and prefixes income with +', async () => {
     const s = new MemStore()
     const r = await run(s, msg('+3000 usd'))
     expect(s.txRows[0]).toMatchObject({ kind: 'income', amount_usd: 3000, category_id: cat('Зарплата').id })
-    expect(textOf(r)).toContain('💰 Зарплата · +$3 000')
-    expect(textOf(r)).not.toContain('($3 000)')
+    expect(textOf(r)).toContain('💰 Зарплата · +$3,000')
+    expect(textOf(r)).not.toContain('($3,000)')
   })
 
   it('marks the rate pending when only an earlier rate is known, and 0 when none', async () => {
@@ -169,7 +169,7 @@ describe('handleUpdate', () => {
     expect(r.map((x) => x.method)).toEqual(['answerCallbackQuery', 'editMessageText'])
     expect(r[0].payload.callback_query_id).toBe('cbq1')
     expect(r[1].payload).toMatchObject({ chat_id: OWNER, message_id: 9 })
-    expect(textOf(r)).toContain('💊 Здоровье · 50 ₴')
+    expect(textOf(r)).toContain('💊 Здоровье · ₴50')
     // second pick must not duplicate the keyword
     await run(s, cb(`c:${t.id}:${cat('Здоровье').sort}`))
     expect(s.categoryRows.find((c) => c.name === 'Здоровье')!.keywords.filter((k) => k === 'непонятное')).toHaveLength(1)
@@ -294,7 +294,7 @@ describe('handleUpdate', () => {
     s.moveRows = [{ id: 'm1', deleted: false, goal_id: 'g1', amount_usd: 1000, date: TODAY, note: '', author: 'owner', source: 'app', created_at: '2026-10-01T12:00:00.000Z' }]
     const r = await run(s, msg('остаток'))
     expect(textOf(r)).toContain('в месяц')
-    expect(textOf(r)).toContain('$2 000') // 3000 balance - 1000 reserved
+    expect(textOf(r)).toContain('$2,000') // 3000 balance - 1000 reserved
   })
 
   it('M1/M2: /left ignores archived accounts and shows whole dollars', async () => {
@@ -306,9 +306,9 @@ describe('handleUpdate', () => {
       seedTx({ kind: 'income', amount: 500, amount_usd: 500, currency: 'USD', account_id: 'old' }),
     ]
     const t = textOf(await run(s, msg('/left')))
-    expect(t).toContain('Свободно: $1 000 ')
-    expect(t).not.toContain('$1 500')
-    expect(t).not.toContain('$1 000.40')
+    expect(t).toContain('Свободно: $1,000 ')
+    expect(t).not.toContain('$1,500')
+    expect(t).not.toContain('$1,000.40')
   })
 
   it('/left asks to set the contract date when it is missing', async () => {
@@ -324,7 +324,7 @@ describe('handleUpdate', () => {
     s.txRows = [seedTx({ kind: 'income', amount: 3000, amount_usd: 3000, currency: 'USD', date: '2026-10-10' })]
     const t = textOf(await run(s, msg('остаток')))
     expect(t).toContain('Заработано')
-    expect(t).toContain('$3 000')
+    expect(t).toContain('$3,000')
   })
 
   it('/month lists the month total and categories by amount, descending', async () => {
@@ -350,7 +350,7 @@ describe('handleUpdate', () => {
       seedTx({ category_id: cat('Продукты').id, amount: 99, currency: 'USD', amount_usd: 99, date: '2026-10-20' }),
     ]
     const t = textOf(await run(s, msg('сегодня')))
-    expect(t).toContain('Кафе и рестораны · 80 ₴ ($1.94)')
+    expect(t).toContain('Кафе и рестораны · ₴80 ($1.94)')
     expect(t).toContain('Продукты · $10')
     expect(t).not.toContain('$99')
     expect(t).toContain('$11.94')

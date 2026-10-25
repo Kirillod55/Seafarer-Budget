@@ -168,7 +168,7 @@ describe('Settings: «Сверка»', () => {
     await spend(80)
     renderSettings()
 
-    expect(await within(await screen.findByRole('region', { name: 'Сверка' })).findByText('4 920 ₴')).toBeTruthy()
+    expect(await within(await screen.findByRole('region', { name: 'Сверка' })).findByText('₴4,920')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Реальный остаток UAH'), { target: { value: '4800' } })
     click('Сверить UAH')
 
@@ -178,7 +178,7 @@ describe('Settings: «Сверка»', () => {
         { amount: -120, currency: 'UAH', date: TEST_TODAY, category_id: null, account_id: main.id, deleted: false, dirty: 1 },
       ])
     })
-    expect(await screen.findByText('4 800 ₴')).toBeTruthy()
+    expect(await screen.findByText('₴4,800')).toBeTruthy()
   })
 
   it('a real amount above the balance creates a positive adjustment (decimal comma accepted)', async () => {

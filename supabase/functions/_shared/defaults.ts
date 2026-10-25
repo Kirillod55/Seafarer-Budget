@@ -83,9 +83,13 @@ export function categoryStyle(c: Category): { color: string; glyph: string } {
   return { color: c.color ?? builtIn.color, glyph: c.glyph ?? builtIn.glyph }
 }
 
+/** Currencies with their own sign; any other currency is written by its code (`MDL 90`). */
 export const CURRENCY_SYMBOL: Record<string, string> = {
-  UAH: '₴',
   USD: '$',
+  UAH: '₴',
   EUR: '€',
-  MDL: 'L',
+  PLN: 'zł',
+  GBP: '£',
+  TRY: '₺',
+  GEL: '₾',
 }

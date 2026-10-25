@@ -37,15 +37,15 @@ describe('Home', () => {
       source: 'app',
     })
     const { container } = renderWithApp(<Home />, env)
-    expect(await screen.findByText('$1 540 в месяц')).toBeTruthy()
-    expect(container.querySelector('.big')!.textContent).toBe('$3 040')
+    expect(await screen.findByText('$1,540 в месяц')).toBeTruthy()
+    expect(container.querySelector('.big')!.textContent).toBe('$3,040')
   })
 
   it('shows the allowance per month and per day', async () => {
     await seed({ next_contract_date: '2026-11-20' })
     renderWithApp(<Home />, env)
 
-    expect(await screen.findByText('$1 540 в месяц')).toBeTruthy()
+    expect(await screen.findByText('$1,540 в месяц')).toBeTruthy()
     expect(screen.getByText('$51 в день')).toBeTruthy()
   })
 
@@ -61,7 +61,7 @@ describe('Home', () => {
     await waitFor(async () => {
       expect((await env.db.settings.toCollection().first())!.next_contract_date).toBe('2026-11-20')
     })
-    expect(await screen.findByText('$1 540 в месяц')).toBeTruthy()
+    expect(await screen.findByText('$1,540 в месяц')).toBeTruthy()
   })
 
   it('in contract status shows «Заработано за контракт» and «Отложено в этом месяце» instead', async () => {
@@ -97,8 +97,8 @@ describe('Home', () => {
 
     expect(await screen.findByText('Заработано за контракт')).toBeTruthy()
     expect(screen.getByText('Отложено в этом месяце')).toBeTruthy()
-    expect(screen.getByText('$2 000')).toBeTruthy() // earned
-    expect(screen.getByText('$1 500')).toBeTruthy() // saved this month = 2000 - 500
+    expect(screen.getByText('$2,000')).toBeTruthy() // earned
+    expect(screen.getByText('$1,500')).toBeTruthy() // saved this month = 2000 - 500
     expect(screen.queryByText(/в месяц$/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Указать дату контракта' })).toBeNull()
   })
@@ -109,7 +109,7 @@ describe('Home', () => {
 
     const perDay = await screen.findByText('-$51 в день')
     expect(perDay.className).toContain('neg')
-    expect(screen.getByText('-$1 540 в месяц')).toBeTruthy()
+    expect(screen.getByText('-$1,540 в месяц')).toBeTruthy()
   })
 
   it('lists recent transactions with category and amount', async () => {
@@ -132,7 +132,7 @@ describe('Home', () => {
     renderWithApp(<Home />, env)
 
     expect(await screen.findByText('кофе')).toBeTruthy()
-    expect(screen.getByText('-80 ₴')).toBeTruthy()
+    expect(screen.getByText('-₴80')).toBeTruthy()
     expect(screen.getByText(/Кафе и рестораны/)).toBeTruthy()
   })
 

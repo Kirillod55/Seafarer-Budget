@@ -110,7 +110,7 @@ describe('Report', () => {
     // 2000 UAH is the 4th largest ($50): original currency plus USD
     expect(rows[3].textContent).toContain('12.10')
     expect(rows[3].textContent).toContain('Без категории')
-    expect(rows[3].textContent).toContain('2 000 ₴')
+    expect(rows[3].textContent).toContain('₴2,000')
     expect(rows[3].textContent).toContain('$50')
     expect(within(top).queryByText(/16\.10/)).toBeNull() // the $10 cafe expense is 6th
   })

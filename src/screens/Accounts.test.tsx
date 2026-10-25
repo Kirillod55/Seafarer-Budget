@@ -34,7 +34,7 @@ describe('Accounts', () => {
 
     expect(await screen.findByRole('region', { name: 'Основной' })).toBeTruthy()
     const card = region('Основной')
-    expect(card.getByText('5 000 ₴')).toBeTruthy()
+    expect(card.getByText('₴5,000')).toBeTruthy()
     expect(card.getByText('≈ $121.36')).toBeTruthy() // 5000 / 41.2
     expect(screen.getByRole('region', { name: 'Наличные' })).toBeTruthy()
     expect(screen.queryByRole('region', { name: 'Старый' })).toBeNull()
@@ -54,8 +54,8 @@ describe('Accounts', () => {
     expect((screen.getByLabelText('Валюта') as HTMLSelectElement).value).toBe('UAH')
     fireEvent.click(screen.getByRole('button', { name: 'Перевести' }))
 
-    await waitFor(() => expect(region('Наличные').getByText('1 000 ₴')).toBeTruthy())
-    expect(region('Основной').getByText('4 000 ₴')).toBeTruthy()
+    await waitFor(() => expect(region('Наличные').getByText('₴1,000')).toBeTruthy())
+    expect(region('Основной').getByText('₴4,000')).toBeTruthy()
     const transfers = await env.db.transactions.filter((t) => t.kind === 'transfer').toArray()
     expect(transfers).toHaveLength(1)
     expect(transfers[0]).toMatchObject({
@@ -113,7 +113,7 @@ describe('Accounts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Обменять' }))
 
     await waitFor(() => expect(region('Основной').getByText('$100')).toBeTruthy())
-    expect(region('Основной').getByText('880 ₴')).toBeTruthy()
+    expect(region('Основной').getByText('₴880')).toBeTruthy()
     const exchanges = await env.db.transactions.filter((t) => t.kind === 'exchange').toArray()
     expect(exchanges).toHaveLength(1)
     expect(exchanges[0]).toMatchObject({

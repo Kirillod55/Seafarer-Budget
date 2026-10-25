@@ -39,7 +39,7 @@ describe('Goals', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
     expect(await screen.findByText('Машина')).toBeTruthy()
-    expect(screen.getByText('$0 из $15 000')).toBeTruthy()
+    expect(screen.getByText('$0 из $15,000')).toBeTruthy()
     expect(screen.getByText('темп пока не определён')).toBeTruthy()
     expect(await env.db.goals.toArray()).toMatchObject([
       { name: 'Машина', target_usd: 15000, deadline: null, archived: false, deleted: false, dirty: 1 },
@@ -63,7 +63,7 @@ describe('Goals', () => {
 
     await move('Отложить', '500')
 
-    expect(await screen.findByText('$12.50 из $15 000')).toBeTruthy()
+    expect(await screen.findByText('$12.50 из $15,000')).toBeTruthy()
     const moves = await env.db.goal_moves.toArray()
     expect(moves).toHaveLength(1)
     expect(moves[0]).toMatchObject({ goal_id: goal.id, amount_usd: 12.5, date: TEST_TODAY, deleted: false, dirty: 1 })
@@ -75,11 +75,11 @@ describe('Goals', () => {
     const goal = await newGoal()
     await env.repo.put<GoalMove>('goal_moves', { goal_id: goal.id, amount_usd: 50, date: TEST_TODAY, note: '' })
     renderWithApp(<Goals />, env)
-    expect(await screen.findByText('$50 из $15 000')).toBeTruthy()
+    expect(await screen.findByText('$50 из $15,000')).toBeTruthy()
 
     await move('Забрать', '200')
 
-    expect(await screen.findByText('$45 из $15 000')).toBeTruthy()
+    expect(await screen.findByText('$45 из $15,000')).toBeTruthy()
     const moves = await env.db.goal_moves.filter((m) => m.amount_usd < 0).toArray()
     expect(moves).toHaveLength(1)
     expect(moves[0]).toMatchObject({ goal_id: goal.id, amount_usd: -5, date: TEST_TODAY, dirty: 1 })
@@ -103,7 +103,7 @@ describe('Goals', () => {
 
     await move('Отложить', '50', 'USD')
 
-    expect(await screen.findByText('$50 из $15 000')).toBeTruthy()
+    expect(await screen.findByText('$50 из $15,000')).toBeTruthy()
     expect(await env.db.goal_moves.toArray()).toMatchObject([{ amount_usd: 50 }])
   })
 
