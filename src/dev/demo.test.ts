@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { alive } from '@shared/alive.ts'
 import { addDays, monthOf } from '@shared/dates.ts'
 import { createDb } from '../db/local.ts'
-import { isDemo, seedDemo } from './demo.ts'
+import { seedDemo } from './demo.ts'
+import { isDemo } from './is-demo.ts'
 
 const TODAY = '2026-10-25'
 

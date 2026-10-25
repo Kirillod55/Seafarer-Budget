@@ -48,13 +48,41 @@ describe('Shell navigation', () => {
     expect(await screen.findByRole('button', { name: '+ Запись' })).toBeTruthy()
   })
 
-  it('the «Запись» and «Отчёт» tabs show the form and the report', async () => {
+  it('has four tabs «Главная · Отчёт · Цели · Ещё» (no «Запись» tab); the sync state shows on «Главная»', async () => {
     await setup()
-    fireEvent.click(screen.getByRole('button', { name: 'Запись' }))
-    expect(await screen.findByLabelText('Сумма')).toBeTruthy()
+    const tabs = screen.getByRole('navigation', { name: 'Разделы' })
+    expect([...tabs.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Главная', 'Отчёт', 'Цели', 'Ещё'])
+    expect(await screen.findByRole('status')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
     expect(await screen.findByText('Октябрь 2026')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Цели' }))
+    expect(await screen.findByRole('heading', { name: 'Цели' })).toBeTruthy()
+  })
+
+  it('leaving «Главная» drops a half-filled record; coming back shows Home', async () => {
+    await setup()
+    fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
+    await screen.findByLabelText('Сумма')
+    fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Главная' }))
+    expect(await screen.findByRole('button', { name: '+ Запись' })).toBeTruthy()
+    expect(screen.queryByLabelText('Сумма')).toBeNull()
+  })
+
+  it('«Ещё» rows open Лимиты, Счета, Категории and Архив under «‹ Ещё», which goes back', async () => {
+    await setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Ещё' }))
+    for (const name of ['Лимиты', 'Счета', 'Категории', 'Архив']) {
+      fireEvent.click(await screen.findByRole('button', { name }))
+      expect(await screen.findByRole('heading', { level: 1, name })).toBeTruthy()
+      expect(screen.getByRole('button', { current: 'page' }).textContent).toBe('Ещё')
+      if (name === 'Категории' || name === 'Архив') expect(screen.getByText('Скоро')).toBeTruthy()
+      const back = document.querySelector<HTMLButtonElement>('.navbar .navback')!
+      expect(back.textContent).toBe('Ещё')
+      fireEvent.click(back)
+      expect(await screen.findByRole('heading', { level: 1, name: 'Ещё' })).toBeTruthy()
+    }
   })
 
   it('the «Ещё» tab opens the settings, whose «Выйти» signs out', async () => {

@@ -1,0 +1,325 @@
+/*
+ * Phone navigation (prototype v60: .navbar, .navback, .navtitle, .tabs, .tab, .v-push/.v-pop/.v-tab, .under).
+ * Glass is solid (spec §6, 2026-10-25): bars on --bar-bg with a crisp line, pills on --glass-btn, no blur or sheen.
+ */
+
+.app {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 0 16px calc(88px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+}
+
+/* ---------- nav bar ---------- */
+
+.navbar {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44px;
+}
+
+.navbar.stick {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  margin: 0 -16px;
+  padding: calc(4px + env(safe-area-inset-top, 0px)) 16px 4px;
+  border-bottom: 1px solid transparent;
+}
+
+.navbar.stick.solid {
+  background: var(--bar-bg);
+  border-bottom-color: var(--line);
+}
+
+.navback,
+.navbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--pill-h);
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 0.5px solid var(--glass-btn-edge);
+  background: var(--glass-btn);
+  box-shadow: inset 0 0.5px 0 var(--glass-btn-edge), 0 1px 6px rgba(0, 0, 0, 0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.941rem; /* 16 */
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* the touch target stays ≥ 44 px around the 34 px pill */
+.navback::after,
+.navbtn::after {
+  content: '';
+  position: absolute;
+  inset: -5px -4px;
+}
+
+.navback {
+  padding: 0 13px 0 7px;
+}
+
+.navback svg {
+  width: 18px;
+  height: 18px;
+}
+
+.navtitle {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + env(safe-area-inset-top, 0px) / 2);
+  transform: translate(-50%, -30%);
+  max-width: 44%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.navbar.solid .navtitle {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.screen > h1.large {
+  margin: 6px 0 14px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- tabs ---------- */
+
+.tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 6px 6px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: var(--bar-bg);
+  border-top: 1px solid var(--line);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.647rem; /* 11 */
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tab.active {
+  color: var(--accent-text);
+}
+
+.tab-ic {
+  display: inline-flex;
+}
+
+.tab-ic svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* ---------- swipe back: the page follows the finger, the previous page shows underneath ---------- */
+
+.screen.backdrag {
+  position: relative;
+  z-index: 2;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.28);
+}
+
+.under {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  background: var(--bg);
+  pointer-events: none;
+}
+
+.under::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  opacity: calc(var(--dim, 0.18) / 0.18 * 0.6);
+}
+
+/* ---------- motion (Reduce Motion: none of it) ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .navback,
+  .navbtn,
+  .tab {
+    transition: transform 0.2s var(--ios), color 0.3s var(--ios);
+  }
+
+  .navback:active,
+  .navbtn:active {
+    transform: scale(0.94);
+  }
+
+  .tab:active {
+    transform: scale(0.9);
+  }
+
+  .navbar.stick {
+    transition: background-color 0.25s var(--ios), border-color 0.25s var(--ios);
+  }
+
+  .navtitle {
+    transition: opacity 0.2s var(--ios), transform 0.3s var(--ios);
+  }
+
+  .screen.v-push {
+    animation: vPush 0.5s var(--ios);
+  }
+
+  .screen.v-pop {
+    animation: vPop 0.5s var(--ios);
+  }
+
+  .screen.v-tab {
+    animation: vTab 0.38s var(--ios);
+  }
+
+  .tab.pop .tab-ic {
+    animation: tabPop 0.5s var(--spring);
+  }
+}
+
+@keyframes vPush {
+  from {
+    transform: translateX(30%);
+    opacity: 0;
+  }
+}
+
+@keyframes vPop {
+  from {
+    transform: translateX(-22%);
+    opacity: 0;
+  }
+}
+
+@keyframes vTab {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+}
+
+@keyframes tabPop {
+  from {
+    transform: scale(0.78);
+  }
+}
+
+/* the old screens' own headings are replaced by the nav bar's large title (until each screen is redone) */
+.legacy-titled > .stack > h2:first-child {
+  display: none;
+}
+
+/* the 1.0 report and goals have no nav bar yet: keep them below the iPhone notch */
+.legacy-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+}
+
+.screen > .topbar {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* ---------- «Ещё» menu (prototype .group.menu; Task 10 redoes «Ещё») ---------- */
+
+.group {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+
+.menu > button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 11px 16px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu > button + button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 66px;
+  right: 0;
+  border-top: 1px solid var(--line);
+}
+
+.menu .chev {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.menu .chev svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ic {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--c, var(--muted));
+  background: color-mix(in srgb, var(--c, var(--muted)) 17%, transparent);
+}
+
+.ic svg {
+  width: 22px;
+  height: 22px;
+}

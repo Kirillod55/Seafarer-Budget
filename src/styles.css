@@ -70,14 +70,6 @@ p {
 
 /* ---------- layout ---------- */
 
-.shell {
-  max-width: 640px;
-  margin: 0 auto;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
 .topbar {
   display: flex;
   align-items: center;
@@ -522,49 +514,6 @@ label {
   border-color: var(--neg);
   max-width: 100%;
   overflow-wrap: anywhere;
-}
-
-.tabbar {
-  position: fixed;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 640px;
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  padding-bottom: env(safe-area-inset-bottom);
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-}
-
-.tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-height: 60px;
-  padding: 4px 0;
-  font: inherit;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.tab.active {
-  color: var(--accent-text);
-  font-weight: 600;
-}
-
-.tab-icon {
-  font-size: 1.3rem;
-  line-height: 1;
-}
-
-.tab-label {
-  font-size: 0.65rem;
 }
 
 /* ---------- settings ---------- */

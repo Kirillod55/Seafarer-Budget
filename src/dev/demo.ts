@@ -1,15 +1,11 @@
 // Dev-only demo mode (`npx vite` → http://localhost:5173/#demo): the signed-in app on its own Dexie
 // database filled with sample data, no Supabase. Nothing here reaches the production bundle:
-// main.tsx calls isDemo() behind `import.meta.env.DEV` and loads demo-app.ts dynamically.
+// main.tsx calls isDemo() (is-demo.ts) behind `import.meta.env.DEV` and loads demo-app.ts dynamically.
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '@shared/defaults.ts'
 import { addDays, daysBetween } from '@shared/dates.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, Transaction } from '@shared/types.ts'
 import type { LocalDb, Row } from '../db/local.ts'
-
-export function isDemo(): boolean {
-  return import.meta.env.DEV && location.hash === '#demo'
-}
 
 /** Small deterministic PRNG (mulberry32): the demo looks the same on every open. */
 function prng(seed: number): () => number {

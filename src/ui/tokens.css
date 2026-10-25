@@ -227,17 +227,19 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-/* theme switch: colours flow over 0.4 s (theme.ts adds .theme-fade for the moment of the switch) */
-html.theme-fade,
-html.theme-fade *,
-html.theme-fade *::before,
-html.theme-fade *::after {
-  transition:
-    background-color 0.4s var(--ios),
-    border-color 0.4s var(--ios),
-    color 0.4s var(--ios),
-    fill 0.4s var(--ios),
-    stroke 0.4s var(--ios) !important;
+/* theme switch: colours flow over 0.4 s (theme.ts adds .theme-fade for the moment of the switch); Reduce Motion: none */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-fade,
+  html.theme-fade *,
+  html.theme-fade *::before,
+  html.theme-fade *::after {
+    transition:
+      background-color 0.4s var(--ios),
+      border-color 0.4s var(--ios),
+      color 0.4s var(--ios),
+      fill 0.4s var(--ios),
+      stroke 0.4s var(--ios) !important;
+  }
 }
 
 /* iPhone «Уменьшение движения»: no animation anywhere */
@@ -272,7 +274,7 @@ html.theme-fade *::after {
   .muted,
   .small,
   .section,
-  .tab {
+  .tab:not(.active) {
     color: var(--text) !important;
   }
 

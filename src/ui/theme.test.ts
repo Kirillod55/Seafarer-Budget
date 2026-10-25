@@ -204,6 +204,19 @@ describe('tokens.css', () => {
     expect(css).toContain('@media (prefers-reduced-motion: reduce)')
   })
 
+  it('Reduce Motion stops the theme fade: the fade rule only exists with no-preference', () => {
+    const fade = css.indexOf('html.theme-fade')
+    const media = css.lastIndexOf('@media (prefers-reduced-motion: no-preference)', fade)
+    expect(media).toBeGreaterThanOrEqual(0)
+    expect(css.slice(media, fade)).not.toContain('}') // the fade rule is the first thing inside that block
+  })
+
+  it('Increase Contrast does not repaint the selected tab', () => {
+    const contrast = css.slice(css.indexOf('@media (prefers-contrast: more)'))
+    expect(contrast).toContain('.tab:not(.active)')
+    expect(contrast).not.toMatch(/\.tab\s*[,{]/)
+  })
+
   it('glass is solid: no backdrop-filter', () => {
     expect(css).not.toMatch(/backdrop-filter/)
   })
