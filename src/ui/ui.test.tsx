@@ -30,6 +30,22 @@ function reducedMotion(on: boolean) {
   }))
 }
 
+/** Run with a stubbed Element.prototype.animate, restoring jsdom's (absent) one even when the test fails. */
+function withAnimate<T>(stub: (this: Element, ...a: Parameters<Element['animate']>) => unknown, body: () => T): T {
+  const had = Object.prototype.hasOwnProperty.call(Element.prototype, 'animate')
+  const prev = Element.prototype.animate
+  Element.prototype.animate = stub as Element['animate']
+  try {
+    return body()
+  } finally {
+    if (had) Element.prototype.animate = prev
+    // @ts-expect-error — jsdom has no Web Animations: take the stub away again
+    else delete Element.prototype.animate
+  }
+}
+
+const fakeAnim = () => ({ onfinish: null, oncancel: null, cancel() {} }) as unknown as Animation
+
 describe('Segmented', () => {
   function Demo({ onChange }: { onChange?: (v: string) => void }) {
     const [v, setV] = useState('expense')
@@ -75,11 +91,12 @@ describe('Picker', () => {
     { value: 'old', label: 'Старая карта' },
   ]
 
-  function Demo({ options = ACCS, kind, allowOther, onChange }: {
+  function Demo({ options = ACCS, kind, allowOther, onChange, onAdd }: {
     options?: PickerOption[]
     kind?: 'currency' | 'category' | 'account'
     allowOther?: boolean
     onChange?: (v: string) => void
+    onAdd?: (code: string) => void
   }) {
     const [v, setV] = useState(options[0].value)
     return (
@@ -90,6 +107,7 @@ describe('Picker', () => {
         options={options}
         kind={kind}
         allowOther={allowOther}
+        onAdd={onAdd}
         onChange={(x) => {
           setV(x)
           onChange?.(x)
@@ -161,6 +179,72 @@ describe('Picker', () => {
     fireEvent.click(document.querySelector('.pick-catch')!)
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(onChange).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /Откуда/ }))
+  })
+
+  it('arrow down or up on the closed field opens the menu', () => {
+    render(<Demo />)
+    const btn = screen.getByRole('button', { name: /Откуда/ })
+    fireEvent.keyDown(btn, { key: 'ArrowDown' })
+    expect(screen.getByRole('listbox')).toBeTruthy()
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
+    expect(screen.queryByRole('listbox')).toBeNull()
+    fireEvent.keyDown(btn, { key: 'ArrowUp' })
+    expect(screen.getByRole('listbox')).toBeTruthy()
+  })
+
+  it('a menu that fits on neither side goes to the larger side with its height cut, scrolling inside', () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 300,
+      bottom: 348,
+      left: 16,
+      right: 359,
+      width: 343,
+      height: 48,
+      x: 16,
+      y: 300,
+      toJSON() {},
+    } as DOMRect)
+    const tall = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(900)
+    try {
+      render(<Demo />)
+      fireEvent.click(screen.getByRole('button', { name: /Откуда/ }))
+      const menu = screen.getByRole('listbox')
+      // window 768: 404 px below the field (8 px gaps), 284 above → below, cut to 404
+      expect(innerHeight).toBe(768)
+      expect(menu.style.maxHeight).toBe('404px')
+      expect(menu.style.top).toBe('356px')
+      expect(menu.style.getPropertyValue('--oy')).toBe('0%')
+    } finally {
+      rect.mockRestore()
+      tall.mockRestore()
+    }
+  })
+
+  it('a menu that fits above but not below opens above the field', () => {
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 600,
+      bottom: 648,
+      left: 16,
+      right: 359,
+      width: 343,
+      height: 48,
+      x: 16,
+      y: 600,
+      toJSON() {},
+    } as DOMRect)
+    const h = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
+    try {
+      render(<Demo />)
+      fireEvent.click(screen.getByRole('button', { name: /Откуда/ }))
+      const menu = screen.getByRole('listbox')
+      expect(menu.style.top).toBe('392px')
+      expect(menu.style.maxHeight).toBe('')
+      expect(menu.style.getPropertyValue('--oy')).toBe('100%')
+    } finally {
+      rect.mockRestore()
+      h.mockRestore()
+    }
   })
 
   it('a click on an item chooses it', () => {
@@ -191,7 +275,8 @@ describe('Picker', () => {
 
   it('«Другая валюта…»: wrong code shows a red hint; «gel» becomes GEL, is chosen and joins the list', () => {
     const onChange = vi.fn()
-    render(<Demo options={CURS} kind="currency" allowOther onChange={onChange} />)
+    const onAdd = vi.fn()
+    render(<Demo options={CURS} kind="currency" allowOther onChange={onChange} onAdd={onAdd} />)
     const btn = screen.getByRole('button', { name: /Откуда/ })
     fireEvent.click(btn)
     fireEvent.click(screen.getByRole('option', { name: /Другая валюта/ }))
@@ -212,6 +297,7 @@ describe('Picker', () => {
     expect(input.getAttribute('aria-invalid')).toBe('false')
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onChange).toHaveBeenCalledWith('GEL')
+    expect(onAdd).toHaveBeenCalledWith('GEL')
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(btn.querySelector('.cbadge')?.textContent).toBe('₾')
     expect(btn.textContent).toContain('GEL')
@@ -257,7 +343,7 @@ describe('Picker', () => {
 })
 
 describe('Toast', () => {
-  function Trigger({ run }: { run?: () => void }) {
+  function Trigger({ run }: { run?: () => void | Promise<unknown> }) {
     const toast = useToast()
     return (
       <button type="button" onClick={() => toast('Запись удалена', run ? { label: 'Отменить', run } : undefined)}>
@@ -266,7 +352,9 @@ describe('Toast', () => {
     )
   }
 
-  function setup(run?: () => void) {
+  const toastEl = () => document.querySelector<HTMLElement>('.toast')
+
+  function setup(run?: () => void | Promise<unknown>) {
     vi.useFakeTimers()
     render(
       <>
@@ -275,47 +363,92 @@ describe('Toast', () => {
       </>,
     )
     fireEvent.click(screen.getByRole('button', { name: 'go' }))
-    return screen.getByRole('status')
+    return toastEl()!
   }
+
+  it('the live region is always on the page; the toast appears inside it', () => {
+    vi.useFakeTimers()
+    render(
+      <>
+        <Trigger />
+        <ToastHost />
+      </>,
+    )
+    const region = screen.getByRole('status')
+    expect(region.parentElement).toBe(document.body)
+    expect(region.textContent).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: 'go' }))
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region.querySelector('.toast')?.textContent).toBe('Запись удалена')
+    act(() => void vi.advanceTimersByTime(6100))
+    expect(screen.getByRole('status')).toBe(region)
+    expect(region.textContent).toBe('')
+  })
 
   it('«Отменить» runs the action and closes the toast', () => {
     const run = vi.fn()
     const t = setup(run)
     expect(t.textContent).toContain('Запись удалена')
-    expect(t.parentElement).toBe(document.body)
     fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
     expect(run).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(toastEl()).toBeNull()
+  })
+
+  it('an action that fails (rejected promise) says so', async () => {
+    setup(() => Promise.reject(new Error('offline')))
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
+    await act(async () => {})
+    expect(toastEl()?.textContent).toBe('Не получилось — попробуй ещё раз')
+  })
+
+  it('an action that throws says so too', () => {
+    setup(() => {
+      throw new Error('boom')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
+    expect(toastEl()?.textContent).toBe('Не получилось — попробуй ещё раз')
   })
 
   it('goes away after 6 s', () => {
     setup()
     act(() => void vi.advanceTimersByTime(5900))
-    expect(screen.queryByRole('status')).toBeTruthy()
+    expect(toastEl()).toBeTruthy()
     act(() => void vi.advanceTimersByTime(200))
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(toastEl()).toBeNull()
   })
 
   it('stays while a pointer is on it, then 2.5 s more', () => {
     const t = setup()
     fireEvent.pointerEnter(t)
     act(() => void vi.advanceTimersByTime(20_000))
-    expect(screen.queryByRole('status')).toBeTruthy()
+    expect(toastEl()).toBeTruthy()
     fireEvent.pointerLeave(t)
     act(() => void vi.advanceTimersByTime(2400))
-    expect(screen.queryByRole('status')).toBeTruthy()
+    expect(toastEl()).toBeTruthy()
     act(() => void vi.advanceTimersByTime(200))
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(toastEl()).toBeNull()
+  })
+
+  it('a short touch early on does not cut the 6 s short', () => {
+    const t = setup()
+    act(() => void vi.advanceTimersByTime(1000))
+    fireEvent.touchStart(t)
+    act(() => void vi.advanceTimersByTime(500))
+    fireEvent.touchEnd(t) // 4.5 s of the 6 are left
+    act(() => void vi.advanceTimersByTime(4400))
+    expect(toastEl()).toBeTruthy()
+    act(() => void vi.advanceTimersByTime(200))
+    expect(toastEl()).toBeNull()
   })
 
   it('stays while a finger is on it', () => {
     const t = setup()
     fireEvent.touchStart(t)
     act(() => void vi.advanceTimersByTime(20_000))
-    expect(screen.queryByRole('status')).toBeTruthy()
+    expect(toastEl()).toBeTruthy()
     fireEvent.touchEnd(t)
     act(() => void vi.advanceTimersByTime(2600))
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(toastEl()).toBeNull()
   })
 
   it('a new toast replaces the old one and restarts the 6 s', () => {
@@ -323,9 +456,9 @@ describe('Toast', () => {
     act(() => void vi.advanceTimersByTime(4000))
     fireEvent.click(screen.getByRole('button', { name: 'go' }))
     act(() => void vi.advanceTimersByTime(4000))
-    expect(screen.getAllByRole('status')).toHaveLength(1)
+    expect(document.querySelectorAll('.toast')).toHaveLength(1)
     act(() => void vi.advanceTimersByTime(2100))
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(toastEl()).toBeNull()
   })
 })
 
@@ -394,6 +527,27 @@ describe('ProgressBar', () => {
     rerender(<ProgressBar value={5} max={0} />)
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0')
   })
+
+  it('grows from 0 when it appears (0 % is laid out first, then the real width); not with Reduce Motion', () => {
+    const seen: string[] = []
+    const ow = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains('bar-fill')) seen.push(this.style.width)
+      return 0
+    })
+    try {
+      reducedMotion(false)
+      const { unmount } = render(<ProgressBar value={40} max={100} />)
+      expect(seen).toEqual(['0%'])
+      expect((document.querySelector('.bar-fill') as HTMLElement).style.width).toBe('40%')
+      unmount()
+      seen.length = 0
+      reducedMotion(true)
+      render(<ProgressBar value={40} max={100} />)
+      expect(seen).toEqual([])
+    } finally {
+      ow.mockRestore()
+    }
+  })
 })
 
 describe('useCountUp', () => {
@@ -440,31 +594,33 @@ describe('Morph', () => {
   })
 
   it('while animating, the old content stays as a hidden, inert layer', () => {
-    const anims: { onfinish: (() => void) | null }[] = []
-    Element.prototype.animate = vi.fn(() => {
-      const a = { onfinish: null, oncancel: null, cancel() {} }
-      anims.push(a)
-      return a as unknown as Animation
-    })
+    const anims: Animation[] = []
     reducedMotion(false)
-    const { rerender, container } = render(
-      <Morph k="a">
-        <p id="x">Первое</p>
-      </Morph>,
+    withAnimate(
+      () => {
+        const a = fakeAnim()
+        anims.push(a)
+        return a
+      },
+      () => {
+        const { rerender, container } = render(
+          <Morph k="a">
+            <p id="x">Первое</p>
+          </Morph>,
+        )
+        rerender(
+          <Morph k="b">
+            <p>Второе</p>
+          </Morph>,
+        )
+        const old = container.querySelector('.mOld') as HTMLElement
+        expect(old.textContent).toBe('Первое')
+        expect(old.getAttribute('aria-hidden')).toBe('true')
+        expect(old.querySelector('[id]')).toBeNull()
+        act(() => void anims[0].onfinish?.call(anims[0], {} as AnimationPlaybackEvent))
+        expect(container.querySelector('.mOld')).toBeNull()
+      },
     )
-    rerender(
-      <Morph k="b">
-        <p>Второе</p>
-      </Morph>,
-    )
-    const old = container.querySelector('.mOld') as HTMLElement
-    expect(old.textContent).toBe('Первое')
-    expect(old.getAttribute('aria-hidden')).toBe('true')
-    expect(old.querySelector('[id]')).toBeNull()
-    act(() => anims[0].onfinish?.())
-    expect(container.querySelector('.mOld')).toBeNull()
-    // @ts-expect-error — remove the stub again
-    delete Element.prototype.animate
   })
 })
 
@@ -486,29 +642,83 @@ describe('useFlip', () => {
 
   it('a removed block melts away in its place as a ghost; new blocks fade in', () => {
     reducedMotion(false)
-    const animate = vi.fn(() => ({ onfinish: null, oncancel: null, cancel() {} }) as unknown as Animation)
-    Element.prototype.animate = animate
-    const { rerender } = render(<List items={['A', 'B']} />)
-    rerender(<List items={['B', 'C']} />)
-    const ghost = document.querySelector('.flipghost') as HTMLElement
-    expect(ghost.textContent).toBe('A')
-    expect(ghost.hasAttribute('data-flip-key')).toBe(false)
-    expect(ghost.style.pointerEvents).toBe('none')
-    // C (new) fades in, A (ghost) fades out; B did not move in jsdom (no layout)
-    expect(animate).toHaveBeenCalledTimes(2)
-    // @ts-expect-error — remove the stub again
-    delete Element.prototype.animate
+    const animate = vi.fn(fakeAnim)
+    withAnimate(animate, () => {
+      const { rerender } = render(<List items={['A', 'B']} />)
+      rerender(<List items={['B', 'C']} />)
+      const ghost = document.querySelector('.flipghost') as HTMLElement
+      expect(ghost.textContent).toBe('A')
+      expect(ghost.hasAttribute('data-flip-key')).toBe(false)
+      expect(ghost.style.pointerEvents).toBe('none')
+      // C (new) fades in, A (ghost) fades out; B did not move in jsdom (no layout)
+      expect(animate).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('a block below one that grows slides from where it stands at t=0, not from beyond the grown block', () => {
+    // A tiny layout: blocks stack from the top of the box; Z and B are 40 tall, A grows 200 → 350. Its height
+    // animation starts at the old 200, and (as in a browser) the layout follows the animated height.
+    // A is tall once Z is gone (the same change)
+    let aAnimating = false
+    let zGone = false
+    const height = (k: string) => (k === 'A' ? (zGone && !aAnimating ? 350 : 200) : 40)
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const box = this.closest('[data-testid="box"]')
+      const k = (this as HTMLElement).dataset?.flipKey
+      let top = 0
+      let h = 0
+      if (box && k) {
+        zGone = !box.querySelector(':scope > [data-flip-key="Z"]')
+        for (const el of box.querySelectorAll<HTMLElement>(':scope > [data-flip-key]')) {
+          if (el === this) {
+            h = height(k)
+            break
+          }
+          top += height(el.dataset.flipKey!)
+        }
+      }
+      return { top, bottom: top + h, left: 0, right: 300, width: 300, height: h, x: 0, y: top, toJSON() {} } as DOMRect
+    })
+    const calls: { key: string; frames: Keyframe[]; easing?: string }[] = []
+    try {
+      reducedMotion(false)
+      withAnimate(
+        function (this: Element, frames, opts) {
+          const key = (this as HTMLElement).dataset?.flipKey ?? ''
+          const fr = frames as Keyframe[]
+          calls.push({ key, frames: fr, easing: (opts as KeyframeAnimationOptions | undefined)?.easing })
+          if (key === 'A' && fr[0].height) aAnimating = true
+          return fakeAnim()
+        },
+        () => {
+          const { rerender } = render(<List items={['Z', 'A', 'B']} />)
+          // in one change Z goes and A grows 200 → 350
+          rerender(<List items={['A', 'B']} />)
+        },
+      )
+    } finally {
+      rect.mockRestore()
+    }
+    const grow = calls.find((c) => c.key === 'A' && c.frames[0].height)
+    expect(grow?.frames).toEqual([{ height: '200px' }, { height: '350px' }])
+    // B stood at 240 (Z 40 + A 200); at t=0 it is at 200 (Z gone, A back at 200): it slides 40 px up from there.
+    // Measured against the final layout (A at 350) it would start at -110, on top of A.
+    expect(calls.find((c) => c.key === 'B')?.frames[0]).toEqual({ transform: 'translateY(40px)' })
+    // A itself moves up by Z's 40
+    const slideA = calls.find((c) => c.key === 'A' && c.frames[0].transform)
+    expect(slideA?.frames[0]).toEqual({ transform: 'translateY(40px)' })
+    // the spec's iOS curve
+    expect(slideA?.easing).toBe('cubic-bezier(.32,.72,0,1)')
   })
 
   it('does nothing with Reduce Motion', () => {
     reducedMotion(true)
-    const animate = vi.fn()
-    Element.prototype.animate = animate
-    const { rerender } = render(<List items={['A', 'B']} />)
-    rerender(<List items={['B']} />)
-    expect(document.querySelector('.flipghost')).toBeNull()
-    expect(animate).not.toHaveBeenCalled()
-    // @ts-expect-error — remove the stub again
-    delete Element.prototype.animate
+    const animate = vi.fn(fakeAnim)
+    withAnimate(animate, () => {
+      const { rerender } = render(<List items={['A', 'B']} />)
+      rerender(<List items={['B']} />)
+      expect(document.querySelector('.flipghost')).toBeNull()
+      expect(animate).not.toHaveBeenCalled()
+    })
   })
 })

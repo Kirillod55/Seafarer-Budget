@@ -53,7 +53,8 @@ describe('Shell navigation', () => {
     await setup()
     const tabs = screen.getByRole('navigation', { name: 'Разделы' })
     expect([...tabs.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Главная', 'Отчёт', 'Цели', 'Ещё'])
-    expect(await screen.findByRole('status')).toBeTruthy()
+    // the sync badge (the toast host has its own, always-present status region)
+    await waitFor(() => expect(document.querySelector('.topbar [role="status"]')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
     expect(await screen.findByText('Октябрь 2026')).toBeTruthy()
@@ -123,6 +124,6 @@ describe('Shell toast host', () => {
     await setup()
     const { result } = renderHook(() => useToast())
     act(() => result.current('Запись удалена'))
-    expect((await screen.findByText('Запись удалена')).closest('.toast')?.getAttribute('role')).toBe('status')
+    expect((await screen.findByText('Запись удалена')).closest('[role="status"]')).toBeTruthy()
   })
 })

@@ -1,7 +1,11 @@
 // Must come first: Dexie reads the global indexedDB when it is first imported.
 import 'fake-indexeddb/auto'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach } from 'vitest'
+
+// The full suite runs in parallel workers: under that load a first render (Dexie live queries) can take over the
+// default 1 s, so findBy*/waitFor wait up to 3 s.
+configure({ asyncUtilTimeout: 3000 })
 
 // jsdom has no layout, and its window.scrollTo only prints «not implemented»: keep the position so tests can read it.
 // (Some suites run in the node environment, without a window.)

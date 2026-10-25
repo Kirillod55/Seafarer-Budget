@@ -34,6 +34,7 @@ export function Picker({
   onChange,
   kind = 'account',
   allowOther = false,
+  onAdd,
 }: {
   id: string
   label: string
@@ -42,6 +43,8 @@ export function Picker({
   onChange(value: string): void
   kind?: 'currency' | 'category' | 'account'
   allowOther?: boolean
+  /** A code entered in «Другая валюта…» (already upper case, 3 letters) — for the caller to keep it. */
+  onAdd?(code: string): void
 }) {
   const btn = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState<'list' | 'other' | null>(null)
@@ -90,6 +93,7 @@ export function Picker({
 
   const addOther = (code: string) => {
     if (!list.some((o) => o.value === code)) setAdded((a) => [...a, code])
+    onAdd?.(code)
     close(true)
     if (code !== value) {
       setSwaps((n) => n + 1)
@@ -119,6 +123,13 @@ export function Picker({
         aria-expanded={open !== null}
         aria-label={`${label}: ${cur ? value : selected.label}`}
         onClick={() => (open ? close(false) : show('list'))}
+        onKeyDown={(e) => {
+          // the arrows open a closed field, like a native select
+          if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault()
+            show('list')
+          }
+        }}
       >
         <span key={swaps} className={`pv${swaps ? ' swap' : ''}`}>
           {cur ? (
@@ -153,12 +164,15 @@ export function Picker({
         />
       )}
       {(open ?? leaving) === 'other' && <OtherCurrency key={opens} leaving={!open} anchor={btn} onAdd={addOther} onClose={() => close(true)} />}
-      {open && createPortal(<div className="pick-catch" onClick={() => close(false)} />, document.body)}
+      {open && createPortal(<div className="pick-catch" onClick={() => close(true)} />, document.body)}
     </>
   )
 }
 
-/** Place a menu under the field (above it when there is no room), clamped to the window; its origin at the field. */
+/**
+ * Place a menu under the field (above it when there is no room below; when neither side fits, on the larger side
+ * with its height cut to fit and the items scrolling), clamped to the window; it grows from the field.
+ */
 function usePlace(anchor: RefObject<HTMLButtonElement | null>, menu: RefObject<HTMLDivElement | null>, minW: number) {
   useLayoutEffect(() => {
     const a = anchor.current
@@ -169,8 +183,22 @@ function usePlace(anchor: RefObject<HTMLButtonElement | null>, menu: RefObject<H
     const left = Math.min(Math.max(8, r.left), innerWidth - w - 8)
     m.style.width = `${w}px`
     m.style.left = `${left}px`
-    const h = m.offsetHeight
-    const below = r.bottom + 8 + h < innerHeight || r.top - 8 - h < 0
+    // 8 px from the field and 8 px from the window edge on either side
+    const roomBelow = innerHeight - r.bottom - 16
+    const roomAbove = r.top - 16
+    let h = m.offsetHeight
+    let below = true
+    if (h > roomBelow) {
+      if (h <= roomAbove) below = false
+      else {
+        // fits on neither side: the larger side, scrolling inside
+        below = roomBelow >= roomAbove
+        const room = Math.max(below ? roomBelow : roomAbove, 120)
+        m.style.maxHeight = `${room}px`
+        m.style.overflowY = 'auto'
+        h = Math.min(h, room)
+      }
+    }
     m.style.top = `${below ? r.bottom + 8 : r.top - 8 - h}px`
     m.style.setProperty('--ox', `${r.left + r.width / 2 - left}px`)
     m.style.setProperty('--oy', below ? '0%' : '100%')
