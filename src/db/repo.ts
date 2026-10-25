@@ -1,5 +1,5 @@
 import { alive } from '@shared/alive.ts'
-import type { ImportRow } from '@shared/csv.ts'
+import { resolveAccount, type ImportRow } from '@shared/csv.ts'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '@shared/defaults.ts'
 import { localDate } from '@shared/dates.ts'
 import { round2, usdRate } from '@shared/fx.ts'
@@ -44,9 +44,9 @@ export interface Repo {
   put<T extends Base>(table: SyncTable, row: Partial<T>): Promise<T>
   /**
    * Soft delete into the 24 h undo bin (deleted_at = now, deleted_batch = a new batch); returns the batch
-   * for «Отменить» / restore(). A row already in the bin keeps its own deleted_at and batch (returned).
-   * null: no such row, a row deleted for good, or a table without a bin (settings, accounts and goal moves,
-   * whose removal stays final).
+   * for «Отменить» / restore(). null: no such row, a row deleted for good, a row already in the bin (it keeps
+   * its own deleted_at and batch, nothing is written; returning that batch would let «Отменить» bring back a
+   * whole «delete period»), or a table without a bin (settings, accounts and goal moves, whose removal stays final).
    */
   remove(table: SyncTable, id: string): Promise<string | null>
   /** Hide a record from the lists (it still counts in the balance and reports). */
@@ -80,7 +80,8 @@ const MAIN_ACCOUNT = 'Основной'
 const OPENING_NOTE = 'Начальный остаток'
 const STANDARD_CATEGORIES = new Set(DEFAULT_CATEGORIES.map((c) => c.name))
 /** Where an imported record without a known category goes. */
-const OTHER_CATEGORY: Record<ImportRow['kind'], string> = { expense: 'Прочее', income: 'Прочий доход' }
+type CategoryKind = Category['kind']
+const OTHER_CATEGORY: Record<CategoryKind, string> = { expense: 'Прочее', income: 'Прочий доход' }
 const IMPORTED_CATEGORY_ICON = '🏷️'
 
 type SoftRow = Row<Base & SoftDeletable & Record<string, unknown>>
@@ -167,7 +168,7 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     }
     const row = existing as unknown as SoftRow
     if (row.deleted) return null // deleted for good: nothing to undo
-    if (row.deleted_at) return row.deleted_batch // already in the bin: it stays in its own batch
+    if (row.deleted_at) return null // already in the bin: it stays in its own batch, nothing to undo here
     const batch = deps.uuid()
     await t.put({ ...existing, deleted_at: deps.now().toISOString(), deleted_batch: batch, dirty: 1 })
     deps.onChange()
@@ -261,26 +262,30 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     const batch = deps.uuid()
     if (rows.length === 0) return { batch, count: 0 }
 
-    const accounts = (await db.accounts.toArray()).filter((a) => alive(a) && !a.archived).sort((a, b) => a.sort - b.sort)
-    const fallbackAccount = accounts.find((a) => a.is_default) ?? accounts[0]
-    if (!fallbackAccount) throw new Error('No account to import into')
-    const accountId = (name: string) => accounts.find((a) => a.name === name.trim())?.id ?? fallbackAccount.id
+    // «Счёт» / «Счёт куда» by exact name (archived accounts too), else the default account (csv.ts resolveAccount)
+    const accounts = await db.accounts.toArray()
+    if (!resolveAccount(accounts, '')) throw new Error('No account to import into')
+    const accountId = (name: string) => resolveAccount(accounts, name)!.id
 
     const allCategories = await db.categories.toArray()
     const categories: Category[] = allCategories.filter(alive)
     let nextSort = Math.max(-1, ...allCategories.map((c) => c.sort)) + 1
     const created: Row<Category>[] = []
-    const byName = (name: string, kind: ImportRow['kind']) =>
-      categories.find((c) => c.name.trim() === name && c.kind === kind) ?? categories.find((c) => c.name.trim() === name)
+    // names compare trimmed and case-insensitively, as in planImport
+    const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+    const byName = (name: string, kind: CategoryKind) =>
+      categories.find((c) => same(c.name, name) && c.kind === kind) ?? categories.find((c) => same(c.name, name))
     const categoryId = (row: ImportRow): string | null => {
+      if (row.kind !== 'expense' && row.kind !== 'income') return null // corrections, transfers, exchanges
+      const kind = row.kind
       const name = row.category.trim()
-      const found = name === '' ? undefined : byName(name, row.kind)
+      const found = name === '' ? undefined : byName(name, kind)
       if (found) return found.id
       if (name !== '' && opts.createCategories) {
         const category: Row<Category> = {
           id: deps.uuid(),
           name,
-          kind: row.kind,
+          kind,
           icon: IMPORTED_CATEGORY_ICON,
           keywords: [],
           archived: false,
@@ -296,28 +301,35 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
         categories.push(category)
         return category.id
       }
-      return byName(OTHER_CATEGORY[row.kind], row.kind)?.id ?? null
+      return byName(OTHER_CATEGORY[kind], kind)?.id ?? null
     }
 
     const rates = await db.fx_rates.toArray()
-    const txs: Row<Transaction>[] = rows.map((row) => ({
-      ...buildFrom(rates, {
-        kind: row.kind,
-        amount: row.amount,
-        currency: row.currency,
-        account_id: accountId(row.account),
-        to_account_id: null,
-        to_amount: null,
-        to_currency: null,
-        category_id: categoryId(row),
-        date: row.date,
-        note: row.note,
-        source: 'app',
-        author: row.author,
-      }),
-      deleted_batch: batch,
-      dirty: 1,
-    }))
+    const txs: Row<Transaction>[] = rows.map((row) => {
+      const from = accountId(row.account)
+      // transfer: onto «Счёт куда»; exchange: «Счёт куда» or, as the app saves it, the same account
+      const to =
+        row.kind === 'transfer' ? accountId(row.toAccount) : row.kind === 'exchange' ? (row.toAccount ? accountId(row.toAccount) : from) : null
+      const exchange = row.kind === 'exchange'
+      return {
+        ...buildFrom(rates, {
+          kind: row.kind,
+          amount: row.amount,
+          currency: row.currency,
+          account_id: from,
+          to_account_id: to,
+          to_amount: exchange ? row.toAmount : null,
+          to_currency: exchange ? row.toCurrency : null,
+          category_id: categoryId(row),
+          date: row.date,
+          note: row.note,
+          source: 'app',
+          author: row.author,
+        }),
+        deleted_batch: batch,
+        dirty: 1,
+      }
+    })
 
     await db.transaction('rw', db.transactions, db.categories, async () => {
       await db.categories.bulkPut(created)
@@ -337,9 +349,10 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
 
   function buildFrom(rates: FxRate[], input: NewTransaction): Transaction {
     return {
-      author: 'owner',
-      archived: false,
       ...input,
+      // after the spread: an explicit `undefined` in the input must not wipe the defaults
+      author: input.author ?? 'owner',
+      archived: input.archived ?? false,
       id: deps.uuid(),
       deleted: false,
       deleted_at: null,

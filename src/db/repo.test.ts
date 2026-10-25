@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ImportRow } from '@shared/csv.ts'
+import { balances } from '@shared/calc.ts'
+import { parseCsv, planImport, toCsv, type ImportRow } from '@shared/csv.ts'
 import type { Account, Category, FxRate, Goal, Limit, Settings, Transaction } from '@shared/types.ts'
 import { createDb, type LocalDb } from './local.ts'
-import { createRepo, type Repo } from './repo.ts'
+import { createRepo, type NewTransaction, type Repo } from './repo.ts'
 
 let n = 0
 let db: LocalDb
@@ -251,6 +252,9 @@ const imp = (patch: Partial<ImportRow>): ImportRow => ({
   account: '',
   note: '',
   author: 'owner',
+  toAccount: '',
+  toAmount: null,
+  toCurrency: null,
   ...patch,
 })
 
@@ -277,14 +281,23 @@ describe('remove (soft) and restore', () => {
     expect(await repo.remove('accounts', 'a1')).toBeNull()
   })
 
-  it('removing a row already in the bin keeps its deleted_at and batch and returns that batch', async () => {
+  // M2 (final review): returning the wipe's batch would let «Отменить» bring back the whole wipe
+  it('removing a row already in the bin returns null and writes nothing; it stays in its own batch', async () => {
     const tx = await repo.addTransaction(baseTx)
+    await repo.addTransaction({ ...baseTx, note: 'обед' })
     const { batch } = await repo.wipe('day', 'all')
     await synced(tx.id)
     onChange.mockClear()
-    expect(await repo.remove('transactions', tx.id)).toBe(batch)
+    expect(await repo.remove('transactions', tx.id)).toBeNull()
     expect(await db.transactions.get(tx.id)).toMatchObject({ deleted_at: NOW_ISO, deleted_batch: batch, dirty: 0 })
     expect(onChange).not.toHaveBeenCalled()
+  })
+
+  // M3 (final review): an explicit undefined must not wipe the defaults
+  it('addTransaction fills author and archived even when they are passed as undefined', async () => {
+    const tx = await repo.addTransaction({ ...baseTx, author: undefined, archived: undefined })
+    expect(tx).toMatchObject({ author: 'owner', archived: false })
+    expect(await db.transactions.get(tx.id)).toMatchObject({ author: 'owner', archived: false })
   })
 
   it('goals, limits and categories are removed softly too', async () => {
@@ -439,5 +452,91 @@ describe('importRows / markBatchDeleted', () => {
     expect(txs.find((t) => t.note === 'i')!.category_id).toBe(otherIncome.id)
     expect(txs.find((t) => t.note === 'empty')!.category_id).toBe(other.id)
     expect(await db.categories.count()).toBe(15)
+  })
+
+  it('imports corrections, transfers and exchanges with their accounts; categories match case-insensitively', async () => {
+    await repo.initDefaults('multi', [
+      { currency: 'UAH', amount: 0, accountName: 'Моно' },
+      { currency: 'USD', amount: 0, accountName: 'Наличные' },
+    ])
+    const accounts = await db.accounts.toArray()
+    const mono = accounts.find((a) => a.name === 'Моно')!
+    const cash = accounts.find((a) => a.name === 'Наличные')!
+    const food = (await db.categories.toArray()).find((c) => c.name === 'Продукты')!
+    await repo.importRows(
+      [
+        imp({ note: 'e', category: 'продукты' }),
+        imp({ note: 'c', kind: 'adjustment', amount: -12.5, category: '', account: 'Наличные' }),
+        imp({ note: 't', kind: 'transfer', amount: 100, category: '', account: 'Моно', toAccount: 'Наличные' }),
+        imp({ note: 'x', kind: 'exchange', amount: 415, category: '', account: 'Наличные', toAmount: 10, toCurrency: 'USD' }),
+        imp({ note: 'y', kind: 'exchange', amount: 415, category: '', account: 'Моно', toAccount: 'Наличные', toAmount: 10, toCurrency: 'USD' }),
+      ],
+      { createCategories: false },
+    )
+    const txs = await db.transactions.toArray()
+    const by = (note: string) => txs.find((t) => t.note === note)!
+    expect(by('e')).toMatchObject({ category_id: food.id, account_id: mono.id })
+    expect(by('c')).toMatchObject({ kind: 'adjustment', amount: -12.5, category_id: null, account_id: cash.id, to_account_id: null })
+    expect(by('t')).toMatchObject({ kind: 'transfer', amount: 100, category_id: null, account_id: mono.id, to_account_id: cash.id, to_amount: null, to_currency: null })
+    // an exchange without «Счёт куда» stays on its account (as the app saves it)
+    expect(by('x')).toMatchObject({ kind: 'exchange', category_id: null, account_id: cash.id, to_account_id: cash.id, to_amount: 10, to_currency: 'USD' })
+    expect(by('y')).toMatchObject({ account_id: mono.id, to_account_id: cash.id })
+  })
+
+  // I5 (final review): the CSV is the disaster-recovery copy (spec §10)
+  it('full backup: export, then import into a book with the same accounts and no records, gives the same balances', async () => {
+    await repo.initDefaults('multi', [
+      { currency: 'UAH', amount: 10000, accountName: 'Моно' },
+      { currency: 'USD', amount: 500.5, accountName: 'Наличные' },
+    ])
+    const accounts = await db.accounts.toArray()
+    const mono = accounts.find((a) => a.name === 'Моно')!.id
+    const cash = accounts.find((a) => a.name === 'Наличные')!.id
+    const categories = await db.categories.toArray()
+    const cat = (name: string) => categories.find((c) => c.name === name)!.id
+    const add = (p: Partial<NewTransaction>) => repo.addTransaction({ ...baseTx, account_id: mono, ...p })
+    await add({ category_id: cat('Продукты'), amount: 0.99, note: 'жвачка' })
+    await add({ category_id: cat('Продукты'), amount: 1200.5, author: 'partner', note: 'Атб; "акция"' })
+    await add({ category_id: cat('Продукты'), amount: 1200.5, author: 'partner', note: 'Атб; "акция"' }) // a true double
+    await add({ kind: 'income', category_id: cat('Зарплата'), amount: 3000, currency: 'USD', account_id: cash, note: 'аванс' })
+    await add({ kind: 'adjustment', amount: -150.25, note: 'сверка' })
+    await add({ kind: 'transfer', amount: 2000, to_account_id: cash, note: 'в наличные', author: 'partner' })
+    await add({ kind: 'exchange', amount: 100, currency: 'USD', account_id: cash, to_account_id: cash, to_amount: 4150, to_currency: 'UAH', note: '' })
+    await add({ kind: 'exchange', amount: 415, to_account_id: null, to_amount: 10.01, to_currency: 'USD', note: 'старый обмен' })
+    const binned = await add({ amount: 999, note: 'в корзине' })
+    await repo.remove('transactions', binned.id)
+
+    const txs = await db.transactions.toArray()
+    const { rows, errors } = parseCsv(toCsv(txs, categories, accounts, 'Маша'), 'Маша')
+    expect(errors).toEqual([])
+    expect(rows).toHaveLength(txs.length - 1)
+    // the same book: nothing is new
+    expect(planImport(rows, txs, categories, accounts).fresh).toEqual([])
+
+    // a book with the same accounts and no records
+    const db2 = createDb(`repo-test-${++n}`)
+    let ids2 = 0
+    const repo2 = createRepo(db2, { now: () => new Date('2026-10-21T10:00:00Z'), uuid: () => `b-${++ids2}`, onChange: () => {} })
+    try {
+      await repo2.initDefaults('multi', [
+        { currency: 'UAH', amount: 0, accountName: 'Моно' },
+        { currency: 'USD', amount: 0, accountName: 'Наличные' },
+      ])
+      expect(await db2.transactions.count()).toBe(0)
+      const accounts2 = await db2.accounts.toArray()
+      const plan = planImport(rows, [], await db2.categories.toArray(), accounts2)
+      expect(plan).toMatchObject({ duplicates: [], unknownCategories: [], unknownAccounts: [] })
+      await repo2.importRows(plan.fresh, { createCategories: false })
+      const txs2 = await db2.transactions.toArray()
+      expect(balances(txs2)).toEqual(balances(txs))
+      for (const name of ['Моно', 'Наличные']) {
+        const before = balances(txs, accounts.find((a) => a.name === name)!.id)
+        const after = balances(txs2, accounts2.find((a) => a.name === name)!.id)
+        expect(after, name).toEqual(before)
+      }
+      expect(txs2.filter((t) => t.author === 'partner')).toHaveLength(3)
+    } finally {
+      await db2.delete()
+    }
   })
 })

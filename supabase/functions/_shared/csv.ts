@@ -1,14 +1,30 @@
 // CSV export of the transactions and parsing / planning of «Загрузить из CSV».
 // Pure code, no browser or npm imports: the app, the bot and the Sunday backup share it.
+// The export is a full backup (spec §10): every kind of record goes out, and importing the file into a book
+// with the same accounts reproduces the balances per account and currency.
 import { alive } from './alive.ts'
 import type { Account, Author, Category, Transaction, TxKind } from './types.ts'
 
 const BOM = '﻿' // makes Excel read the file as UTF-8
 const SEPARATOR = ';'
 const EOL = '\r\n'
-const HEADER = ['Дата', 'Тип', 'Сумма', 'Валюта', 'Сумма USD', 'Категория', 'Счёт', 'Заметка', 'Кто']
+const HEADER = [
+  'Дата',
+  'Тип',
+  'Сумма',
+  'Валюта',
+  'Сумма USD',
+  'Категория',
+  'Счёт',
+  'Заметка',
+  'Кто',
+  'Счёт куда',
+  'Сумма куда',
+  'Валюта куда',
+]
 const OWNER_LABEL = 'Я'
 const DEFAULT_PARTNER_LABEL = 'Она'
+const DEFAULT_CURRENCY = 'UAH'
 
 const KIND_LABEL: Record<TxKind, string> = {
   expense: 'Расход',
@@ -18,12 +34,15 @@ const KIND_LABEL: Record<TxKind, string> = {
   adjustment: 'Корректировка',
 }
 
+/** «Кто» of the second person: their name, or «Она» when none is set. */
+const partnerLabelOf = (partnerName: string | null) => partnerName?.trim() || DEFAULT_PARTNER_LABEL
+
 /** A cell: quoted CSV-style when it holds the separator, a quote or a line break. */
 function cell(value: string): string {
   return /[;"\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
 }
 
-/** 12.5 → «12,5» */
+/** 12.5 → «12,5», -0.01 → «-0,01» */
 const number = (n: number) => String(n).replace('.', ',')
 
 /** UTF-8 CSV text (BOM, «;» separator, decimal comma) of the live transactions, in the given order. */
@@ -35,17 +54,16 @@ export function toCsv(
 ): string {
   const categoryName = new Map(categories.map((c) => [c.id, c.name]))
   const accountName = new Map(accounts.map((a) => [a.id, a.name]))
-  const partnerLabel = partnerName || DEFAULT_PARTNER_LABEL
+  const partnerLabel = partnerLabelOf(partnerName)
 
   const rows = txs.filter(alive).map((t) => {
-    // the second leg of a transfer / exchange has no column of its own, so it goes in front of the note
-    let leg = ''
+    // the second leg: transfer = same money onto «Счёт куда»; exchange = «Сумма куда» in «Валюта куда»
+    let to: [string, string, string] = ['', '', '']
     if (t.kind === 'transfer' && t.to_account_id) {
-      leg = `→ ${accountName.get(t.to_account_id) ?? ''}`
+      to = [accountName.get(t.to_account_id) ?? '', number(t.to_amount ?? t.amount), t.to_currency ?? t.currency]
     } else if (t.kind === 'exchange' && t.to_amount !== null && t.to_currency !== null) {
-      leg = `→ ${number(t.to_amount)} ${t.to_currency}`
+      to = [t.to_account_id ? (accountName.get(t.to_account_id) ?? '') : '', number(t.to_amount), t.to_currency]
     }
-    const note = leg && t.note ? `${leg} ${t.note}` : leg || t.note
     return [
       t.date,
       KIND_LABEL[t.kind] ?? t.kind,
@@ -54,8 +72,9 @@ export function toCsv(
       number(t.amount_usd),
       (t.category_id && categoryName.get(t.category_id)) || '',
       accountName.get(t.account_id) ?? '',
-      note,
+      t.note,
       t.author === 'partner' ? partnerLabel : OWNER_LABEL,
+      ...to,
     ]
       .map(cell)
       .join(SEPARATOR)
@@ -70,13 +89,21 @@ export interface ImportRow {
   /** 1-based line in the file; the header is line 1 */
   line: number
   date: string
-  kind: 'expense' | 'income'
+  kind: TxKind
+  /** positive; signed for a correction (adjustment) */
   amount: number
   currency: string
+  /** expense / income only ('' for the other kinds) */
   category: string
+  /** «Счёт» as written ('' = the default account) */
   account: string
   note: string
   author: Author
+  /** «Счёт куда»: the receiving account of a transfer (required) or an exchange ('' = the same account) */
+  toAccount: string
+  /** exchange only: what was received */
+  toAmount: number | null
+  toCurrency: string | null
 }
 
 export interface ImportError {
@@ -84,14 +111,31 @@ export interface ImportError {
   reason: string
 }
 
-const SKIPPED_KINDS = new Set(['перевод', 'обмен', 'корректировка'])
+const KIND_BY_LABEL: Record<string, TxKind> = {
+  '': 'expense',
+  расход: 'expense',
+  доход: 'income',
+  корректировка: 'adjustment',
+  перевод: 'transfer',
+  обмен: 'exchange',
+}
 
-/** Splits CSV text into records of cells, honouring quotes (a quoted cell may hold the separator and line breaks). */
+/** Header names and labels are compared trimmed, lower-case and with «ё» read as «е» («Счет» = «Счёт»). */
+const norm = (s: string) => s.trim().toLowerCase().replaceAll('ё', 'е')
+
+/** Category names are compared trimmed and case-insensitively. */
+const categoryKey = (name: string) => name.trim().toLowerCase()
+
+/**
+ * Splits CSV text into records of cells, honouring quotes: a quote at the start of a cell opens a quoted
+ * cell (which may hold the separator and line breaks); anywhere else it is an ordinary character.
+ */
 function splitRecords(text: string, sep: string): { line: number; cells: string[] }[] {
   const records: { line: number; cells: string[] }[] = []
   let cells: string[] = []
   let value = ''
   let inQuotes = false
+  let cellStart = true // nothing of the current cell read yet
   let line = 1
   let startLine = 1
   let touched = false // the record holds anything but a bare line break
@@ -102,6 +146,7 @@ function splitRecords(text: string, sep: string): { line: number; cells: string[
     cells = []
     value = ''
     touched = false
+    cellStart = true
   }
 
   for (let i = 0; i < text.length; i++) {
@@ -120,12 +165,14 @@ function splitRecords(text: string, sep: string): { line: number; cells: string[
       }
       continue
     }
-    if (ch === '"') {
+    if (ch === '"' && cellStart) {
       inQuotes = true
+      cellStart = false
       touched = true
     } else if (ch === sep) {
       cells.push(value)
       value = ''
+      cellStart = true
       touched = true
     } else if (ch === '\r' || ch === '\n') {
       if (ch === '\r' && text[i + 1] === '\n') i++
@@ -134,6 +181,7 @@ function splitRecords(text: string, sep: string): { line: number; cells: string[
       startLine = line
     } else {
       value += ch
+      cellStart = false
       touched = true
     }
   }
@@ -154,9 +202,17 @@ function parseDate(raw: string): string | null {
   return `${String(yy).padStart(4, '0')}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
 }
 
-/** «1 200,50», «1200.5», «12» → number; null when it is not a plain positive number. */
-function parseAmount(raw: string): number | null {
-  let s = raw.replace(/[\s  ]/g, '')
+/**
+ * «1 200,50», «1200.5», «12» → number; with `signed`, a leading «-», «−» or «+» is allowed (corrections).
+ * null when it is not a plain number (positive unless signed).
+ */
+function parseAmount(raw: string, signed = false): number | null {
+  let s = raw.replace(/[\s  ]/g, '')
+  let sign = 1
+  if (signed && /^[-−+]/.test(s)) {
+    if (s[0] !== '+') sign = -1
+    s = s.slice(1)
+  }
   if (s.includes(',') && s.includes('.')) {
     // the separator that comes last is the decimal one: «1.200,50» / «1,200.50»
     const decimal = s.lastIndexOf(',') > s.lastIndexOf('.') ? ',' : '.'
@@ -165,7 +221,31 @@ function parseAmount(raw: string): number | null {
   s = s.replace(',', '.')
   if (!/^\d+(\.\d+)?$/.test(s)) return null
   const n = Number(s)
-  return n > 0 && Number.isFinite(n) ? n : null
+  if (!Number.isFinite(n)) return null
+  if (signed) return n === 0 ? 0 : sign * n
+  return n > 0 ? n : null
+}
+
+/** Signs and words people write instead of the code (compared lower-case, without a trailing dot). */
+const CURRENCY_WORDS: Record<string, string> = {
+  '₴': 'UAH',
+  грн: 'UAH',
+  гривна: 'UAH',
+  $: 'USD',
+  дол: 'USD',
+  '€': 'EUR',
+  евро: 'EUR',
+  лей: 'MDL',
+  l: 'MDL',
+}
+
+/** A currency cell → a 3-letter code; '' → null (the caller decides), anything unknown → undefined. */
+function parseCurrency(raw: string): string | null | undefined {
+  const s = raw.trim()
+  if (s === '') return null
+  const word = CURRENCY_WORDS[s.toLowerCase().replace(/\.$/, '')]
+  if (word) return word
+  return /^[A-Za-z]{3}$/.test(s) ? s.toUpperCase() : undefined
 }
 
 /** Reads a CSV file (this app's export or a hand-made one) into rows to import; bad rows go to `errors`. */
@@ -181,38 +261,29 @@ export function parseCsv(text: string, partnerName: string | null): { rows: Impo
   if (!header) return { rows, errors: [{ line: 1, reason: 'Файл пустой' }] }
   const index = new Map<string, number>()
   header.cells.forEach((name, i) => {
-    const key = name.trim().toLowerCase()
+    const key = norm(name)
     if (!index.has(key)) index.set(key, i)
   })
-  for (const required of ['дата', 'сумма']) {
-    if (!index.has(required)) {
-      const title = required[0].toUpperCase() + required.slice(1)
-      return { rows, errors: [{ line: header.line, reason: `Нет колонки «${title}»` }] }
-    }
+  for (const required of ['Дата', 'Сумма']) {
+    if (!index.has(norm(required))) return { rows, errors: [{ line: header.line, reason: `Нет колонки «${required}»` }] }
   }
   const get = (cells: string[], column: string) => {
-    const i = index.get(column)
+    const i = index.get(norm(column))
     return i === undefined ? '' : (cells[i] ?? '').trim()
   }
-  const partnerLabel = (partnerName || DEFAULT_PARTNER_LABEL).toLowerCase()
+  const partnerLabel = norm(partnerLabelOf(partnerName))
 
   for (const { line, cells } of records.slice(1)) {
+    if (cells.every((c) => c.trim() === '')) continue // «;;;» left by a spreadsheet
     const fail = (reason: string) => errors.push({ line, reason })
 
-    const kindRaw = get(cells, 'тип').toLowerCase()
-    if (SKIPPED_KINDS.has(kindRaw)) {
-      fail('Этот тип не загружается')
-      continue
-    }
-    let kind: ImportRow['kind']
-    if (kindRaw === '' || kindRaw === 'расход') kind = 'expense'
-    else if (kindRaw === 'доход') kind = 'income'
-    else {
+    const kind = KIND_BY_LABEL[norm(get(cells, 'Тип'))]
+    if (kind === undefined) {
       fail('Неизвестный тип')
       continue
     }
 
-    const dateRaw = get(cells, 'дата')
+    const dateRaw = get(cells, 'Дата')
     if (dateRaw === '') {
       fail('Нет даты')
       continue
@@ -223,72 +294,204 @@ export function parseCsv(text: string, partnerName: string | null): { rows: Impo
       continue
     }
 
-    const amountRaw = get(cells, 'сумма')
+    const amountRaw = get(cells, 'Сумма')
     if (amountRaw === '') {
       fail('Нет суммы')
       continue
     }
-    const amount = parseAmount(amountRaw)
+    const amount = parseAmount(amountRaw, kind === 'adjustment')
     if (amount === null) {
       fail('Непонятная сумма')
       continue
     }
 
-    const whoRaw = get(cells, 'кто').toLowerCase()
+    const currency = parseCurrency(get(cells, 'Валюта'))
+    if (currency === undefined) {
+      fail('Непонятная валюта')
+      continue
+    }
+
+    const whoRaw = norm(get(cells, 'Кто'))
     let author: Author
-    if (whoRaw === '' || whoRaw === OWNER_LABEL.toLowerCase()) author = 'owner'
+    if (whoRaw === '' || whoRaw === norm(OWNER_LABEL)) author = 'owner'
     else if (whoRaw === partnerLabel) author = 'partner'
     else {
       fail('Непонятно, кто это')
       continue
     }
 
-    rows.push({
+    const row: ImportRow = {
       line,
       date,
       kind,
       amount,
-      currency: get(cells, 'валюта').toUpperCase() || 'UAH',
-      category: get(cells, 'категория'),
-      account: get(cells, 'счёт'),
-      note: get(cells, 'заметка'),
+      currency: currency ?? DEFAULT_CURRENCY,
+      category: kind === 'expense' || kind === 'income' ? get(cells, 'Категория') : '',
+      account: get(cells, 'Счёт'),
+      note: get(cells, 'Заметка'),
       author,
-    })
+      toAccount: kind === 'transfer' || kind === 'exchange' ? get(cells, 'Счёт куда') : '',
+      toAmount: null,
+      toCurrency: null,
+    }
+
+    if (kind === 'transfer') {
+      if (row.toAccount === '') {
+        fail('Нет счёта «куда»')
+        continue
+      }
+      const toCurrency = parseCurrency(get(cells, 'Валюта куда'))
+      if (toCurrency === undefined) {
+        fail('Непонятная валюта')
+        continue
+      }
+      if (toCurrency !== null && toCurrency !== row.currency) {
+        fail('Перевод в другую валюту — это обмен')
+        continue
+      }
+    }
+
+    if (kind === 'exchange') {
+      const toAmountRaw = get(cells, 'Сумма куда')
+      if (toAmountRaw === '') {
+        fail('Нет суммы «куда»')
+        continue
+      }
+      const toAmount = parseAmount(toAmountRaw)
+      if (toAmount === null) {
+        fail('Непонятная сумма «куда»')
+        continue
+      }
+      const toCurrency = parseCurrency(get(cells, 'Валюта куда'))
+      if (toCurrency === undefined) {
+        fail('Непонятная валюта')
+        continue
+      }
+      if (toCurrency === null) {
+        fail('Нет валюты «куда»')
+        continue
+      }
+      if (toCurrency === row.currency) {
+        fail('Обмен в ту же валюту')
+        continue
+      }
+      row.toAmount = toAmount
+      row.toCurrency = toCurrency
+    }
+
+    rows.push(row)
   }
   return { rows, errors }
 }
 
-const cents = (n: number) => Math.round(n * 100)
-const key = (r: { date: string; kind: string; amount: number; currency: string; category: string; note: string; author: string }) =>
-  [r.date, r.kind, cents(r.amount), r.currency, r.category, r.note.trim(), r.author].join('\u0000')
+/**
+ * The account an imported «Счёт» goes to: the live account with exactly that name (archived ones too, so a
+ * backup restores onto them), else the default account (is_default, else the first by sort among the live,
+ * not archived ones). undefined only when there is no account at all.
+ */
+export function resolveAccount<A extends Account>(accounts: A[], name: string): A | undefined {
+  const live = accounts.filter(alive)
+  const wanted = name.trim()
+  const exact = wanted === '' ? undefined : live.find((a) => a.name.trim() === wanted)
+  if (exact) return exact
+  const open = live.filter((a) => !a.archived).sort((a, b) => a.sort - b.sort)
+  return open.find((a) => a.is_default) ?? open[0]
+}
 
-/** Splits rows into new ones and ones already in the book; lists the category names that do not exist yet. */
+const cents = (n: number) => Math.round(n * 100)
+
+interface KeyParts {
+  date: string
+  kind: string
+  amount: number
+  currency: string
+  category: string
+  note: string
+  author: string
+  account: string
+  toAccount: string
+  toAmount: number | null
+  toCurrency: string | null
+}
+
+/**
+ * What makes two records «the same» for the duplicate check. Expenses and incomes are compared without the
+ * account (a hand-made file usually has no «Счёт»); corrections, transfers and exchanges with it, since the
+ * account is what they are about.
+ */
+function key(r: KeyParts): string {
+  const base = [r.date, r.kind, cents(r.amount), r.currency, categoryKey(r.category), r.note.trim(), r.author]
+  if (r.kind === 'expense' || r.kind === 'income') return base.join('\u0000')
+  return [...base, r.account, r.toAccount, r.toAmount === null ? '' : cents(r.toAmount), r.toCurrency ?? ''].join('\u0000')
+}
+
+/**
+ * Splits rows into new ones and ones already in the book (a multiset: each record matches one file row), and
+ * lists the category and account names that do not exist yet (their rows go to «Прочее» / the default account).
+ */
 export function planImport(
   rows: ImportRow[],
   existing: Transaction[],
   categories: Category[],
-  // accounts are not matched yet: imported rows go to the default account (kept in the signature for the screen)
-  _accounts: Account[],
-): { fresh: ImportRow[]; duplicates: ImportRow[]; unknownCategories: string[] } {
-  // an existing record's category is resolved among all categories, so a record under an archived one still matches
+  accounts: Account[],
+): { fresh: ImportRow[]; duplicates: ImportRow[]; unknownCategories: string[]; unknownAccounts: string[] } {
+  // an existing record's category / account is resolved among all of them, so one under an archived (or
+  // binned) category or account still matches
   const categoryName = new Map(categories.map((c) => [c.id, c.name.trim()]))
-  const known = new Set<string>()
-  for (const c of categories) if (alive(c)) known.add(c.name.trim())
+  const accountName = new Map(accounts.map((a) => [a.id, a.name.trim()]))
+  const knownCategories = new Set(categories.filter(alive).map((c) => categoryKey(c.name)))
+  const accountOf = (name: string) => resolveAccount(accounts, name)?.name.trim() ?? ''
 
-  const seen = new Set<string>()
+  const seen = new Map<string, number>()
   for (const t of existing) {
-    if (!alive(t) || (t.kind !== 'expense' && t.kind !== 'income')) continue
-    const category = (t.category_id && categoryName.get(t.category_id)) || ''
-    seen.add(key({ ...t, category }))
+    if (!alive(t)) continue
+    const transfer = t.kind === 'transfer'
+    const exchange = t.kind === 'exchange'
+    const k = key({
+      ...t,
+      category: t.kind === 'expense' || t.kind === 'income' ? (t.category_id && categoryName.get(t.category_id)) || '' : '',
+      account: accountName.get(t.account_id) ?? '',
+      toAccount: transfer
+        ? (t.to_account_id && accountName.get(t.to_account_id)) || ''
+        : exchange
+          ? (accountName.get(t.to_account_id ?? t.account_id) ?? '')
+          : '',
+      toAmount: exchange ? t.to_amount : null,
+      toCurrency: exchange ? t.to_currency : null,
+    })
+    seen.set(k, (seen.get(k) ?? 0) + 1)
   }
 
   const fresh: ImportRow[] = []
   const duplicates: ImportRow[] = []
-  const unknown: string[] = []
-  for (const row of rows) {
-    ;(seen.has(key(row)) ? duplicates : fresh).push(row)
-    const name = row.category.trim()
-    if (name !== '' && !known.has(name) && !unknown.includes(name)) unknown.push(name)
+  const unknownCategories: string[] = []
+  const unknownAccounts: string[] = []
+  const liveAccountNames = new Set(accounts.filter(alive).map((a) => a.name.trim()))
+  const noteAccount = (name: string) => {
+    const n = name.trim()
+    if (n !== '' && !liveAccountNames.has(n) && !unknownAccounts.includes(n)) unknownAccounts.push(n)
   }
-  return { fresh, duplicates, unknownCategories: unknown }
+
+  for (const row of rows) {
+    const k = key({
+      ...row,
+      account: accountOf(row.account),
+      toAccount:
+        row.kind === 'transfer' ? accountOf(row.toAccount) : row.kind === 'exchange' ? accountOf(row.toAccount || row.account) : '',
+    })
+    const left = seen.get(k) ?? 0
+    if (left > 0) {
+      seen.set(k, left - 1)
+      duplicates.push(row)
+    } else {
+      fresh.push(row)
+    }
+    const name = row.category.trim()
+    if (name !== '' && !knownCategories.has(categoryKey(name)) && !unknownCategories.some((u) => categoryKey(u) === categoryKey(name))) {
+      unknownCategories.push(name)
+    }
+    noteAccount(row.account)
+    noteAccount(row.toAccount)
+  }
+  return { fresh, duplicates, unknownCategories, unknownAccounts }
 }
