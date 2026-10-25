@@ -16,8 +16,8 @@ export default defineConfig({
         display: 'standalone',
         start_url: './',
         scope: './',
-        theme_color: '#1f6feb', // --accent (light theme) in styles.css
-        background_color: '#f4f5f7', // --bg (light theme)
+        theme_color: '#0E0F12', // --bg (dark theme) in src/ui/tokens.css
+        background_color: '#0E0F12', // --bg (dark theme)
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },

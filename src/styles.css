@@ -1,60 +1,27 @@
+/*
+ * 1.1 tokens, theme, font and base elements live in ui/tokens.css. Below: the shared classes of the 1.0 screens,
+ * kept until each screen is replaced (stage 2, tasks 2–14) and then deleted with it.
+ */
+@import './ui/tokens.css';
+
+/* 1.0 variable names, mapped onto the 1.1 tokens so the old screens follow both themes */
 :root {
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --text: #1b1f27;
-  --muted: #667085;
-  --border: #e1e4ea;
-  --accent: #1f6feb;
-  --accent-text: #ffffff;
-  --pos: #15803d;
-  --neg: #c62828;
-  --warn-bg: #fff4e5;
-  --level-ok: #15803d;
-  --level-warn: #d97706;
-  --level-over: #c62828;
-  --track: #e6e9ef;
-  --radius: 14px;
+  --surface: var(--card);
+  --border: var(--line);
+  --pos: var(--ok);
+  --neg: var(--danger);
+  --warn-bg: color-mix(in srgb, var(--pill-warn) 16%, transparent);
+  --level-ok: var(--accent);
+  --level-warn: var(--pill-warn);
+  --level-over: var(--warn);
+  --radius: var(--r-card);
   --tap: 48px;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #101318;
-    --surface: #1a1f27;
-    --text: #e8ebf0;
-    --muted: #98a2b3;
-    --border: #2b323d;
-    --accent: #4c8dff;
-    --accent-text: #0b1220;
-    --pos: #4ade80;
-    --neg: #ff6b6b;
-    --warn-bg: #3a2c14;
-    --level-ok: #4ade80;
-    --level-warn: #fbbf24;
-    --level-over: #ff6b6b;
-    --track: #2b323d;
-  }
-}
-
-* {
-  box-sizing: border-box;
 }
 
 html,
 body,
 #root {
   min-height: 100%;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 17px;
-  line-height: 1.4;
-  -webkit-text-size-adjust: 100%;
 }
 
 h1 {
@@ -215,7 +182,7 @@ label {
 }
 
 .btn-primary {
-  color: var(--accent-text);
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -229,7 +196,7 @@ label {
   padding: 0.25rem 0.5rem;
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 500;
 }
 
@@ -587,7 +554,7 @@ label {
 }
 
 .tab.active {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 

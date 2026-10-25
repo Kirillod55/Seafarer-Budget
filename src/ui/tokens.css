@@ -1,0 +1,282 @@
+/*
+ * Seafarer Budget 1.1 design tokens (spec §6, prototype v60) and base element styles.
+ * Theme: data-theme="light" | "dark" on <html>; no attribute = follow prefers-color-scheme.
+ * The explicit-theme rules come after the @media rule AND are more specific (html:not(#_)[…]),
+ * so «Светлая» wins on a dark system (the bug found in the prototype).
+ * Glass is solid (decision 2026-10-25): no blur, no translucent sheen.
+ */
+
+:root {
+  /* light theme (default) */
+  --bg: #FFFFFF;
+  --card: #FFFFFF;
+  --line: #E8E8EC;
+  --text: #14161A;
+  --muted: #6B6B73;
+  --accent-text: #4D6B00;
+  --warn: #C2410C;
+  --danger: #D70015;
+  --ok: #1F8A4C;
+  --track: #F2F2F5;
+  --stage: #F7F7F8;
+  --anchor: #1D4ED8;
+  --partner: #3A3D44;
+  --act-edit: #8E8E93;
+  --act-del: #FF3B30;
+  --act-arch: #FF9500;
+  --pill-warn: #9A6200;
+  --glass-bg: #FFFFFF;
+  --toast-bg: #FFFFFF;
+  --glass-btn: #F2F2F5;
+  --bar-bg: #FFFFFF;
+  --glass-btn-edge: rgba(255, 255, 255, .7);
+  --glass-edge: rgba(255, 255, 255, .85);
+  --glass-line: rgba(20, 22, 26, .08);
+  --glass-shadow: 0 18px 50px rgba(20, 22, 26, .22), 0 2px 8px rgba(20, 22, 26, .08);
+  --scrim: rgba(0, 0, 0, .28);
+
+  /* the same in both themes */
+  --accent: #C6F432;
+  --on-accent: #11140A;
+  --font: 'Onest Variable', 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ios: cubic-bezier(.32, .72, 0, 1);
+  --spring: cubic-bezier(.34, 1.45, .64, 1);
+
+  /* phone shapes: cards and groups 20, fields 12, buttons 14; pills 34, round buttons 36, touch ≥ 44 */
+  --r-card: 20px;
+  --r-field: 12px;
+  --r-btn: 14px;
+  --pill-h: 34px;
+  --round-h: 36px;
+  --touch: 44px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #0E0F12;
+    --card: #181A1F;
+    --line: #262930;
+    --text: #F2F3F5;
+    --muted: #8E939C;
+    --accent-text: #C6F432;
+    --warn: #FF8A5B;
+    --danger: #FF5C5C;
+    --ok: #5FD98F;
+    --track: #262930;
+    --stage: #08090B;
+    --anchor: #5B9BFF;
+    --partner: #E4E6EA;
+    --act-edit: #55585F;
+    --act-del: #FF453A;
+    --act-arch: #C77700;
+    --pill-warn: #F5B83D;
+    --glass-bg: #24272D;
+    --toast-bg: #2A2D33;
+    --glass-btn: #1F2126;
+    --bar-bg: #0E0F12;
+    --glass-btn-edge: rgba(255, 255, 255, .14);
+    --glass-edge: rgba(255, 255, 255, .22);
+    --glass-line: rgba(255, 255, 255, .08);
+    --glass-shadow: 0 18px 50px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .3);
+    --scrim: rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+}
+
+html:not(#_)[data-theme="light"] {
+  --bg: #FFFFFF;
+  --card: #FFFFFF;
+  --line: #E8E8EC;
+  --text: #14161A;
+  --muted: #6B6B73;
+  --accent-text: #4D6B00;
+  --warn: #C2410C;
+  --danger: #D70015;
+  --ok: #1F8A4C;
+  --track: #F2F2F5;
+  --stage: #F7F7F8;
+  --anchor: #1D4ED8;
+  --partner: #3A3D44;
+  --act-edit: #8E8E93;
+  --act-del: #FF3B30;
+  --act-arch: #FF9500;
+  --pill-warn: #9A6200;
+  --glass-bg: #FFFFFF;
+  --toast-bg: #FFFFFF;
+  --glass-btn: #F2F2F5;
+  --bar-bg: #FFFFFF;
+  --glass-btn-edge: rgba(255, 255, 255, .7);
+  --glass-edge: rgba(255, 255, 255, .85);
+  --glass-line: rgba(20, 22, 26, .08);
+  --glass-shadow: 0 18px 50px rgba(20, 22, 26, .22), 0 2px 8px rgba(20, 22, 26, .08);
+  --scrim: rgba(0, 0, 0, .28);
+  color-scheme: light;
+}
+
+html:not(#_)[data-theme="dark"] {
+  --bg: #0E0F12;
+  --card: #181A1F;
+  --line: #262930;
+  --text: #F2F3F5;
+  --muted: #8E939C;
+  --accent-text: #C6F432;
+  --warn: #FF8A5B;
+  --danger: #FF5C5C;
+  --ok: #5FD98F;
+  --track: #262930;
+  --stage: #08090B;
+  --anchor: #5B9BFF;
+  --partner: #E4E6EA;
+  --act-edit: #55585F;
+  --act-del: #FF453A;
+  --act-arch: #C77700;
+  --pill-warn: #F5B83D;
+  --glass-bg: #24272D;
+  --toast-bg: #2A2D33;
+  --glass-btn: #1F2126;
+  --bar-bg: #0E0F12;
+  --glass-btn-edge: rgba(255, 255, 255, .14);
+  --glass-edge: rgba(255, 255, 255, .22);
+  --glass-line: rgba(255, 255, 255, .08);
+  --glass-shadow: 0 18px 50px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .3);
+  --scrim: rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+
+/* ---------- base elements ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Dynamic Type: 1rem = the body size (17 px) × --ts, where --ts = the iPhone text size ÷ 17,
+ * clamped to 1…1.3 (measured from -apple-system-body by applyTextScale() in theme.ts).
+ * Every font size is in rem so it follows the setting.
+ */
+html {
+  font-size: calc(17px * var(--ts, 1));
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+.large {
+  font-size: 1.882rem; /* 32 */
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  line-height: 1.1;
+  margin: 0;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: 1.294rem; /* 22 */
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.num,
+input[inputmode='decimal'],
+input[type='number'] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* fields: 17 px or more, so iOS never zooms the page on focus */
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: max(17px, 1rem);
+  color: var(--text);
+}
+
+button {
+  font-family: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+/* theme switch: colours flow over 0.4 s (theme.ts adds .theme-fade for the moment of the switch) */
+html.theme-fade,
+html.theme-fade *,
+html.theme-fade *::before,
+html.theme-fade *::after {
+  transition:
+    background-color 0.4s var(--ios),
+    border-color 0.4s var(--ios),
+    color 0.4s var(--ios),
+    fill 0.4s var(--ios),
+    stroke 0.4s var(--ios) !important;
+}
+
+/* iPhone «Уменьшение движения»: no animation anywhere */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* iPhone «Увеличение контраста»: crisp text-coloured borders, muted captions in full colour */
+@media (prefers-contrast: more) {
+  .card,
+  .group,
+  .glass,
+  .toast,
+  .navback,
+  .navbtn,
+  .picker,
+  .seg,
+  input,
+  select,
+  textarea {
+    border: 1px solid var(--text) !important;
+  }
+
+  .label,
+  .t2,
+  .muted,
+  .small,
+  .section,
+  .tab {
+    color: var(--text) !important;
+  }
+
+  .tabs {
+    border-top: 1px solid var(--text) !important;
+  }
+}

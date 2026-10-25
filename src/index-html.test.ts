@@ -17,3 +17,15 @@ describe('index.html (iPhone shell)', () => {
     expect(html).not.toMatch(/rel="apple-touch-icon"[^>]*href="\//)
   })
 })
+
+describe('1.1 theme colours', () => {
+  it('index.html starts with the dark --bg as theme-color (applyTheme updates it at start)', () => {
+    expect(html).toContain('<meta name="theme-color" content="#0E0F12" />')
+  })
+
+  it('the PWA manifest uses the dark --bg', () => {
+    const config = readFileSync('vite.config.ts', 'utf8')
+    expect(config).toMatch(/theme_color:\s*'#0E0F12'/)
+    expect(config).toMatch(/background_color:\s*'#0E0F12'/)
+  })
+})
