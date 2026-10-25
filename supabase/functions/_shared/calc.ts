@@ -1,6 +1,8 @@
 // Budget calculations. Pure functions, shared by the Telegram bot (Deno) and the React app.
-// Deleted rows (`deleted: true`) are never counted. `round2` is applied to aggregate outputs only.
+// Dead rows (`!alive(row)`: deleted for good or in the 24 h undo bin) are never counted; archived rows are.
+// `round2` is applied to aggregate outputs only.
 
+import { alive } from './alive.ts'
 import { addDays, daysBetween, monthOf, prevMonth } from './dates.ts'
 import { round2, usdRate } from './fx.ts'
 import type { FxRate, Goal, GoalMove, Limit, Settings, Transaction } from './types.ts'
@@ -37,7 +39,7 @@ export function balances(
   const on = (id: string | null) => (accountId === undefined || id === accountId) && !(id !== null && skip.has(id))
 
   for (const t of txs) {
-    if (t.deleted) continue
+    if (!alive(t)) continue
     switch (t.kind) {
       case 'expense':
         if (on(t.account_id)) add(t.currency, -t.amount)
@@ -81,7 +83,7 @@ export function balanceUsd(bal: Record<string, number>, rates: FxRate[], today: 
 /** USD set aside for goals (all goals, or only `goalId`). */
 export function reservedUsd(moves: GoalMove[], goalId?: string): number {
   return round2(
-    sum(moves.filter((m) => !m.deleted && (goalId === undefined || m.goal_id === goalId)).map((m) => m.amount_usd)),
+    sum(moves.filter((m) => alive(m) && (goalId === undefined || m.goal_id === goalId)).map((m) => m.amount_usd)),
   )
 }
 
@@ -93,7 +95,7 @@ export interface MonthReport {
 }
 
 function monthExpenses(txs: Transaction[], month: string): Transaction[] {
-  return txs.filter((t) => !t.deleted && t.kind === 'expense' && monthOf(t.date) === month)
+  return txs.filter((t) => alive(t) && t.kind === 'expense' && monthOf(t.date) === month)
 }
 
 export function monthReport(txs: Transaction[], month: string): MonthReport {
@@ -125,7 +127,10 @@ export type Allowance =
   | { status: 'no_date' }
   | { status: 'expired' }
 
-/** How much can be spent per day / per month until the next contract pays out (date + salary lag). */
+/**
+ * How much can be spent per day / per month until the next contract pays out (date + salary lag).
+ * @deprecated use dailyBudget — removed in stage 4
+ */
 export function allowance(freeUsd: number, s: Settings, today: string): Allowance {
   if (!s.next_contract_date) return { status: 'no_date' }
   const days = daysBetween(today, addDays(s.next_contract_date, s.salary_lag_days))
@@ -134,12 +139,61 @@ export function allowance(freeUsd: number, s: Settings, today: string): Allowanc
   return { status: 'ok', days, perDay: round2(perDay), perMonth: round2(perDay * DAYS_PER_MONTH) }
 }
 
+export type DailyBudget =
+  | {
+      state: 'ok' | 'overspent' | 'reserve'
+      days: number
+      balanceMorningUsd: number
+      freeMorningUsd: number
+      perDay: number
+      spentToday: number
+      leftToday: number
+    }
+  | { state: 'no_date'; spentToday: number }
+  | { state: 'sea'; spentToday: number }
+
+/**
+ * Daily budget (spec §2). Recomputed every morning from the balance at the start of `today`:
+ * every movement dated `today` is rolled back by leaving it out of the balance, so the budget
+ * stays fixed during the day and spending only fills the bar.
+ *  days = daysBetween(today, landing) + 1;  perDay = max(0, free) / days;  left = perDay - spentToday.
+ * States: no_date (no landing date), sea (today after landing), reserve (free <= 0, perDay 0),
+ * overspent (left < 0), ok. `leftToday` uses the rounded `perDay`, so the shown numbers add up.
+ */
+export function dailyBudget(input: {
+  txs: Transaction[]
+  rates: FxRate[]
+  accounts: { id: string; archived: boolean }[]
+  reservedUsd: number
+  settings: Pick<Settings, 'next_contract_date' | 'reserve_usd'>
+  today: string
+}): DailyBudget {
+  const { txs, rates, accounts, settings: s, today } = input
+  const spentToday = round2(
+    sum(txs.filter((t) => alive(t) && t.kind === 'expense' && t.date === today).map((t) => t.amount_usd)),
+  )
+  if (!s.next_contract_date) return { state: 'no_date', spentToday }
+  if (today > s.next_contract_date) return { state: 'sea', spentToday }
+
+  const days = daysBetween(today, s.next_contract_date) + 1
+  const balanceMorningUsd = balanceUsd(
+    activeBalances(txs.filter((t) => t.date !== today), accounts),
+    rates,
+    today,
+  )
+  const freeMorningUsd = round2(balanceMorningUsd - input.reservedUsd - s.reserve_usd)
+  const perDay = round2(Math.max(0, freeMorningUsd) / days)
+  const leftToday = round2(perDay - spentToday)
+  const state = freeMorningUsd <= 0 ? 'reserve' : leftToday < 0 ? 'overspent' : 'ok'
+  return { state, days, balanceMorningUsd, freeMorningUsd, perDay, spentToday, leftToday }
+}
+
 export function contractStats(
   txs: Transaction[],
   s: Settings,
   today: string,
 ): { earnedUsd: number; savedThisMonthUsd: number; projectedUsd: number | null } {
-  const live = txs.filter((t) => !t.deleted)
+  const live = txs.filter(alive)
   const start = s.contract_start_date
   const earned = start
     ? sum(live.filter((t) => t.kind === 'income' && t.date >= start).map((t) => t.amount_usd))
@@ -175,7 +229,7 @@ export function goalProgress(
   moves: GoalMove[],
   today: string,
 ): { savedUsd: number; share: number; etaDate: string | null; perMonthNeeded: number | null } {
-  const mine = moves.filter((m) => !m.deleted && m.goal_id === goal.id)
+  const mine = moves.filter((m) => alive(m) && m.goal_id === goal.id)
   const saved = sum(mine.map((m) => m.amount_usd))
   const remaining = goal.target_usd - saved
   const share = goal.target_usd > 0 ? saved / goal.target_usd : 0

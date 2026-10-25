@@ -4,13 +4,14 @@ import {
   balances,
   balanceUsd,
   contractStats,
+  dailyBudget,
   goalProgress,
   limitCrossing,
   limitStatus,
   monthReport,
   reservedUsd,
 } from './calc.ts'
-import { addDays } from './dates.ts'
+import { addDays, localDate } from './dates.ts'
 import type { FxRate, Goal, GoalMove, Limit, Settings, Transaction } from './types.ts'
 
 let seq = 0
@@ -405,5 +406,191 @@ describe('limitCrossing', () => {
     expect(limitCrossing(0.95, 1.02)).toBe('over')
     expect(limitCrossing(0.5, 1.2)).toBe('over')
     expect(limitCrossing(1.0, 1.1)).toBeNull()
+  })
+})
+
+describe('dailyBudget', () => {
+  const accounts = [{ id: 'a1', archived: false }]
+  const rates: FxRate[] = [
+    { date: '2026-10-20', currency: 'USD', uah_per_unit: 40 },
+    { date: '2026-10-20', currency: 'UAH', uah_per_unit: 1 },
+  ]
+  const income = (amount: number, date = '2026-01-01') => tx({ kind: 'income', amount, amount_usd: amount, date })
+  const expense = (amount: number, date: string, p: Partial<Transaction> = {}) =>
+    tx({ kind: 'expense', amount, amount_usd: amount, date, ...p })
+  function run(over: {
+    txs?: Transaction[]
+    reserved?: number
+    reserve?: number
+    land?: string | null
+    today: string
+    accounts?: { id: string; archived: boolean }[]
+  }) {
+    return dailyBudget({
+      txs: over.txs ?? [],
+      rates,
+      accounts: over.accounts ?? accounts,
+      reservedUsd: over.reserved ?? 0,
+      settings: { next_contract_date: over.land === undefined ? '2026-12-21' : over.land, reserve_usd: over.reserve ?? 0 },
+      today: over.today,
+    })
+  }
+
+  it('$3600, landing in 59 days (60 days), no reserve -> 60.00', () => {
+    const r = run({ txs: [income(3600)], today: '2026-10-22', land: '2026-12-20' })
+    expect(r).toMatchObject({ state: 'ok', days: 60, balanceMorningUsd: 3600, freeMorningUsd: 3600, perDay: 60, spentToday: 0, leftToday: 60 })
+  })
+
+  it('next day after spending $150 -> 58.47, then after $30 -> 58.97', () => {
+    const txs = [income(3600), expense(150, '2026-10-22')]
+    const d2 = run({ txs, today: '2026-10-23', land: '2026-12-20' })
+    expect(d2).toMatchObject({ state: 'ok', days: 59, balanceMorningUsd: 3450, perDay: 58.47 })
+    const d3 = run({ txs: [...txs, expense(30, '2026-10-23')], today: '2026-10-24', land: '2026-12-20' })
+    expect(d3).toMatchObject({ days: 58, balanceMorningUsd: 3420, perDay: 58.97 })
+  })
+
+  it('$5000 with $1000 reserve over 60 days -> 66.67', () => {
+    const r = run({ txs: [income(5000)], reserve: 1000, today: '2026-10-22', land: '2026-12-20' })
+    expect(r).toMatchObject({ state: 'ok', days: 60, freeMorningUsd: 4000, perDay: 66.67 })
+  })
+
+  it('goal money is set aside before dividing', () => {
+    const r = run({ txs: [income(5000)], reserved: 500, reserve: 500, today: '2026-10-22', land: '2026-12-20' })
+    expect(r).toMatchObject({ freeMorningUsd: 4000, perDay: 66.67 })
+  })
+
+  it('2026-10-22 -> 2026-11-01 is 11 days; landing today is 1 day', () => {
+    expect(run({ txs: [income(110)], today: '2026-10-22', land: '2026-11-01' })).toMatchObject({ days: 11, perDay: 10 })
+    expect(run({ txs: [income(110)], today: '2026-10-22', land: '2026-10-22' })).toMatchObject({ state: 'ok', days: 1, perDay: 110 })
+  })
+
+  it('spent today $36.68 of $59.67 -> left 22.99 (ok); spent $70 -> overspent, left -10.33', () => {
+    const base = [income(59.67)]
+    const ok = run({ txs: [...base, expense(36.68, '2026-10-22')], today: '2026-10-22', land: '2026-10-22' })
+    expect(ok).toMatchObject({ state: 'ok', perDay: 59.67, spentToday: 36.68, leftToday: 22.99 })
+    const over = run({ txs: [...base, expense(70, '2026-10-22')], today: '2026-10-22', land: '2026-10-22' })
+    expect(over).toMatchObject({ state: 'overspent', perDay: 59.67, spentToday: 70, leftToday: -10.33 })
+  })
+
+  it('spending exactly the budget is still ok (left 0)', () => {
+    const r = run({ txs: [income(60), expense(60, '2026-10-22')], today: '2026-10-22', land: '2026-10-22' })
+    expect(r).toMatchObject({ state: 'ok', leftToday: 0 })
+  })
+
+  it('reserve larger than the money -> state reserve, perDay 0', () => {
+    const r = run({ txs: [income(500)], reserve: 800, today: '2026-10-22', land: '2026-12-20' })
+    expect(r).toMatchObject({ state: 'reserve', perDay: 0, freeMorningUsd: -300 })
+    expect(run({ txs: [income(800)], reserve: 800, today: '2026-10-22' })).toMatchObject({ state: 'reserve', perDay: 0 })
+  })
+
+  it('reserve wins over overspent when there is no free money', () => {
+    const r = run({ txs: [income(100), expense(20, '2026-10-22')], reserve: 200, today: '2026-10-22', land: '2026-12-20' })
+    expect(r).toMatchObject({ state: 'reserve', perDay: 0, leftToday: -20 })
+  })
+
+  it('no landing date -> no_date, with spentToday', () => {
+    const r = run({ txs: [income(100), expense(12.5, '2026-10-22')], today: '2026-10-22', land: null })
+    expect(r).toEqual({ state: 'no_date', spentToday: 12.5 })
+  })
+
+  it('today after the landing date -> sea, with spentToday', () => {
+    const r = run({ txs: [income(100), expense(7, '2026-10-22')], today: '2026-10-22', land: '2026-10-21' })
+    expect(r).toEqual({ state: 'sea', spentToday: 7 })
+  })
+
+  it("rolls back every movement of today: transfer and exchange don't change the morning balance", () => {
+    const base = [income(1000)]
+    const transfer = tx({ kind: 'transfer', amount: 300, amount_usd: 300, account_id: 'a1', to_account_id: 'a2', date: '2026-10-22' })
+    const exchange = tx({
+      kind: 'exchange', amount: 100, amount_usd: 100, account_id: 'a1', to_account_id: 'a2',
+      to_amount: 4000, to_currency: 'UAH', date: '2026-10-22',
+    })
+    const accs = [{ id: 'a1', archived: false }, { id: 'a2', archived: false }]
+    const r = run({ txs: [...base, transfer, exchange], accounts: accs, today: '2026-10-22', land: '2026-10-22' })
+    expect(r).toMatchObject({ balanceMorningUsd: 1000, spentToday: 0 })
+  })
+
+  it("today's income and adjustments are rolled back as well", () => {
+    const r = run({
+      txs: [income(1000), income(400, '2026-10-22'), tx({ kind: 'adjustment', amount: -50, amount_usd: -50, date: '2026-10-22' })],
+      today: '2026-10-22',
+      land: '2026-10-22',
+    })
+    expect(r).toMatchObject({ balanceMorningUsd: 1000 })
+  })
+
+  it('archived accounts are not free money', () => {
+    const txs = [income(1000), tx({ kind: 'income', amount: 500, amount_usd: 500, account_id: 'a9', date: '2026-01-01' })]
+    const r = run({ txs, accounts: [{ id: 'a1', archived: false }, { id: 'a9', archived: true }], today: '2026-10-22', land: '2026-10-22' })
+    expect(r).toMatchObject({ balanceMorningUsd: 1000 })
+  })
+
+  it("00:30 in Kyiv is already the next day: an entry dated 2026-10-22 counts as today's", () => {
+    const today = localDate(new Date('2026-10-21T21:30:00Z'), 'Europe/Kyiv')
+    expect(today).toBe('2026-10-22')
+    const r = run({ txs: [income(1000), expense(25, '2026-10-22')], today, land: '2026-10-22' })
+    expect(r).toMatchObject({ balanceMorningUsd: 1000, spentToday: 25 })
+  })
+
+  it('soft-deleted rows are neither balance nor spent today; archived rows count', () => {
+    const txs = [
+      income(1000),
+      expense(300, '2026-10-22', { deleted_at: '2026-10-22T08:00:00Z', deleted_batch: 'b1' }),
+      expense(100, '2026-10-20', { deleted_at: '2026-10-21T08:00:00Z' }),
+      expense(40, '2026-10-22', { archived: true }),
+      expense(10, '2026-10-20', { archived: true }),
+    ]
+    const r = run({ txs, today: '2026-10-22', land: '2026-10-22' })
+    expect(r).toMatchObject({ balanceMorningUsd: 990, spentToday: 40, perDay: 990, leftToday: 950 })
+  })
+})
+
+describe('soft-deleted rows are ignored by every calculation', () => {
+  const gone = { deleted_at: '2026-10-10T09:00:00Z', deleted_batch: 'b1' }
+
+  it('balances', () => {
+    const txs = [
+      tx({ kind: 'income', amount: 100, amount_usd: 100 }),
+      tx({ kind: 'expense', amount: 30, amount_usd: 30, ...gone }),
+      tx({ kind: 'expense', amount: 5, amount_usd: 5, archived: true }),
+    ]
+    expect(balances(txs)).toEqual({ USD: 95 })
+  })
+
+  it('reservedUsd and goalProgress', () => {
+    const moves = [move({ amount_usd: 100 }), move({ amount_usd: 900, deleted: true })]
+    expect(reservedUsd(moves)).toBe(100)
+    expect(reservedUsd(moves, 'g1')).toBe(100)
+    const goal = { id: 'g1', deleted: false, name: 'x', target_usd: 1000, deadline: null } as unknown as Goal
+    expect(goalProgress(goal, moves, '2026-10-20').savedUsd).toBe(100)
+  })
+
+  it('monthReport (current and previous month) and limitStatus', () => {
+    const txs = [
+      tx({ amount: 10, amount_usd: 10, category_id: 'c1', date: '2026-10-05' }),
+      tx({ amount: 99, amount_usd: 99, category_id: 'c1', date: '2026-10-06', ...gone }),
+      tx({ amount: 20, amount_usd: 20, category_id: 'c1', date: '2026-10-07', archived: true }),
+      tx({ amount: 50, amount_usd: 50, category_id: 'c1', date: '2026-09-07' }),
+      tx({ amount: 70, amount_usd: 70, category_id: 'c1', date: '2026-09-08', ...gone }),
+    ]
+    const r = monthReport(txs, '2026-10')
+    expect(r.totalUsd).toBe(30)
+    expect(r.prevTotalUsd).toBe(50)
+    expect(r.top).toHaveLength(2)
+    const limit = { id: 'l1', deleted: false, category_id: 'c1', monthly_usd: 100 } as unknown as Limit
+    expect(limitStatus(limit, txs, '2026-10').spentUsd).toBe(30)
+  })
+
+  it('contractStats', () => {
+    const txs = [
+      tx({ kind: 'income', amount: 1000, amount_usd: 1000, date: '2026-10-02' }),
+      tx({ kind: 'income', amount: 500, amount_usd: 500, date: '2026-10-03', ...gone }),
+      tx({ kind: 'expense', amount: 100, amount_usd: 100, date: '2026-10-04' }),
+      tx({ kind: 'expense', amount: 400, amount_usd: 400, date: '2026-10-05', ...gone }),
+    ]
+    const s = settings({ contract_start_date: '2026-10-01', contract_end_date: '2026-10-31' })
+    const r = contractStats(txs, s, '2026-10-10')
+    expect(r.earnedUsd).toBe(1000)
+    expect(r.savedThisMonthUsd).toBe(900)
   })
 })
