@@ -6,7 +6,7 @@ import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import type { Goal, GoalMove, Settings } from '@shared/types.ts'
-import { ProgressBar } from '../components/ProgressBar.tsx'
+import { ProgressBar } from '../ui/ProgressBar.tsx'
 import { useApp } from '../context.tsx'
 import { parseAmount } from '../lib/amount.ts'
 
@@ -203,7 +203,7 @@ function GoalCard({
   return (
     <section className="card stack" aria-label={goal.name}>
       <h2>{goal.name}</h2>
-      <ProgressBar share={p.share} />
+      <ProgressBar value={p.share} max={1} />
       <p>{`${usd(p.savedUsd)} из ${usd(goal.target_usd)}`}</p>
       <p className="muted small">{p.etaDate ? `наберётся к ${ruDate(p.etaDate)}` : 'темп пока не определён'}</p>
       {p.perMonthNeeded !== null && p.perMonthNeeded > 0 && (

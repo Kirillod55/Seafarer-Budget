@@ -9,6 +9,7 @@ import { Limits } from './screens/Limits.tsx'
 import { RecordScreen } from './screens/Record.tsx'
 import { Settings } from './screens/Settings.tsx'
 import { Archive, ChevronRight, CreditCard, Gauge, Tag, type LucideIcon } from './ui/icons.ts'
+import { ToastHost } from './ui/Toast.tsx'
 
 // The report pulls in the chart library, so it loads on demand (it is precached by the service worker).
 const Report = lazy(() => import('./screens/Report.tsx').then((m) => ({ default: m.Report })))
@@ -82,7 +83,13 @@ export function Shell({ onSignOut }: { onSignOut(): void }) {
     }
   }
 
-  return <Navigator renderScreen={renderScreen} onNavigate={() => setRecord(null)} />
+  return (
+    <>
+      <Navigator renderScreen={renderScreen} onNavigate={() => setRecord(null)} />
+      {/* the one toast host: screens call useToast() */}
+      <ToastHost />
+    </>
+  )
 }
 
 /** A screen that a later task builds. */

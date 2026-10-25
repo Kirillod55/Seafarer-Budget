@@ -420,32 +420,7 @@ label {
   text-align: right;
 }
 
-/* ---------- goals, limits, accounts ---------- */
-
-.bar {
-  height: 0.7rem;
-  overflow: hidden;
-  background: var(--track);
-  border-radius: 999px;
-}
-
-.bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-}
-
-.bar.level-ok .bar-fill {
-  background: var(--level-ok);
-}
-
-.bar.level-warn .bar-fill {
-  background: var(--level-warn);
-}
-
-.bar.level-over .bar-fill {
-  background: var(--level-over);
-}
+/* ---------- goals, limits, accounts (the progress bar itself: ui/ui.css) ---------- */
 
 .limit-warn {
   color: var(--level-warn);

@@ -1,6 +1,7 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, renderHook, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Shell } from './Shell.tsx'
+import { useToast } from './ui/Toast.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from './test-utils.tsx'
 
 // Recharts has no size in jsdom.
@@ -114,5 +115,14 @@ describe('Shell navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ещё' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     expect(onSignOut).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Shell toast host', () => {
+  it('a toast asked for anywhere in the app shows up (ToastHost is mounted once)', async () => {
+    await setup()
+    const { result } = renderHook(() => useToast())
+    act(() => result.current('Запись удалена'))
+    expect((await screen.findByText('Запись удалена')).closest('.toast')?.getAttribute('role')).toBe('status')
   })
 })

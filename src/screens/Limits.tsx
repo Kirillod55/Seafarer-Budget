@@ -5,7 +5,7 @@ import { limitStatus } from '@shared/calc.ts'
 import { localDate, monthOf } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import type { Category, Limit } from '@shared/types.ts'
-import { ProgressBar } from '../components/ProgressBar.tsx'
+import { ProgressBar } from '../ui/ProgressBar.tsx'
 import { useApp } from '../context.tsx'
 import { parseAmount } from '../lib/amount.ts'
 
@@ -155,7 +155,7 @@ export function Limits() {
             ) : (
               <button type="button" className="limit-btn stack" onClick={() => setEditing({ kind: 'edit', id: limit.id })}>
                 <span className="limit-title">{`${category.icon} ${category.name}`}</span>
-                <ProgressBar share={status.share} level={status.level} />
+                <ProgressBar value={status.share} max={1} level={status.level} />
                 <span className={`small${status.level === 'ok' ? ' muted' : ` limit-${status.level}`}`}>
                   {`${usd(status.spentUsd)} из ${usd(limit.monthly_usd)}`}
                 </span>

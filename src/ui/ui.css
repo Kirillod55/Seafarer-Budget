@@ -1,0 +1,519 @@
+/*
+ * Shared UI parts (stage 2, Task 3), ported from prototype v60: .seg/.thumb, .picker + .glass menu (.opt, .chk,
+ * .cbadge, .curother), .toast, .bar, category tiles on glass, the partner mark, .morph layers, .flipghost.
+ * Glass is solid (spec §6 «Стекло без прозрачности»): its shape, light edge and shadow, no blur, no sheen.
+ * Reduce Motion switches every animation here off through the global rule in tokens.css.
+ */
+
+/* ---------- segmented switch ---------- */
+
+.seg {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  border-radius: var(--r-field);
+  background: var(--track);
+}
+
+.seg > button {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.882rem; /* 15 */
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.3s var(--ios);
+}
+
+.seg > button[aria-pressed='true'] {
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.seg > .thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  z-index: 0;
+  width: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition:
+    transform 0.45s var(--ios),
+    width 0.45s var(--ios);
+}
+
+/* ---------- picker field ---------- */
+
+.picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 10px 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: max(17px, 1rem);
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker[aria-expanded='true'] {
+  border-color: var(--accent-text);
+}
+
+.picker .pv {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.picker .pv-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker .pv.swap {
+  animation: pvIn 0.3s var(--ios);
+}
+
+.picker .chev2 {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+}
+
+.picker .chev2 svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes pvIn {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+}
+
+/* ---------- glass menu ---------- */
+
+.pick-catch {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.glass {
+  position: fixed;
+  z-index: 61;
+  min-width: 230px;
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 24px;
+  background: var(--glass-bg);
+  color: var(--text);
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-edge),
+    inset 0 -1px 0 var(--glass-line);
+  transform-origin: var(--ox, 20%) var(--oy, 0%);
+  animation: glassIn 0.5s var(--spring);
+}
+
+.glass.out {
+  pointer-events: none;
+  animation: glassOut 0.22s var(--ios) forwards;
+}
+
+@keyframes glassIn {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+}
+
+@keyframes glassOut {
+  to {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+.glass .opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: max(17px, 1rem);
+  text-align: left;
+  cursor: pointer;
+  animation: optIn 0.4s var(--ios) both;
+  animation-delay: calc(var(--i, 0) * 40ms + 60ms);
+}
+
+@keyframes optIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+}
+
+.glass .opt + .opt::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 52px;
+  right: 14px;
+  border-top: 1px solid var(--glass-line);
+}
+
+.glass .opt:hover,
+.glass .opt:focus-visible {
+  background: var(--glass-line);
+  outline: none;
+}
+
+.glass .opt .chk {
+  display: inline-flex;
+  flex: none;
+  width: 22px;
+  color: var(--accent-text);
+}
+
+.glass .opt .chk svg {
+  width: 20px;
+  height: 20px;
+}
+
+.glass .opt .opt-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass .opt .sub {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.882rem;
+}
+
+/* category tiles on glass and on the toast: solid tile, white glyph (dark on light colours) */
+.ic.sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.ic.sm svg {
+  width: 15px;
+  height: 15px;
+}
+
+.glass .ic,
+.toast .ic {
+  background: var(--c, var(--act-edit));
+  color: #fff;
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.22);
+}
+
+.glass .ic svg,
+.toast .ic svg {
+  stroke-width: 2.3;
+}
+
+.glass .ic.lt,
+.toast .ic.lt {
+  color: #1c1c1e;
+}
+
+/* ---------- currency menu ---------- */
+
+.curmenu .opt.other {
+  border-top: 1px solid var(--glass-line);
+}
+
+.curmenu .opt.other::after {
+  display: none;
+}
+
+.cbadge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-text) 16%, transparent);
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cbadge.sm {
+  width: 22px;
+  height: 22px;
+  margin-right: 2px;
+  font-size: 12px;
+}
+
+.cbadge.plus {
+  background: var(--track);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.cnm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.cnm b {
+  font-weight: 600;
+}
+
+.cnm small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glass.curother {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  overflow: visible;
+}
+
+.curother label {
+  display: block;
+  margin: 0;
+  color: var(--text);
+  font-size: 0.765rem;
+  font-weight: 600;
+}
+
+.co-row {
+  display: flex;
+  gap: 8px;
+}
+
+.co-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--touch);
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.co-row input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.co-ok {
+  flex: none;
+  min-height: var(--touch);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.co-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.706rem; /* 12 */
+}
+
+.co-hint.err {
+  color: var(--danger);
+}
+
+/* ---------- toast with «Отменить» ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 4px 6px 4px 16px;
+  border: 0.5px solid var(--glass-edge);
+  border-radius: var(--r-btn);
+  background: var(--toast-bg);
+  color: var(--text);
+  box-shadow: var(--glass-shadow);
+  font-size: 0.882rem;
+  transform: translateX(-50%);
+  animation: toastIn 0.45s var(--spring);
+}
+
+.toast-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast button {
+  flex: none;
+  min-height: var(--touch);
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 16px) scale(0.96);
+  }
+}
+
+/* ---------- progress bar ---------- */
+
+.bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--track);
+}
+
+.bar.thin {
+  height: 6px;
+}
+
+.bar > .bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width 0.8s var(--ios);
+}
+
+.bar.level-warn > .bar-fill {
+  background: var(--pill-warn);
+}
+
+.bar.level-over > .bar-fill {
+  background: var(--warn);
+}
+
+/* ---------- the second person's mark ---------- */
+
+.who {
+  display: inline-block;
+  flex: none;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--partner);
+  color: var(--bg);
+  box-shadow: 0 0 0 2px var(--card);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 19px;
+  text-align: center;
+}
+
+/* on the corner of a category tile: <span class="ic-wrap"><CategoryIcon/><PartnerBadge/></span> */
+.ic-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.ic-wrap > .who {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+}
+
+.ic-wrap > .ic.sm + .who {
+  right: -6px;
+  bottom: -6px;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+/* ---------- morph and flip ---------- */
+
+.morph {
+  position: relative;
+}
+
+.morph > .mOld {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.flipghost {
+  animation: none !important;
+}
