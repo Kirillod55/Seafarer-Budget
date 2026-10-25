@@ -1,10 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { alive } from '@shared/alive.ts'
-import { localDate } from '@shared/dates.ts'
-import { DEFAULT_SETTINGS } from '@shared/defaults.ts'
 import { money } from '@shared/format.ts'
 import type { Account, Category, Transaction } from '@shared/types.ts'
-import { useApp } from '../context.tsx'
 import { TxRow } from './TxRow.tsx'
 
 const MONTHS_GEN = [
@@ -45,7 +42,7 @@ export function DayGroups({
   accounts,
   partnerName,
   onOpen,
-  today: todayProp,
+  today,
   maxDays,
   totals = false,
 }: {
@@ -55,16 +52,13 @@ export function DayGroups({
   /** settings.partner_name; empty or null → «Она» */
   partnerName: string | null
   onOpen(id: string): void
-  /** the user's local date; defaults to now in the default time zone */
-  today?: string
+  /** the user's local date (settings time zone): «Сегодня» */
+  today: string
   /** show only the newest N days (the home screen shows 3) */
   maxDays?: number
   /** the day's spending (USD) right of each heading — the «Расходы» list */
   totals?: boolean
 }) {
-  const { now } = useApp()
-  const today = todayProp ?? localDate(now(), DEFAULT_SETTINGS.timezone)
-
   const visible = txs.filter((t) => alive(t) && !t.archived)
   const byDay = new Map<string, Transaction[]>()
   for (const t of visible) byDay.set(t.date, [...(byDay.get(t.date) ?? []), t])
@@ -94,7 +88,7 @@ export function DayGroups({
         const rows = byDay.get(day)!.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
         const spent = rows.filter((t) => t.kind === 'expense').reduce((s, t) => s + t.amount_usd, 0)
         return (
-          <section key={day} className="day" data-flip-key={`day-${day}`}>
+          <section key={day} className="daygroup" data-flip-key={`day-${day}`}>
             <h3 className={`section${totals ? ' dsec' : ''}`}>
               <span>{dayTitle(day, today)}</span>
               {totals && <span className="num">{money(spent, 'USD')}</span>}

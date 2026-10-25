@@ -272,13 +272,6 @@
 
 /* ---------- «Ещё» menu (prototype .group.menu; Task 10 redoes «Ещё») ---------- */
 
-.group {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  overflow: hidden;
-}
-
 .menu {
   display: flex;
   flex-direction: column;

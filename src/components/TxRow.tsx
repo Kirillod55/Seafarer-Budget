@@ -47,11 +47,12 @@ function amounts(tx: Transaction): { main: string; sub: string | null; inc: bool
     return { main: money(tx.amount, tx.currency), sub, inc: false }
   }
   const inc = tx.kind === 'income' || (tx.kind === 'adjustment' && tx.amount > 0)
-  const sign = inc ? '+' : tx.kind === 'adjustment' && tx.amount < 0 ? '-' : ''
-  const abs = Math.abs(tx.amount)
-  if (tx.currency === 'USD') return { main: sign + money(abs, 'USD'), sub: null, inc }
-  if (tx.rate_pending) return { main: sign + money(abs, tx.currency), sub: 'курс уточняется', inc }
-  return { main: sign + money(Math.abs(tx.amount_usd), 'USD'), sub: money(abs, tx.currency), inc }
+  // only a negative adjustment keeps its minus, written by money() itself; expenses have none, income gets «+»
+  const neg = tx.kind === 'adjustment' && tx.amount < 0
+  const fmt = (v: number, cur: string) => (inc ? '+' : '') + money(neg ? -Math.abs(v) : Math.abs(v), cur)
+  if (tx.currency === 'USD') return { main: fmt(tx.amount, 'USD'), sub: null, inc }
+  if (tx.rate_pending) return { main: fmt(tx.amount, tx.currency), sub: 'курс уточняется', inc }
+  return { main: fmt(tx.amount_usd, 'USD'), sub: money(Math.abs(tx.amount), tx.currency), inc }
 }
 
 /*
@@ -86,7 +87,7 @@ export function TxRow({
   const title = category?.name ?? KIND_TITLE[tx.kind]
   const where = account && toAccount ? `${account.name} → ${toAccount.name}` : account?.name
   const moves = tx.kind === 'transfer' || tx.kind === 'exchange'
-  const note = capitalize(tx.note.trim()) || (moves ? where : '') || '—'
+  const note = capitalize(tx.note.trim()) || (moves ? where : '') || ''
   const amount = amounts(tx)
 
   const archive = async () => {
@@ -122,13 +123,14 @@ export function TxRow({
       <span className="t">
         <span className="t1">{title}</span>
         <span className="t2">
-          {hers && (
+          {hers ? (
             <>
               <b className="whon">{name}</b>
-              {' · '}
+              {note && ` · ${note}`}
             </>
+          ) : (
+            note || '—'
           )}
-          {note}
         </span>
       </span>
       <span className={`a num${amount.inc ? ' inc' : ''}`}>

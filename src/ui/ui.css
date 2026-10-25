@@ -684,13 +684,21 @@
 
 /* ---------- day groups (DayGroups; prototype .section/.dsec) ---------- */
 
+/* a card of rows (records, categories, the «Ещё» menu): the dividers live on the rows */
+.group {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+
 .days {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.day {
+.daygroup {
   display: flex;
   flex-direction: column;
   gap: 8px;

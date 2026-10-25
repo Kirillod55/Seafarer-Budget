@@ -112,19 +112,31 @@ const fgOf = (row: HTMLElement) => row.querySelector<HTMLElement>('.tx')!
 
 /** A tap as a finger makes it: down, up, click. */
 function tap(el: HTMLElement) {
-  fireEvent.pointerDown(el, { pointerId: 9, button: 0, clientX: 100, clientY: 20 })
-  fireEvent.pointerUp(el, { pointerId: 9, button: 0, clientX: 100, clientY: 20 })
-  fireEvent.click(el)
+  const p = { pointerId: 9, pointerType: 'touch', button: 0, clientX: 100, clientY: 20 }
+  fireEvent.pointerDown(el, p)
+  fireEvent.pointerUp(el, p)
+  fireEvent.click(el, { detail: 1 })
 }
 
 /** A synthetic horizontal drag on the row's front: down, a few moves to `dx`, up (all in the same ms: no fling). */
-function swipe(row: HTMLElement, dx: number) {
+function swipe(row: HTMLElement, dx: number, pointerType = 'touch') {
   const el = fgOf(row)
   const x0 = 340
-  fireEvent.pointerDown(el, { pointerId: 1, button: 0, clientX: x0, clientY: 20 })
-  for (let i = 1; i <= 6; i++) fireEvent.pointerMove(el, { pointerId: 1, clientX: x0 + (dx * i) / 6, clientY: 20 })
-  fireEvent.pointerUp(el, { pointerId: 1, clientX: x0 + dx, clientY: 20 })
+  const p = { pointerId: 1, pointerType, button: 0, clientY: 20 }
+  // one frozen instant: performance.now() has sub-ms resolution, and a few µs between samples would read as a fling
+  const now = performance.now()
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(now)
+  try {
+    fireEvent.pointerDown(el, { ...p, clientX: x0 })
+    for (let i = 1; i <= 6; i++) fireEvent.pointerMove(el, { ...p, clientX: x0 + (dx * i) / 6 })
+    fireEvent.pointerUp(el, { ...p, clientX: x0 + dx })
+  } finally {
+    clock.mockRestore()
+  }
 }
+
+const x = (row: HTMLElement) => fgOf(row).style.transform
+const flush = () => act(async () => {})
 
 const actionNames = (row: HTMLElement) =>
   within(row)
@@ -217,10 +229,10 @@ describe('TxRow and DayGroups', () => {
     const { onOpen } = setup()
     const row = await waitFor(() => rowOf('Кофе'))
 
-    swipe(row, -120)
+    swipe(row, -120, 'mouse')
     await waitFor(() => expect(fgOf(row).style.transform).toBe('translateX(-222px)'))
-    // the click a mouse sends at the end of the drag is not a tap: the row stays open
-    fireEvent.click(fgOf(row))
+    // the click a mouse sends at the end of its drag is not a tap: the row stays open
+    fireEvent.click(fgOf(row), { detail: 1 })
     expect(fgOf(row).style.transform).toBe('translateX(-222px)')
 
     tap(fgOf(row))
@@ -370,5 +382,155 @@ describe('TxRow and DayGroups', () => {
     await seed([])
     setup()
     expect(await screen.findByText('Записей пока нет')).toBeTruthy()
+  })
+
+  it('her record without a note says just «Маша»; a negative adjustment keeps the minus money() writes', async () => {
+    await seed([
+      tx({ id: 't1', author: 'partner', note: '' }),
+      tx({ id: 't2', kind: 'adjustment', amount: -5, currency: 'USD', amount_usd: -5, rate_usd: 1, category_id: null, note: 'сверка', created_at: '2026-10-21T09:00:00.000Z' }),
+    ])
+    setup()
+    const hers = await waitFor(() => rowOf('Маша'))
+    expect(hers.querySelector('.t2')!.textContent).toBe('Маша')
+    const adj = rowOf('Сверка').querySelector('.a')!
+    expect(adj.textContent).toBe('-$5')
+    expect(adj.classList.contains('inc')).toBe(false)
+  })
+})
+
+describe('SwipeRow while it moves (Reduce Motion off: real springs)', () => {
+  beforeEach(() => reducedMotion(false))
+
+  it('a tap while the row is still opening closes it and does not open the record', async () => {
+    await seed([tx({ id: 't1' })])
+    const { onOpen } = setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+
+    swipe(row, -120)
+    expect(x(row)).toBe('translateX(-120px)') // released; the opening spring has not landed yet
+    tap(fgOf(row))
+    expect(onOpen).not.toHaveBeenCalled()
+    await waitFor(() => expect(actionNames(row)).toEqual([]))
+    expect(x(row)).toBe('translateX(0px)')
+  })
+
+  it('a tap while the row is closing lets it close fully; the record opens only from a closed row', async () => {
+    await seed([tx({ id: 't1' })])
+    const { onOpen } = setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+    swipe(row, -120)
+    await waitFor(() => expect(x(row)).toBe('translateX(-222px)'))
+
+    tap(fgOf(row)) // starts closing
+    tap(fgOf(row)) // lands mid-way
+    expect(onOpen).not.toHaveBeenCalled()
+    await waitFor(() => expect(actionNames(row)).toEqual([]))
+    expect(x(row)).toBe('translateX(0px)')
+
+    tap(fgOf(row))
+    expect(onOpen).toHaveBeenCalledWith('t1')
+  })
+
+  it('a tap during the full-swipe slide is ignored: the delete still runs, the record does not open', async () => {
+    await seed([tx({ id: 't1' })])
+    const { onOpen } = setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+
+    swipe(row, -ROW_W * 0.9)
+    tap(fgOf(row))
+    swipe(row, 200) // nor can a drag catch it
+    expect(onOpen).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(screen.queryByText('Кофе')).toBeNull())
+    expect((await env.db.transactions.get('t1'))!.deleted_at).toBeTruthy()
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('never two open rows: opening a second row while the first is still opening closes the first', async () => {
+    await seed([tx({ id: 't1' }), tx({ id: 't2', note: 'обед', created_at: '2026-10-21T09:00:00.000Z' })])
+    setup()
+    const a = await waitFor(() => rowOf('Кофе'))
+    const b = rowOf('Обед')
+
+    swipe(a, -120)
+    swipe(b, -120)
+    await waitFor(() => expect(x(b)).toBe('translateX(-222px)'))
+    await waitFor(() => expect(x(a)).toBe('translateX(0px)'))
+    await waitFor(() => expect(document.querySelectorAll('.swipe.swiping').length).toBe(1))
+    expect(b.classList.contains('swiping')).toBe(true)
+
+    // a tap on the closed row only closes the open one
+    tap(fgOf(a))
+    await waitFor(() => expect(x(b)).toBe('translateX(0px)'))
+  })
+})
+
+describe('SwipeRow input', () => {
+  it('keyboard: ArrowLeft opens the row and focuses «Изменить»; Esc closes it and returns focus to the row', async () => {
+    await seed([tx({ id: 't1' })])
+    setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+    const fg = fgOf(row)
+    const acts = row.querySelector('.acts')!
+
+    fg.focus()
+    fireEvent.keyDown(fg, { key: 'ArrowLeft' })
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Изменить'))
+    expect(acts.hasAttribute('inert')).toBe(false)
+    expect(acts.getAttribute('aria-hidden')).toBe('false')
+    await waitFor(() => expect(x(row)).toBe('translateX(-222px)'))
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    expect(document.activeElement).toBe(fg)
+    await waitFor(() => expect(acts.hasAttribute('inert')).toBe(true))
+    expect(x(row)).toBe('translateX(0px)')
+
+    // the context-menu key opens it too
+    fireEvent.keyDown(fg, { key: 'ContextMenu' })
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Изменить'))
+  })
+
+  it('a keyboard or screen-reader activation is never taken for the end of a drag', async () => {
+    await seed([tx({ id: 't1' })])
+    const { onOpen } = setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+
+    // a short mouse drag that springs back: the mouse's own click would be swallowed…
+    swipe(row, -40, 'mouse')
+    await flush()
+    expect(x(row)).toBe('translateX(0px)')
+    // …but Enter / VoiceOver (a click with detail 0) opens the record
+    fireEvent.click(fgOf(row), { detail: 0 })
+    expect(onOpen).toHaveBeenCalledWith('t1')
+
+    // after a touch drag nothing is swallowed at all
+    onOpen.mockClear()
+    swipe(row, -40, 'touch')
+    await flush()
+    fireEvent.click(fgOf(row), { detail: 1 })
+    expect(onOpen).toHaveBeenCalledWith('t1')
+  })
+
+  it('a second finger is ignored', async () => {
+    await seed([tx({ id: 't1' })])
+    setup()
+    const row = await waitFor(() => rowOf('Кофе'))
+    const el = fgOf(row)
+    const f1 = { pointerId: 1, pointerType: 'touch', button: 0, clientY: 20 }
+    const f2 = { pointerId: 2, pointerType: 'touch', button: 0, clientY: 20 }
+
+    fireEvent.pointerDown(el, { ...f1, clientX: 340 })
+    fireEvent.pointerDown(el, { ...f2, clientX: 200 })
+    fireEvent.pointerMove(el, { ...f2, clientX: 40 })
+    expect(row.classList.contains('swiping')).toBe(false)
+    expect(x(row)).toBe('')
+
+    fireEvent.pointerMove(el, { ...f1, clientX: 280 })
+    fireEvent.pointerMove(el, { ...f1, clientX: 220 })
+    expect(x(row)).toBe('translateX(-120px)')
+    fireEvent.pointerUp(el, { ...f2, clientX: 40 }) // the second finger lifting changes nothing
+    expect(x(row)).toBe('translateX(-120px)')
+    fireEvent.pointerUp(el, { ...f1, clientX: 220 })
+    await waitFor(() => expect(x(row)).toBe('translateX(-222px)'))
   })
 })

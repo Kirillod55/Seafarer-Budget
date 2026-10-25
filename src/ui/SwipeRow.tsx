@@ -1,4 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { createTracker, prefersReducedMotion, project, rubber, spring } from './motion.ts'
 import './ui.css'
 
@@ -16,8 +25,14 @@ export interface SwipeAction {
  * where it is, with the finger's speed, to open or closed, chosen by where the flick would land (projection 0.99).
  * A swipe further than «open + 40 px» and over 60 % of the width deletes, like Mail on the iPhone: the other buttons
  * fold away, the red one fills the row, the row slides off, collapses, and the delete action runs. Archive and
- * delete collapse the row first; «Изменить» closes it. Tapping an open row (or any row while one is open) only
- * closes it. Only one row is open at a time. The root carries `data-swipe-row`, so the back swipe leaves it alone.
+ * delete collapse the row first; «Изменить» closes it. Tapping an open (or opening) row, or any row while one is
+ * open, only closes it. Only one row is open at a time. The root carries `data-swipe-row`, so the back swipe
+ * leaves it alone.
+ *
+ * Moving rows: a running spring is stopped only when a new drag actually starts (the row is caught on the fly);
+ * a plain tap never freezes it. While the row slides off or collapses it takes no input at all.
+ * Keyboard: ArrowLeft or the context-menu key opens the row and focuses the first action; Esc (or ArrowRight on
+ * the row) closes it and returns focus to the row.
  */
 
 /** px/s: synthetic or glitchy samples must not fling the spring (as the back swipe) */
@@ -27,7 +42,7 @@ const COLLAPSE_MS = 280
 /** if the row is still here this long after its action ran (it was not removed), it comes back */
 const RESTORE_MS = 1200
 
-/** the one open row on the page */
+/** the one open (or opening) row on the page */
 let openRow: { close(): void } | null = null
 
 export function SwipeRow({
@@ -56,12 +71,19 @@ export function SwipeRow({
   // gesture state lives in refs: the row moves every frame without re-rendering
   const [g] = useState(() => ({
     x: 0,
+    /** the finger this gesture follows; a second finger is ignored */
+    pid: null as number | null,
     x0: null as number | null,
     y0: 0,
     base: 0,
     drag: false,
+    /** a mouse drag just ended: the click it sends is not a tap */
     dragged: false,
     full: false,
+    /** sliding off after a full swipe, or collapsing: no input until it is gone */
+    leaving: false,
+    /** focus the first action once the buttons are shown (keyboard open) */
+    focusFirst: false,
     sp: null as { stop(): void } | null,
     tracker: createTracker(),
     timers: [] as ReturnType<typeof setTimeout>[],
@@ -90,7 +112,7 @@ export function SwipeRow({
     if (actsRef.current) actsRef.current.style.width = ''
   }
 
-  const springTo = (target: number, velocity: number, damping: number, response: number, done: () => void) => {
+  const springTo = (target: number, velocity: number, damping: number, response: number, done?: () => void) => {
     g.sp?.stop()
     g.sp = spring({
       from: g.x,
@@ -101,32 +123,47 @@ export function SwipeRow({
       onUpdate: place,
       onDone: () => {
         g.sp = null
-        done()
+        done?.()
       },
     })
   }
 
   me.close = () => {
+    if (g.leaving) return
     if (openRow === me) openRow = null
     springTo(0, 0, 1, 0.3, settle)
   }
 
+  /** open to the buttons; the open row is known at once, not when the spring lands */
+  const openTo = (velocity: number, damping: number) => {
+    if (openRow && openRow !== me) openRow.close()
+    openRow = me
+    setRevealed(true)
+    springTo(-open, velocity, damping, 0.3)
+  }
+
   const run = (a: SwipeAction) => {
+    if (g.leaving) return
     if (a.key === 'edit') {
       me.close()
       a.run()
       return
     }
     if (openRow === me) openRow = null
+    g.leaving = true
+    g.pid = null
+    g.x0 = null
     const root = rootRef.current
     const later = () => {
       a.run()
       // the action normally takes the row off the list; if it is still here, show it again
       g.timers.push(
         setTimeout(() => {
+          g.leaving = false
           setCollapsing(false)
           if (rootRef.current) rootRef.current.style.height = ''
           g.sp?.stop()
+          g.sp = null
           place(0)
           settle()
         }, RESTORE_MS),
@@ -149,6 +186,13 @@ export function SwipeRow({
     root.style.height = '0px'
   }, [collapsing])
 
+  // keyboard open: the first action takes focus once the buttons are no longer inert
+  useEffect(() => {
+    if (!revealed || !g.focusFirst) return
+    g.focusFirst = false
+    actsRef.current?.querySelector<HTMLButtonElement>('.act')?.focus()
+  }, [revealed, g])
+
   useEffect(
     () => () => {
       g.sp?.stop()
@@ -159,21 +203,19 @@ export function SwipeRow({
   )
 
   const down = (e: ReactPointerEvent) => {
-    if (collapsing || (e.pointerType === 'mouse' && e.button !== 0)) return
+    if (g.leaving || g.pid !== null || (e.pointerType === 'mouse' && e.button !== 0)) return
+    g.pid = e.pointerId
     g.x0 = e.clientX
     g.y0 = e.clientY
     g.drag = false
     g.dragged = false
     g.tracker.reset()
     g.tracker.add(e.clientX)
-    // catch a moving row on the fly
-    g.sp?.stop()
-    g.sp = null
-    g.base = g.x
+    // a running spring keeps going: only a real drag catches the row (move)
   }
 
   const move = (e: ReactPointerEvent) => {
-    if (g.x0 === null) return
+    if (e.pointerId !== g.pid || g.x0 === null || g.leaving) return
     const mx = e.clientX - g.x0
     const my = e.clientY - g.y0
     g.tracker.add(e.clientX)
@@ -185,6 +227,11 @@ export function SwipeRow({
       }
       if (Math.abs(mx) <= 8) return
       g.drag = true
+      // catch the row where it is now, on the fly; from here it follows the finger from where it went down
+      // (the few px of slop included, as the prototype and UIKit pans do)
+      g.sp?.stop()
+      g.sp = null
+      g.base = g.x
       try {
         fgRef.current?.setPointerCapture(e.pointerId)
       } catch {
@@ -200,46 +247,78 @@ export function SwipeRow({
     setFullOnce(canFull && -raw > Math.max(w * 0.6, open + 40))
   }
 
-  const up = (cancelled: boolean) => {
-    if (g.x0 === null) return
+  const up = (e: ReactPointerEvent, cancelled: boolean) => {
+    if (e.pointerId !== g.pid) return
+    g.pid = null
+    const started = g.x0 !== null && g.drag
     g.x0 = null
-    if (!g.drag) return
+    if (!started || g.leaving) return
     g.drag = false
-    g.dragged = true
+    // only a mouse sends a click at the end of a drag; a touch drag does not, and a keyboard click is never one
+    g.dragged = e.pointerType === 'mouse'
     const v = Math.max(-MAX_V, Math.min(MAX_V, g.tracker.velocity()))
     const w = width()
     if (g.full && !cancelled) {
       // full swipe: the row slides all the way, then the delete action runs (with «Отменить»)
       const del = actions.find((a) => a.key === 'delete')!
-      springTo(-w, v, 1, 0.25, () => run(del))
+      if (openRow === me) openRow = null
+      g.leaving = true
+      springTo(-w, v, 1, 0.25, () => {
+        g.leaving = false
+        run(del)
+      })
       return
     }
     setFullOnce(false)
     const rest = g.x + project(v, 0.99)
     const target = v > 300 ? 0 : v < -300 || rest < -open / 2 ? -open : 0
-    springTo(target, v, target && Math.abs(v) > 600 ? 0.8 : 1, 0.3, () => {
-      if (target) openRow = me
-      else settle()
-    })
+    if (target) openTo(v, Math.abs(v) > 600 ? 0.8 : 1)
+    else {
+      if (openRow === me) openRow = null
+      springTo(0, v, 1, 0.3, settle)
+    }
   }
 
-  const click = () => {
+  const click = (e: ReactMouseEvent) => {
+    if (g.leaving) return
     if (g.dragged) {
-      // the click that ends a drag is not a tap
       g.dragged = false
-      return
+      // the click a mouse sends at the end of its drag is not a tap (a keyboard click has detail 0)
+      if (e.detail !== 0) return
     }
     if (openRow) {
       openRow.close()
       return
     }
+    // still springing back to rest: let it land rather than open the record mid-way
+    if (g.sp) return
     onOpen()
+  }
+
+  const keyDown = (e: ReactKeyboardEvent) => {
+    if (g.leaving) return
+    const onRow = e.target === fgRef.current
+    if (onRow && (e.key === 'ArrowLeft' || e.key === 'ContextMenu')) {
+      e.preventDefault()
+      // buttons already shown: focus now; otherwise once they stop being inert (effect above)
+      if (revealed) actsRef.current?.querySelector<HTMLButtonElement>('.act')?.focus()
+      else g.focusFirst = true
+      openTo(0, 1)
+      return
+    }
+    if (e.key === 'Escape' || (onRow && e.key === 'ArrowRight')) {
+      if (openRow !== me && !revealed) return
+      e.preventDefault()
+      e.stopPropagation()
+      me.close()
+      fgRef.current?.focus()
+    }
   }
 
   const cls = ['swipe', revealed && 'swiping', full && 'full', collapsing && 'collapse', className].filter(Boolean).join(' ')
 
   return (
-    <div ref={rootRef} className={cls} data-swipe-row="">
+    <div ref={rootRef} className={cls} data-swipe-row="" onKeyDown={keyDown}>
       <div ref={actsRef} className={`acts n${n}`} aria-hidden={!revealed} inert={!revealed}>
         {actions.map((a) => (
           <button key={a.key} type="button" className={`act ${a.key}`} tabIndex={revealed ? 0 : -1} onClick={() => run(a)}>
@@ -253,8 +332,8 @@ export function SwipeRow({
         className="tx"
         onPointerDown={down}
         onPointerMove={move}
-        onPointerUp={() => up(false)}
-        onPointerCancel={() => up(true)}
+        onPointerUp={(e) => up(e, false)}
+        onPointerCancel={(e) => up(e, true)}
         onClick={click}
       >
         {children}
