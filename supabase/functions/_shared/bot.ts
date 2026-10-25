@@ -7,7 +7,7 @@ import {
   contractStats,
   limitCrossing,
   limitStatus,
-  liveGoalMoves,
+  reservingGoalMoves,
   monthReport,
   reservedUsd,
 } from './calc.ts'
@@ -357,7 +357,7 @@ async function runCommand(
         store.rates(),
         store.accounts(),
       ])
-      const free = round2(balanceUsd(activeBalances(txs, accounts), rates, today) - reservedUsd(liveGoalMoves(moves, goals)))
+      const free = round2(balanceUsd(activeBalances(txs, accounts), rates, today) - reservedUsd(reservingGoalMoves(moves, goals)))
       const lines = [`Свободно: ${money(free, 'USD', { whole: true })} (баланс за вычетом целей)`]
       if (settings.status === 'contract') {
         const st = contractStats(txs, settings, today)

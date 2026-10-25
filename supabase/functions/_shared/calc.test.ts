@@ -8,7 +8,7 @@ import {
   goalProgress,
   limitCrossing,
   limitStatus,
-  liveGoalMoves,
+  reservingGoalMoves,
   monthReport,
   reservedUsd,
 } from './calc.ts'
@@ -165,7 +165,7 @@ describe('reservedUsd', () => {
   })
 })
 
-describe('liveGoalMoves', () => {
+describe('reservingGoalMoves', () => {
   const g = (id: string, p: Partial<Goal> = {}): Goal => ({
     id, deleted: false, deleted_at: null, deleted_batch: null, name: id, target_usd: 1000, deadline: null, archived: false, ...p,
   })
@@ -178,14 +178,24 @@ describe('liveGoalMoves', () => {
   ]
   const goals = [g('live'), g('binned', { deleted_at: '2026-10-21T10:00:00.000Z', deleted_batch: 'b1' }), g('final', { deleted: true })]
 
+  // spec §4: an archived goal «не участвует в бюджете»
+  it('an archived goal reserves nothing; taken out of the archive it reserves again', () => {
+    const withArchived = [...goals, g('old', { archived: true })]
+    const all = [...moves, move({ id: 'm6', goal_id: 'old', amount_usd: 500 })]
+    expect(reservingGoalMoves(all, withArchived).map((m) => m.id)).toEqual(['m1'])
+    expect(reservedUsd(reservingGoalMoves(all, withArchived))).toBe(100)
+    const unarchived = withArchived.map((x) => (x.id === 'old' ? { ...x, archived: false } : x))
+    expect(reservedUsd(reservingGoalMoves(all, unarchived))).toBe(600)
+  })
+
   it('keeps only live moves of live goals, so a wiped goal reserves nothing', () => {
-    expect(liveGoalMoves(moves, goals).map((m) => m.id)).toEqual(['m1'])
-    expect(reservedUsd(liveGoalMoves(moves, goals))).toBe(100)
+    expect(reservingGoalMoves(moves, goals).map((m) => m.id)).toEqual(['m1'])
+    expect(reservedUsd(reservingGoalMoves(moves, goals))).toBe(100)
   })
 
   it('a restored goal reserves its money again', () => {
     const restored = goals.map((x) => (x.id === 'binned' ? { ...x, deleted_at: null, deleted_batch: null } : x))
-    expect(reservedUsd(liveGoalMoves(moves, restored))).toBe(140)
+    expect(reservedUsd(reservingGoalMoves(moves, restored))).toBe(140)
   })
 })
 

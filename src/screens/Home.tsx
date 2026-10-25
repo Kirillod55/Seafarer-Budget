@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
-import { activeBalances, allowance, balanceUsd, contractStats, liveGoalMoves, reservedUsd } from '@shared/calc.ts'
+import { activeBalances, allowance, balanceUsd, contractStats, reservingGoalMoves, reservedUsd } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { round2, usdRate } from '@shared/fx.ts'
@@ -71,7 +71,7 @@ export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}
 
   const today = localDate(now(), settings.timezone)
   const bal = activeBalances(txs, accounts) // archived accounts are not free money
-  const reserved = reservedUsd(liveGoalMoves(moves, goals)) // a goal in the undo bin reserves nothing
+  const reserved = reservedUsd(reservingGoalMoves(moves, goals)) // a goal in the bin or the archive reserves nothing
   const freeUsd = round2(balanceUsd(bal, rates, today) - reserved)
   const noRate = Object.keys(bal).filter((cur) => bal[cur] !== 0 && !usdRate(rates, cur, today))
   const al = allowance(freeUsd, settings, today)
