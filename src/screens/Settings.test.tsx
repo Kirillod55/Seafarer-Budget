@@ -54,7 +54,14 @@ describe('Settings: accounts mode', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Несколько счетов' }))
     await waitFor(async () => expect((await settingsRow()).accounts_mode).toBe('multi'))
-    click('Один счёт')
+    // M1 (final review): the first save keeps the buttons disabled for a moment; wait until the screen shows
+    // the new mode and the buttons are enabled again, or the second click lands on a disabled button
+    const single = screen.getByRole('button', { name: 'Один счёт' }) as HTMLButtonElement
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Несколько счетов' }).getAttribute('aria-pressed')).toBe('true')
+      expect(single.disabled).toBe(false)
+    })
+    fireEvent.click(single)
     await waitFor(async () => expect((await settingsRow()).accounts_mode).toBe('single'))
 
     expect(await env.db.accounts.filter((a) => !a.deleted).count()).toBe(2)

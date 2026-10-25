@@ -175,14 +175,19 @@ describe('Record', () => {
   it('a record whose category was deleted shows «Без категории» and saves category_id null', async () => {
     await seed()
     await env.repo.remove('categories', existing.category_id!)
-    renderWithApp(<RecordScreen id={existing.id} onDone={() => {}} />, env)
+    // M1 (final review): the record starts in sync, so dirty:1 below can only come from this save
+    await env.db.transactions.update(existing.id, { dirty: 0 })
+    const onDone = vi.fn()
+    renderWithApp(<RecordScreen id={existing.id} onDone={onDone} />, env)
 
-    const select = (await screen.findByLabelText('Категория')) as HTMLSelectElement
-    expect(select.selectedOptions[0].textContent).toBe('Без категории')
+    // the record has loaded before saving
+    await waitFor(() => expect((screen.getByLabelText('Сумма') as HTMLInputElement).value).toBe('80'))
+    const select = screen.getByLabelText('Категория') as HTMLSelectElement
+    await waitFor(() => expect(select.selectedOptions[0].textContent).toBe('Без категории'))
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
 
-    await waitFor(async () => expect((await env.db.transactions.get(existing.id))!.dirty).toBe(1))
-    expect((await env.db.transactions.get(existing.id))!.category_id).toBeNull()
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+    expect(await env.db.transactions.get(existing.id)).toMatchObject({ dirty: 1, category_id: null })
   })
 
   it('an empty date is rejected with «Укажите дату»', async () => {
