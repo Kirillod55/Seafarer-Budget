@@ -64,7 +64,7 @@ function categoryOf(t: Transaction, categories: Category[]): { icon: string; nam
   return c ? { icon: c.icon, name: c.name } : NO_CATEGORY
 }
 
-/** `☕ Кафе и рестораны · 80 ₴ ($1.94)`; income gets a «+»; USD-only amounts do not repeat the USD part. */
+/** `☕ Кафе и рестораны · ₴80 ($1.94)`; income gets a «+»; USD-only amounts do not repeat the USD part. */
 function describeTx(t: Transaction, categories: Category[]): string {
   const c = categoryOf(t, categories)
   const base = `${t.kind === 'income' ? '+' : ''}${money(t.amount, t.currency)}`
