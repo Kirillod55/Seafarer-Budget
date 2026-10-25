@@ -711,7 +711,7 @@ function AccountsSection({ accounts }: { accounts: Account[] }) {
 
 /* ---------- export ---------- */
 
-function ExportSection({ today }: { today: string }) {
+function ExportSection({ today, partnerName }: { today: string; partnerName: string | null }) {
   const { db } = useApp()
   const { busy, error, run } = useAction()
 
@@ -723,7 +723,7 @@ function ExportSection({ today }: { today: string }) {
         db.accounts.toArray(),
       ])
       txs.sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
-      downloadCsv(csvFileName(today), toCsv(txs, categories, accounts))
+      downloadCsv(csvFileName(today), toCsv(txs, categories, accounts, partnerName))
     })
 
   return (
@@ -765,7 +765,7 @@ export function Settings({ onSignOut }: { onSignOut(): void }) {
       <ReconcileSection settings={settings} accounts={accounts} txs={txs} today={today} />
       <CategoriesSection categories={categories} />
       {settings.accounts_mode === 'multi' && <AccountsSection accounts={accounts} />}
-      <ExportSection today={today} />
+      <ExportSection today={today} partnerName={settings.partner_name} />
       <button type="button" className="btn btn-danger btn-block" onClick={onSignOut}>
         Выйти
       </button>
