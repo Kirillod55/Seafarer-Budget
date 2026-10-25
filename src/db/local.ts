@@ -14,7 +14,9 @@ import type {
 
 // Booleans cannot be indexed in IndexedDB, so `dirty` is a number:
 // 0 = in sync, 1 = waiting to be pushed, 2 = parked (the server refused it; retried after an edit or on app start).
-export type Row<T> = T & { dirty: 0 | 1 | 2 }
+// `_changed` (settings only, local-only): the fields edited since the last successful push; sync sends only
+// those for a row the server already has, so the bot's / another device's changes to other fields survive.
+export type Row<T> = T & { dirty: 0 | 1 | 2; _changed?: string[] }
 
 export interface MetaRow {
   key: string

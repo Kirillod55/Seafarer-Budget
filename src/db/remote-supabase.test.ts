@@ -92,6 +92,22 @@ describe('push', () => {
     expect(arg(queries[1], 'select')).toEqual(['id, rev, deleted'])
   })
 
+  it('pushColumns sends a column-scoped update of one row, not an upsert', async () => {
+    const { client, queries } = fakeClient(() => ({ data: [{ id: 's1', rev: 9, deleted: false }], error: null, status: 200 }))
+    const remote = createSupabaseRemote(client)
+    expect(await remote.pushColumns('settings', { id: 's1', base_rev: 5, reserve_usd: 500 })).toEqual([
+      { id: 's1', rev: 9, deleted: false },
+    ])
+    expect(queries[0].table).toBe('settings')
+    expect(queries[0].calls).toEqual([
+      ['update', [{ base_rev: 5, reserve_usd: 500 }]],
+      ['eq', ['id', 's1']],
+      ['select', ['id, rev, deleted']],
+    ])
+    const refused = fakeClient(() => ({ data: null, error: { message: 'violates check constraint' }, status: 400 }))
+    await expect(createSupabaseRemote(refused.client).pushColumns('settings', { id: 's1' })).rejects.toBeInstanceOf(RowRejectedError)
+  })
+
   it('maps a 4xx server refusal to RowRejectedError', async () => {
     const { client } = fakeClient(() => ({ data: null, error: { message: 'violates check constraint', code: '23514' }, status: 400 }))
     await expect(createSupabaseRemote(client).push('accounts', [{ id: 'a' }])).rejects.toBeInstanceOf(RowRejectedError)
@@ -108,7 +124,8 @@ describe('push', () => {
 })
 
 describe('patchRates (I3)', () => {
-  it('updates only the rate columns of rows still pending on the server', async () => {
+  // I2 (final review): a write to a binned row would bump its rev for nothing; the bin row is left alone
+  it('updates only the rate columns of rows still pending and not in the bin on the server', async () => {
     const { client, queries } = fakeClient(() => ({ data: null, error: null, status: 204 }))
     await createSupabaseRemote(client).patchRates([{ id: 't1', rate_usd: 0.025, amount_usd: 2 }])
     expect(queries).toHaveLength(1)
@@ -117,6 +134,7 @@ describe('patchRates (I3)', () => {
       ['update', [{ rate_usd: 0.025, amount_usd: 2, rate_pending: false }]],
       ['eq', ['id', 't1']],
       ['eq', ['rate_pending', true]],
+      ['is', ['deleted_at', null]],
     ])
   })
 })

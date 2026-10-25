@@ -35,6 +35,12 @@ export interface PushResult {
 export interface Remote {
   /** Upsert rows; throws RowRejectedError when the server refuses them, any other error when it is unreachable. */
   push(table: SyncTable, rows: object[]): Promise<PushResult[]>
+  /**
+   * Column-scoped UPDATE of one existing row (`id`, `base_rev` and the changed fields only). Not an upsert:
+   * Postgres checks NOT NULL on the proposed INSERT row before it finds the conflict, so a partial upsert
+   * fails. Returns [] when the server has no such row. Errors as for push().
+   */
+  pushColumns(table: SyncTable, row: object): Promise<PushResult[]>
   pull(table: SyncTable, sinceRev: number): Promise<object[]>
   fxRates(date: string, currencies: string[]): Promise<FxRate[]>
   /** Sets rate_usd / amount_usd / rate_pending=false only on rows that are still rate_pending on the server. */
@@ -65,18 +71,44 @@ export const PARKED_PREFIX = 'parked:'
 const parkedKey = (table: SyncTable, id: string) => `${PARKED_PREFIX}${table}:${id}`
 
 // dirty: 0 = in sync, 1 = waiting to be pushed, 2 = parked (the server refused it)
-type AnyRow = Record<string, unknown> & { id: string; rev?: number; dirty?: 0 | 1 | 2 }
+type AnyRow = Record<string, unknown> & { id: string; rev?: number; dirty?: 0 | 1 | 2; _changed?: string[] }
 
-// The row's own content: no local-only `dirty`, no server-owned `rev` / `user_id`, no per-request `base_rev`.
-function content(row: AnyRow): object {
-  const { dirty: _dirty, rev: _rev, user_id: _user, base_rev: _base, ...rest } = row
+// The row's own content: no local-only `dirty` / `_changed`, no server-owned `rev` / `user_id` / `deleted_rev`,
+// no per-request `base_rev`.
+function content(row: AnyRow): Record<string, unknown> {
+  const {
+    dirty: _dirty,
+    _changed: _fields,
+    rev: _rev,
+    user_id: _user,
+    base_rev: _base,
+    deleted_rev: _deletedRev,
+    ...rest
+  } = row
   return rest
 }
 
+/**
+ * A settings row the server already has (rev set) whose edited fields are known goes out column-scoped:
+ * only `id` and those fields (Remote.pushColumns). A row never pushed, or one edited before the fields were
+ * tracked, goes whole.
+ */
+function isPartial(table: SyncTable, row: AnyRow): boolean {
+  return table === 'settings' && row.rev != null && Array.isArray(row._changed)
+}
+
 // What the server gets: the content plus `base_rev` = the rev this edit was made on (null for a new row).
-// The server keeps a soft deletion unless base_rev = its current rev, so a restore needs it on every push.
+// The server keeps a soft deletion unless base_rev >= the deletion's rev, so a restore needs it on every push.
 function toWire(row: AnyRow): object {
   return { ...content(row), base_rev: row.rev ?? null }
+}
+
+// The column-scoped form (see isPartial): id, base_rev and the changed fields.
+function changedWire(row: AnyRow): object {
+  const all = content(row)
+  const out: Record<string, unknown> = { id: row.id, base_rev: row.rev ?? null }
+  for (const k of row._changed ?? []) if (k in all) out[k] = all[k]
+  return out
 }
 
 function sameContent(a: AnyRow, b: AnyRow): boolean {
@@ -120,6 +152,8 @@ export function createSync(
   /**
    * Record what the server stored; a row edited while the push was in flight stays dirty. Where the server
    * stored other deletion fields than were sent (it kept a deletion), they are taken over: deletion wins.
+   * After a column-scoped push the server row also holds fields this device has not seen (changed by the
+   * bot or another device): the row keeps its old rev, so the pull that follows brings the merged row.
    */
   async function applyPushed(table: SyncTable, sent: AnyRow[], results: PushResult[]): Promise<void> {
     const t = db.syncTable(table)
@@ -134,7 +168,16 @@ export function createSync(
         for (const k of DELETION_FIELDS) {
           if (result[k] !== undefined && !sameValue(result[k], row[k] ?? null)) server[k] = result[k]
         }
-        await t.put({ ...current, ...server, rev: result.rev, dirty: unchanged ? 0 : 1 } as never)
+        const { _changed, ...rest } = current
+        const next: AnyRow = {
+          ...rest,
+          ...server,
+          rev: isPartial(table, row) ? current.rev : result.rev,
+          dirty: unchanged ? 0 : 1,
+        }
+        // still edited since the push: the changed fields (merged on every write) go out next time
+        if (!unchanged && _changed) next._changed = _changed
+        await t.put(next as never)
         await db.meta.delete(parkedKey(table, result.id))
       }
     })
@@ -157,10 +200,20 @@ export function createSync(
     const dirty = (await t.where('dirty').equals(1).toArray()) as AnyRow[]
     let pushed = 0
     const parked: string[] = []
-    for (let i = 0; i < dirty.length; i += PUSH_CHUNK) {
-      const chunk = dirty.slice(i, i + PUSH_CHUNK)
+    // settings rows go one by one: a column-scoped row is an UPDATE of its own (one settings row per user anyway)
+    const size = table === 'settings' ? 1 : PUSH_CHUNK
+    const send = async (rows: AnyRow[]): Promise<PushResult[]> => {
+      if (rows.length === 1 && isPartial(table, rows[0])) {
+        const results = await remote.pushColumns(table, changedWire(rows[0]))
+        if (results.length) return results
+        // the server has no such row (removed there): it goes out whole
+      }
+      return remote.push(table, rows.map(toWire))
+    }
+    for (let i = 0; i < dirty.length; i += size) {
+      const chunk = dirty.slice(i, i + size)
       try {
-        const results = await remote.push(table, chunk.map(toWire))
+        const results = await send(chunk)
         await applyPushed(table, chunk, results)
         pushed += results.length
         continue
@@ -170,7 +223,7 @@ export function createSync(
       // the server refused the chunk: find the culprits one by one
       for (const row of chunk) {
         try {
-          const results = await remote.push(table, [toWire(row)])
+          const results = await send([row])
           await applyPushed(table, [row], results)
           pushed += results.length
         } catch (e) {

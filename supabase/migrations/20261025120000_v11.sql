@@ -8,7 +8,10 @@
 --   * every new column is nullable or has a default (a fresh 1.0 row that omits it gets the default);
 --   * set_rev() turns NULLs in the NOT NULL 1.1 columns into the default (new row) or the stored
 --     value (existing row), before the constraints are checked;
---   * set_rev() keeps a soft deletion unless the writer proves it saw it (base_rev = current rev).
+--   * set_rev() keeps a soft deletion unless the writer proves it saw it (base_rev >= deleted_rev,
+--     the rev that made the deletion);
+--   * set_rev() keeps the server-owned settings columns (keepalive_at, last_reminder_at,
+--     partner_seen_at) unless the writer is the service role (bot, Edge Functions).
 
 -- ---------------------------------------------------------------------------
 -- settings
@@ -52,10 +55,12 @@ declare
   t text;
 begin
   -- deleted_at: when the row went to the 24 h undo bin; deleted_batch: one id per delete action
-  -- (a whole "delete period" restores together). `deleted = true` stays the final deletion.
+  -- (a whole "delete period" restores together); deleted_rev: the rev of the write that put the row
+  -- in the bin, set only by set_rev() (a restore is judged against it, so later writes to the binned
+  -- row do not block it). `deleted = true` stays the final deletion.
   foreach t in array array['transactions', 'goals', 'limits', 'categories']
   loop
-    execute format('alter table public.%I add column deleted_at timestamptz, add column deleted_batch uuid', t);
+    execute format('alter table public.%I add column deleted_at timestamptz, add column deleted_batch uuid, add column deleted_rev bigint', t);
   end loop;
 
   -- base_rev: the rev the writer had seen when it made the edit. It carries no meaning of its own;
@@ -72,8 +77,12 @@ $$;
 --   INSERT  NULL in a NOT NULL 1.1 column -> its default, or the stored value if the id exists (upsert)
 --   UPDATE  rule 1: `deleted = true` is final and never undone
 --           NULL in a 1.1 column -> the stored value (a 1.0 batch upsert sends missing keys as NULL)
---           rule 2: a soft deletion (deleted_at) is kept unless base_rev = old.rev
+--           rule 2: a soft deletion (deleted_at) is kept unless base_rev >= old.deleted_rev
+--           rule 3: settings.keepalive_at / last_reminder_at / partner_seen_at keep the stored value
+--                   unless current_user = 'service_role' (the bot and the Edge Functions)
 --           base_rev is cleared (it only counts for the request that sent it)
+--   BOTH    deleted_rev (soft tables) is server-owned: the new rev when deleted_at goes from null
+--           to a value, null when deleted_at is null, else the stored value; a pushed value is ignored
 -- One function serves all 7 synced tables and the 1.1 columns exist only on some of them, so the
 -- row is read through jsonb and patched with jsonb_populate_record instead of naming new.<col>.
 -- ---------------------------------------------------------------------------
@@ -89,10 +98,20 @@ declare
   keep     text[];
   k        text;
   stored   jsonb;
+  soft     boolean := tg_table_name in ('transactions', 'goals', 'limits', 'categories');
+  binned   jsonb;
 begin
   -- see init.sql: the advisory lock keeps rev visible in commit order
   perform pg_advisory_xact_lock(5201021000001);
   new.rev := nextval('public.rev_seq');
+
+  if tg_op = 'INSERT' and soft then
+    -- a row can arrive already in the bin (binned on the device before its first push)
+    patch := patch || jsonb_build_object(
+      'deleted_rev',
+      case when coalesce(to_jsonb(new) -> 'deleted_at', 'null'::jsonb) = 'null'::jsonb then null else new.rev end
+    );
+  end if;
 
   if tg_op = 'INSERT' then
     defaults := case tg_table_name
@@ -143,13 +162,35 @@ begin
     end loop;
 
     -- Rule 2: deletion wins. A soft-deleted row (deleted_at set) is restored only by a writer that
-    -- saw the deletion: base_rev = the current rev. A missing base_rev (every 1.0 client, any echo
-    -- of a stale pulled row) or an older one keeps deleted_at/deleted_batch; the rest of the edit
-    -- still applies.
-    if old_j -> 'deleted_at' is not null and old_j -> 'deleted_at' <> 'null'::jsonb
-       and new_j -> 'deleted_at' = 'null'::jsonb
-       and (new.base_rev is null or new.base_rev < old.rev) then
-      patch := patch || jsonb_build_object('deleted_at', old_j -> 'deleted_at', 'deleted_batch', old_j -> 'deleted_batch');
+    -- saw the deletion: base_rev >= deleted_rev, the rev of the write that binned it (not the row's
+    -- latest rev, so a later write to the binned row by another device or the bot does not block
+    -- «Вернуть»). A missing base_rev (every 1.0 client, any echo of a stale pulled row) or an older
+    -- one keeps deleted_at/deleted_batch; the rest of the edit still applies.
+    if soft then
+      if old_j -> 'deleted_at' <> 'null'::jsonb
+         and new_j -> 'deleted_at' = 'null'::jsonb
+         and (new.base_rev is null
+              or new.base_rev < coalesce((old_j ->> 'deleted_rev')::bigint, old.rev)) then
+        patch := patch || jsonb_build_object('deleted_at', old_j -> 'deleted_at', 'deleted_batch', old_j -> 'deleted_batch');
+      end if;
+      -- deleted_rev follows the final deleted_at
+      binned := coalesce(patch -> 'deleted_at', new_j -> 'deleted_at');
+      patch := patch || jsonb_build_object(
+        'deleted_rev',
+        case
+          when binned = 'null'::jsonb then null
+          when old_j -> 'deleted_at' = 'null'::jsonb then to_jsonb(new.rev)
+          else coalesce(old_j -> 'deleted_rev', to_jsonb(old.rev))
+        end
+      );
+    end if;
+
+    -- Rule 3: columns only the server writes (keep-alive, reminders, when the partner was last seen).
+    -- A client's whole-row push (every 1.0 device, a stale copy) must not set them back.
+    if tg_table_name = 'settings' and current_user <> 'service_role' then
+      foreach k in array array['keepalive_at', 'last_reminder_at', 'partner_seen_at'] loop
+        patch := patch || jsonb_build_object(k, old_j -> k);
+      end loop;
     end if;
 
     -- base_rev is per request: never keep it, so a later write that omits it is not judged by it.

@@ -172,6 +172,7 @@ describe('Limits', () => {
           return { id: row.id, rev: stored.rev, deleted: stored.deleted, deleted_at: (row.deleted_at as string | null) ?? null, deleted_batch: (row.deleted_batch as string | null) ?? null }
         })
       },
+      pushColumns: async () => [],
       pull: async () => [],
       fxRates: async () => [],
       patchRates: async () => {},

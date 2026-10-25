@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 // imported) so that changing a type without the migration, or the reverse, fails this test.
 
 const BASE = ['id', 'user_id', 'rev', 'deleted', 'base_rev']
-const SOFT_DELETE = ['deleted_at', 'deleted_batch']
+const SOFT_DELETE = ['deleted_at', 'deleted_batch', 'deleted_rev']
 
 const FIELDS: Record<string, string[]> = {
   settings: [

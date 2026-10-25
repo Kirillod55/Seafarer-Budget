@@ -100,6 +100,36 @@ function usdFieldsFrom(
   }
 }
 
+/** Keys that are not settings content: identity, server bookkeeping and local sync state. */
+const NOT_CONTENT = new Set(['id', 'rev', 'user_id', 'base_rev', 'deleted_rev', 'dirty', '_changed'])
+
+/**
+ * Settings only (see Row._changed in local.ts): the fields `next` changes against `existing`, added to the
+ * ones still waiting to be pushed. undefined = the row goes out whole: a new row, or one edited before the
+ * fields were tracked (its earlier edit is not known field by field).
+ */
+function changedFields(
+  table: SyncTable,
+  existing: (Record<string, unknown> & { dirty?: number; _changed?: string[] }) | undefined,
+  next: Record<string, unknown>,
+): string[] | undefined {
+  if (table !== 'settings' || !existing) return undefined
+  const pending = existing.dirty !== 0
+  if (pending && !Array.isArray(existing._changed)) return undefined
+  const fields = pending ? [...existing._changed!] : []
+  for (const k of Object.keys(next)) {
+    if (NOT_CONTENT.has(k) || fields.includes(k)) continue
+    if (JSON.stringify(existing[k] ?? null) !== JSON.stringify(next[k] ?? null)) fields.push(k)
+  }
+  return fields
+}
+
+/** `row` with its `_changed` set to `fields` (or without it when the row goes out whole). */
+function withChanged<R extends Record<string, unknown>>(row: R, fields: string[] | undefined): R {
+  const { _changed: _old, ...rest } = row
+  return (fields ? { ...rest, _changed: fields } : rest) as unknown as R
+}
+
 export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
   async function write<T extends Base>(table: SyncTable, row: Partial<T>): Promise<T> {
     const t = db.syncTable(table)
@@ -112,8 +142,9 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
       deleted: row.deleted ?? existing?.deleted ?? false,
       dirty: 1 as const,
     }
-    await t.put(merged as never)
-    return merged as unknown as T
+    const out = withChanged(merged, changedFields(table, existing, merged))
+    await t.put(out as never)
+    return out as unknown as T
   }
 
   async function put<T extends Base>(table: SyncTable, row: Partial<T>): Promise<T> {
@@ -129,7 +160,8 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     const existing = await t.get(id)
     if (!existing) return null
     if (!isSoftTable(table)) {
-      await t.put({ ...existing, deleted: true, dirty: 1 })
+      const next = { ...existing, deleted: true, dirty: 1 as const }
+      await t.put(withChanged(next, changedFields(table, existing, next)))
       deps.onChange()
       return null
     }

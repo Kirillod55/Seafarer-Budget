@@ -18,29 +18,44 @@ function isRejection(status: number): boolean {
   return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429
 }
 
+/** The columns a push asks back, and what it makes of them (soft tables also deleted_at / deleted_batch). */
+function resultColumns(table: SyncTable): string {
+  return isSoftTable(table) ? 'id, rev, deleted, deleted_at, deleted_batch' : 'id, rev, deleted'
+}
+
+function toResults(table: SyncTable, data: unknown): PushResult[] {
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => {
+    const result: PushResult = { id: r.id as string, rev: Number(r.rev), deleted: r.deleted === true }
+    if (isSoftTable(table)) {
+      result.deleted_at = (r.deleted_at as string | null) ?? null
+      result.deleted_batch = (r.deleted_batch as string | null) ?? null
+    }
+    return result
+  })
+}
+
 export function createSupabaseRemote(client: SupabaseClient): SupabaseRemote {
   return {
     // The deletion fields come back too: the trigger may keep a deletion over the pushed edit.
     async push(table: SyncTable, rows: object[]) {
-      const soft = isSoftTable(table)
-      const columns = soft ? 'id, rev, deleted, deleted_at, deleted_batch' : 'id, rev, deleted'
       const out: PushResult[] = []
       for (let i = 0; i < rows.length; i += PUSH_CHUNK) {
         const { data, error, status } = await client
           .from(table)
           .upsert(rows.slice(i, i + PUSH_CHUNK), { onConflict: 'id' })
-          .select(columns)
+          .select(resultColumns(table))
         if (error) throw isRejection(status) ? new RowRejectedError(error.message) : new Error(error.message)
-        for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
-          const result: PushResult = { id: r.id as string, rev: Number(r.rev), deleted: r.deleted === true }
-          if (soft) {
-            result.deleted_at = (r.deleted_at as string | null) ?? null
-            result.deleted_batch = (r.deleted_batch as string | null) ?? null
-          }
-          out.push(result)
-        }
+        out.push(...toResults(table, data))
       }
       return out
+    },
+
+    // A column-scoped UPDATE (an upsert would put NULL in the NOT NULL columns it does not send and fail).
+    async pushColumns(table: SyncTable, row: object) {
+      const { id, ...fields } = row as Record<string, unknown> & { id: string }
+      const { data, error, status } = await client.from(table).update(fields).eq('id', id).select(resultColumns(table))
+      if (error) throw isRejection(status) ? new RowRejectedError(error.message) : new Error(error.message)
+      return toResults(table, data)
     },
 
     // Keyset paging: an offset would skip rows when a row changes (and gets a new rev) between pages.
@@ -70,8 +85,9 @@ export function createSupabaseRemote(client: SupabaseClient): SupabaseRemote {
       return Array.isArray(list) ? (list as FxRate[]) : []
     },
 
-    // Only the rate columns, and only while the row is still pending on the server, so a deletion or a
-    // category change made by the bot in the meantime is never overwritten.
+    // Only the rate columns, and only while the row is still pending and not in the bin on the server, so a
+    // deletion or a category change made by the bot in the meantime is never overwritten, and a binned row
+    // is not written at all.
     async patchRates(rows: RatePatch[]) {
       for (const { id, rate_usd, amount_usd } of rows) {
         const { error } = await client
@@ -79,6 +95,7 @@ export function createSupabaseRemote(client: SupabaseClient): SupabaseRemote {
           .update({ rate_usd, amount_usd, rate_pending: false })
           .eq('id', id)
           .eq('rate_pending', true)
+          .is('deleted_at', null)
         if (error) throw new Error(error.message)
       }
     },

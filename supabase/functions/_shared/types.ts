@@ -2,7 +2,10 @@ export interface Base {
   id: string
   user_id?: string
   rev?: number
-  /** The rev the writer had seen when it made the edit; only the server's set_rev() reads it. Not sent yet. */
+  /**
+   * The rev the writer had seen when it made the edit. Sent with every push (sync.ts toWire), never
+   * stored: only the server's set_rev() reads it (a restore from the bin needs base_rev >= deleted_rev).
+   */
   base_rev?: number | null
   deleted: boolean
 }
@@ -11,6 +14,11 @@ export interface Base {
 export interface SoftDeletable {
   deleted_at: string | null
   deleted_batch: string | null
+  /**
+   * Server-owned like `rev`: the rev of the write that put the row in the bin (null outside the bin).
+   * Arrives with pulls, never sent (sync.ts toWire strips it; the server ignores a pushed value).
+   */
+  deleted_rev?: number | null
 }
 
 export type Author = 'owner' | 'partner'

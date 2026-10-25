@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Account, FxRate, Goal, SyncTable, Transaction } from '@shared/types.ts'
+import { isSoftTable, type Account, type FxRate, type Goal, type Settings, type SyncTable, type Transaction } from '@shared/types.ts'
 import { createDb, type LocalDb } from './local.ts'
 import { createRepo, type Repo } from './repo.ts'
 import { createSync, RowRejectedError, type RatePatch, type Remote } from './sync.ts'
@@ -28,20 +28,51 @@ class FakeRemote implements Remote {
     for (const r of rows) this.attempted.push((r as { id: string }).id)
     const bad = rows.find((r) => this.reject.has((r as { id: string }).id))
     if (bad) throw new RowRejectedError(this.reject.get((bad as { id: string }).id)!)
+    // like Postgres: NOT NULL is checked on the proposed INSERT row, so a partial upsert fails
+    if (table === 'settings' && rows.some((r) => !('base_currency' in r))) {
+      throw new RowRejectedError('null value in column "base_currency" violates not-null constraint')
+    }
+    return this.store(table, rows)
+  }
+  /** like update(fields).eq('id', id): only the sent columns, only an existing row */
+  async pushColumns(table: SyncTable, row: object) {
+    if (this.failPush) throw new Error('network down')
+    const id = (row as { id: string }).id
+    this.attempted.push(id)
+    if (this.reject.has(id)) throw new RowRejectedError(this.reject.get(id)!)
+    if (!this.t(table).has(id)) return []
+    return this.store(table, [row])
+  }
+  private store(table: SyncTable, rows: object[]) {
     return rows.map((r) => {
       this.pushLog.push(r)
-      const { base_rev, ...incoming } = r as Record<string, unknown> & { id: string; base_rev?: number | null }
+      // deleted_rev is server-owned: a pushed value is ignored, like the trigger does
+      const { base_rev, deleted_rev: _ignored, ...incoming } = r as Record<string, unknown> & {
+        id: string
+        base_rev?: number | null
+      }
       const prev = this.t(table).get(incoming.id)
       const rev = this.nextRev++
-      const stored: Record<string, unknown> = { ...incoming, rev }
-      // like the v1.1 set_rev() trigger: `deleted` is final; a soft deletion stays unless base_rev = current rev
+      // an upsert updates only the columns it sends (a column-scoped settings push keeps the rest)
+      const stored: Record<string, unknown> = { ...prev, ...incoming, rev }
+      // like the v1.1 set_rev() trigger: `deleted` is final; a soft deletion stays unless base_rev >= deleted_rev;
+      // the server-owned settings columns keep their values (a client is never the service role)
       if (prev) {
         if (prev.deleted === true) stored.deleted = true
         const lifts = prev.deleted_at != null && incoming.deleted_at === null
-        if (lifts && (base_rev == null || base_rev < (prev.rev as number))) {
+        const deletedRev = (prev.deleted_rev ?? prev.rev) as number
+        if (lifts && (base_rev == null || base_rev < deletedRev)) {
           stored.deleted_at = prev.deleted_at
           stored.deleted_batch = prev.deleted_batch
         }
+        if (table === 'settings') {
+          for (const k of ['keepalive_at', 'last_reminder_at', 'partner_seen_at']) stored[k] = prev[k] ?? null
+        }
+      }
+      if (isSoftTable(table)) {
+        const binned = (stored.deleted_at ?? null) !== null
+        const wasBinned = (prev?.deleted_at ?? null) !== null
+        stored.deleted_rev = !binned ? null : wasBinned ? (prev!.deleted_rev ?? prev!.rev) : rev
       }
       this.t(table).set(incoming.id, stored)
       const soft = 'deleted_at' in stored ? { deleted_at: stored.deleted_at as string | null, deleted_batch: stored.deleted_batch as string | null } : {}
@@ -59,12 +90,13 @@ class FakeRemote implements Remote {
     this.fxCurrencies.push(currencies)
     return this.fx[date] ?? []
   }
-  // like update(...).eq('id', id).eq('rate_pending', true): only the rate columns, only while still pending
+  // like update(...).eq('id', id).eq('rate_pending', true).is('deleted_at', null): only the rate columns,
+  // only while still pending and not in the bin
   async patchRates(rows: RatePatch[]) {
     this.patchLog.push(rows)
     for (const p of rows) {
       const row = this.t('transactions').get(p.id)
-      if (!row || row.rate_pending !== true) continue
+      if (!row || row.rate_pending !== true || (row.deleted_at ?? null) !== null) continue
       this.t('transactions').set(p.id, {
         ...row,
         rate_usd: p.rate_usd,
@@ -87,12 +119,14 @@ let dbs: LocalDb[] = []
 let remote: FakeRemote
 
 function device(): { db: LocalDb; repo: Repo; sync: ReturnType<typeof createSync> } {
-  const db = createDb(`sync-test-${++n}`)
+  // the device number is fixed now: `n` moves on with the next device(), ids must not follow it
+  const me = ++n
+  const db = createDb(`sync-test-${me}`)
   dbs.push(db)
   let u = 0
   const repo = createRepo(db, {
     now: () => new Date('2026-10-21T10:00:00Z'),
-    uuid: () => `d${n}-${++u}`,
+    uuid: () => `d${me}-${++u}`,
     onChange: () => {},
   })
   return { db, repo, sync: createSync(db, remote) }
@@ -708,5 +742,137 @@ describe('deletion wins (1.1)', () => {
     remote.failPush = true
     await pc.sync.syncOnce()
     expect(await pc.db.transactions.get('bot-1')).toMatchObject({ deleted: true, note: 'bot', dirty: 0 })
+  })
+
+  // I2 (final review): the restore is judged by the deletion's rev, not by the row's latest rev
+  it('a restore still goes through after an unrelated server write to the binned row', async () => {
+    const { pc, row, batch } = await deletedOnPhone()
+    await pc.sync.syncOnce() // pc sees the deletion
+    const deletionRev = (await pc.db.transactions.get(row.id))!.rev!
+    expect(remote.t('transactions').get(row.id)!.deleted_rev).toBe(deletionRev)
+    // the bot (or another device) writes to the row while it sits in the bin; pc has not pulled that yet
+    remote.seed('transactions', { ...remote.t('transactions').get(row.id)!, note: 'bot' })
+    expect(await pc.repo.restore(batch)).toBe(1)
+    await pc.sync.syncOnce()
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ deleted_at: null, deleted_batch: null, deleted_rev: null })
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({ deleted_at: null, dirty: 0 })
+    // deleted_rev is server-owned: it is never sent
+    expect(remote.pushLog.every((r) => !('deleted_rev' in r))).toBe(true)
+  })
+
+  it('a device that never saw the deletion still cannot resurrect it after later server writes', async () => {
+    const { pc, row, batch } = await deletedOnPhone()
+    remote.seed('transactions', { ...remote.t('transactions').get(row.id)!, note: 'bot' })
+    // pc never pulled the deletion: its copy is alive and its edit carries the old rev
+    await pc.repo.updateTransaction(row.id, { note: 'from pc' })
+    remote.failPull = true
+    await pc.sync.syncOnce()
+    remote.failPull = false
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ deleted_at: '2026-10-21T10:00:00.000Z', deleted_batch: batch })
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({ deleted_batch: batch, dirty: 0 })
+  })
+
+  it('a rate fix leaves a row that went to the bin on the server alone', async () => {
+    remote.seed('transactions', botTx('bot-1', { rate_pending: true, deleted_at: '2026-10-21T09:00:00.000Z', deleted_batch: 'b', deleted_rev: 1 }))
+    const before = remote.t('transactions').get('bot-1')!.rev
+    await remote.patchRates([{ id: 'bot-1', rate_usd: 1, amount_usd: 100 }])
+    expect(remote.t('transactions').get('bot-1')!.rev).toBe(before)
+  })
+})
+
+// I1 (final review): settings go out column by column, so a device offline for weeks cannot undo what the
+// bot or another device changed in other fields meanwhile.
+describe('settings push (column-scoped)', () => {
+  async function syncedSettings() {
+    const a = device()
+    await a.repo.initDefaults('single', [])
+    const res = await a.sync.syncOnce()
+    expect(res.error).toBeUndefined()
+    const s = (await a.db.settings.toArray())[0]
+    // a row that was never pushed goes out whole
+    const first = remote.pushLog.find((r) => (r as { id: string }).id === s.id) as Record<string, unknown>
+    expect(first).toMatchObject({ base_rev: null, default_currency: 'UAH', reserve_usd: 0, timezone: 'Europe/Kyiv' })
+    expect(s).toMatchObject({ dirty: 0 })
+    expect(s).not.toHaveProperty('_changed')
+    return { a, id: s.id }
+  }
+
+  it('offline device changes reserve_usd while the server changed default_currency: after sync both survive', async () => {
+    const { a, id } = await syncedSettings()
+    // the bot changes the default currency on the server
+    remote.seed('settings', { ...remote.t('settings').get(id)!, default_currency: 'EUR', keepalive_at: '2026-10-20T08:00:00Z' })
+    // the device, offline, changes the reserve
+    await a.repo.put<Settings>('settings', { id, reserve_usd: 500 })
+    expect(await a.db.settings.get(id)).toMatchObject({ _changed: ['reserve_usd'], dirty: 1 })
+    remote.failPush = true
+    await a.sync.syncOnce()
+    remote.failPush = false
+    remote.pushLog.length = 0
+    const res = await a.sync.syncOnce()
+    expect(res.error).toBeUndefined()
+
+    // only the changed field went out
+    expect(remote.pushLog).toEqual([{ id, base_rev: expect.any(Number), reserve_usd: 500 }])
+    expect(remote.t('settings').get(id)).toMatchObject({ reserve_usd: 500, default_currency: 'EUR', keepalive_at: '2026-10-20T08:00:00Z' })
+    // and the device ends up with the merged row
+    const local = await a.db.settings.get(id)
+    expect(local).toMatchObject({ reserve_usd: 500, default_currency: 'EUR', keepalive_at: '2026-10-20T08:00:00Z', dirty: 0 })
+    expect(local).not.toHaveProperty('_changed')
+    expect(local!.rev).toBe(remote.t('settings').get(id)!.rev)
+  })
+
+  it('changed fields add up over several edits; a whole-row put records only the fields that differ', async () => {
+    const { a, id } = await syncedSettings()
+    await a.repo.put<Settings>('settings', { id, reserve_usd: 100 })
+    const current = (await a.db.settings.get(id))!
+    // Home.tsx style: the whole row with one field changed
+    await a.repo.put<Settings>('settings', { ...current, next_contract_date: '2026-12-01' })
+    await a.repo.put<Settings>('settings', { id, reserve_usd: 200 })
+    expect((await a.db.settings.get(id))!._changed).toEqual(['reserve_usd', 'next_contract_date'])
+    remote.pushLog.length = 0
+    await a.sync.syncOnce()
+    expect(remote.pushLog).toEqual([{ id, base_rev: expect.any(Number), reserve_usd: 200, next_contract_date: '2026-12-01' }])
+  })
+
+  it('goes out whole when the server has no such row, or when the edit predates field tracking', async () => {
+    const { a, id } = await syncedSettings()
+    remote.t('settings').delete(id) // removed on the server (cleanup)
+    await a.repo.put<Settings>('settings', { id, reserve_usd: 100 })
+    remote.pushLog.length = 0
+    expect((await a.sync.syncOnce()).error).toBeUndefined()
+    expect(remote.t('settings').get(id)).toMatchObject({ reserve_usd: 100, default_currency: 'UAH', timezone: 'Europe/Kyiv' })
+
+    // a row left dirty by 1.0 (no _changed): its edit is not known field by field
+    await a.db.settings.update(id, { reserve_usd: 300, dirty: 1 })
+    remote.pushLog.length = 0
+    await a.repo.put<Settings>('settings', { id, default_currency: 'EUR' })
+    expect(await a.db.settings.get(id)).not.toHaveProperty('_changed')
+    await a.sync.syncOnce()
+    expect(remote.pushLog[0]).toMatchObject({ id, reserve_usd: 300, default_currency: 'EUR', timezone: 'Europe/Kyiv' })
+  })
+
+  it('removing the settings row records `deleted` as a changed field', async () => {
+    const { a, id } = await syncedSettings()
+    await a.repo.remove('settings', id)
+    expect(await a.db.settings.get(id)).toMatchObject({ deleted: true, _changed: ['deleted'] })
+  })
+
+  it('an edit made while the push is in flight keeps the row dirty with its changed fields', async () => {
+    const { a, id } = await syncedSettings()
+    await a.repo.put<Settings>('settings', { id, reserve_usd: 100 })
+    const origPush = remote.pushColumns.bind(remote)
+    remote.pushColumns = async (table, row) => {
+      const out = await origPush(table, row)
+      await a.repo.put<Settings>('settings', { id, default_currency: 'USD' })
+      return out
+    }
+    await a.sync.syncOnce()
+    remote.pushColumns = origPush
+    expect(await a.db.settings.get(id)).toMatchObject({ dirty: 1, default_currency: 'USD', _changed: ['reserve_usd', 'default_currency'] })
+    remote.pushLog.length = 0
+    await a.sync.syncOnce()
+    expect(remote.pushLog).toEqual([{ id, base_rev: expect.any(Number), reserve_usd: 100, default_currency: 'USD' }])
+    expect(remote.t('settings').get(id)).toMatchObject({ reserve_usd: 100, default_currency: 'USD' })
+    expect(await a.db.settings.get(id)).not.toHaveProperty('_changed')
   })
 })

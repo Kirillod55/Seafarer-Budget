@@ -26,6 +26,9 @@ const SUPABASE_STUBS = `
       end if;
     end loop;
   end $$;
+  -- as on Supabase: the service role bypasses RLS, client roles may call auth.uid()
+  alter role service_role bypassrls;
+  grant usage on schema auth to anon, authenticated, service_role;
   create publication supabase_realtime;
 `
 
@@ -427,6 +430,158 @@ describe('v1.1 migration on PGlite', () => {
       )
       expect(col.rows, t).toHaveLength(1)
     }
+  })
+
+  // I1: settings columns written only by the server (bot / Edge Functions run as service_role)
+  it('settings: keepalive_at, last_reminder_at, partner_seen_at change only under the service role', async () => {
+    const id = newId()
+    await db.query(
+      `insert into public.settings
+         (id, base_currency, default_currency, currencies, accounts_mode, status, salary_lag_days, timezone)
+       values ($1, 'USD', 'USD', '{USD}', 'single', 'home', 0, 'Europe/Kyiv')`,
+      [id],
+    )
+    const stale = toWire(await one(db, 'select * from public.settings where id = $1', [id]))
+    const owned =
+      'select keepalive_at, last_reminder_at, partner_seen_at, default_currency, reserve_usd from public.settings where id = $1'
+    const iso = (r: Row) => ({
+      keepalive_at: (r.keepalive_at as Date | null)?.toISOString() ?? null,
+      last_reminder_at: (r.last_reminder_at as Date | null)?.toISOString() ?? null,
+      partner_seen_at: (r.partner_seen_at as Date | null)?.toISOString() ?? null,
+    })
+    const want = {
+      keepalive_at: '2026-10-20T08:00:00.000Z',
+      last_reminder_at: '2026-10-21T08:00:00.000Z',
+      partner_seen_at: '2026-10-22T08:00:00.000Z',
+    }
+    try {
+      await db.exec('set role service_role')
+      await db.query(
+        `update public.settings set keepalive_at = $2, last_reminder_at = $3, partner_seen_at = $4,
+           default_currency = 'EUR' where id = $1`,
+        [id, want.keepalive_at, want.last_reminder_at, want.partner_seen_at],
+      )
+    } finally {
+      await db.exec('reset role')
+    }
+    expect(iso(await one(db, owned, [id]))).toEqual(want)
+
+    // a client (1.0 full-row echo, or any stale copy) pushes the old values: they stay as the server set them
+    try {
+      await db.exec('set role authenticated')
+      await upsertLikePostgrest(db, 'settings', [{ ...stale, reserve_usd: 7 }])
+      await db.query('update public.settings set keepalive_at = null, partner_seen_at = now() where id = $1', [id])
+    } finally {
+      await db.exec('reset role')
+    }
+    let row = await one(db, owned, [id])
+    expect(iso(row)).toEqual(want)
+    expect(Number(row.reserve_usd)).toBe(7)
+    // the other columns of a stale whole-row push still apply (the 1.1 app pushes only changed columns)
+    expect(row.default_currency).toBe('USD')
+
+    // any role other than service_role (here the table owner) cannot change them either
+    await db.query('update public.settings set last_reminder_at = null where id = $1', [id])
+    row = await one(db, owned, [id])
+    expect(iso(row)).toEqual(want)
+  })
+
+  it('settings: a column-scoped push must be an UPDATE (a partial upsert fails on NOT NULL)', async () => {
+    const id = newId()
+    const s = await one(
+      db,
+      `insert into public.settings
+         (id, base_currency, default_currency, currencies, accounts_mode, status, salary_lag_days, timezone)
+       values ($1, 'USD', 'UAH', '{USD}', 'single', 'home', 0, 'Europe/Kyiv') returning rev`,
+      [id],
+    )
+    try {
+      await db.exec('set role authenticated')
+      // NOT NULL is checked on the proposed INSERT row before the conflict is found
+      await expect(upsertLikePostgrest(db, 'settings', [{ id, base_rev: Number(s.rev), reserve_usd: 9 }])).rejects.toThrow(
+        /not-null/,
+      )
+      // what remote-supabase.ts pushColumns sends: update(fields).eq('id', id)
+      await db.query('update public.settings set reserve_usd = 9, base_rev = $2 where id = $1', [id, s.rev])
+    } finally {
+      await db.exec('reset role')
+    }
+    const row = await one(db, 'select reserve_usd, default_currency, base_rev from public.settings where id = $1', [id])
+    expect(Number(row.reserve_usd)).toBe(9)
+    expect(row.default_currency).toBe('UAH')
+    expect(row.base_rev).toBeNull()
+  })
+
+  // I2: a deletion is judged by the rev that made it (deleted_rev), not by the row's latest rev
+  it('soft deletion stamps deleted_rev; a client stamp is ignored; restore clears it', async () => {
+    const id = newId()
+    await insertTx1_0(db, id)
+    const del = await softDelete(db, id)
+    let row = await one(db, 'select deleted_rev from public.transactions where id = $1', [id])
+    expect(Number(row.deleted_rev)).toBe(Number(del.rev))
+    // a pushed deleted_rev (a 1.0 echo of select *) never overrides the server's
+    await db.query('update public.transactions set deleted_rev = 1, note = $2 where id = $1', [id, 'echo'])
+    row = await one(db, 'select deleted_rev from public.transactions where id = $1', [id])
+    expect(Number(row.deleted_rev)).toBe(Number(del.rev))
+    await db.query(
+      'update public.transactions set deleted_at = null, deleted_batch = null, base_rev = $2 where id = $1',
+      [id, del.rev],
+    )
+    row = await one(db, 'select deleted_at, deleted_rev from public.transactions where id = $1', [id])
+    expect(row.deleted_at).toBeNull()
+    expect(row.deleted_rev).toBeNull()
+    // a row that arrives already in the bin (pushed by the device that binned it) is stamped too
+    const ins = await one(
+      db,
+      `insert into public.transactions
+         (id, kind, amount, currency, rate_usd, amount_usd, account_id, date, deleted_at, deleted_batch, deleted_rev)
+       values ($1, 'expense', 10, 'USD', 1, 10, $2, '2026-10-25', now(), gen_random_uuid(), 5) returning rev, deleted_rev`,
+      [newId(), ACCOUNT],
+    )
+    expect(Number(ins.deleted_rev)).toBe(Number(ins.rev))
+    const plain = await insertTx1_0(db, newId())
+    expect(plain.deleted_rev).toBeNull()
+    for (const t of ['categories', 'transactions', 'goals', 'limits']) {
+      const col = await db.query(
+        `select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = $1 and column_name = 'deleted_rev' and data_type = 'bigint'`,
+        [t],
+      )
+      expect(col.rows, t).toHaveLength(1)
+    }
+  })
+
+  it('restore still works after an unrelated server write to the binned row', async () => {
+    const id = newId()
+    await insertTx1_0(db, id)
+    const del = await softDelete(db, id)
+    // another device's / the bot's write to the row while it sits in the bin
+    const later = await one(db, `update public.transactions set note = 'bot' where id = $1 returning rev`, [id])
+    expect(Number(later.rev)).toBeGreaterThan(Number(del.rev))
+    // the restoring device saw the deletion (base_rev = the deletion's rev), not the later write
+    const seen = toWire(await one(db, 'select * from public.transactions where id = $1', [id]))
+    await upsertLikePostgrest(db, 'transactions', [
+      { ...seen, note: 'bot', deleted_at: null, deleted_batch: null, base_rev: Number(del.rev) },
+    ])
+    const row = await one(db, 'select deleted_at, deleted_batch, deleted_rev from public.transactions where id = $1', [id])
+    expect(row.deleted_at).toBeNull()
+    expect(row.deleted_batch).toBeNull()
+    expect(row.deleted_rev).toBeNull()
+  })
+
+  it('a client that never saw the deletion still cannot resurrect it after later writes', async () => {
+    const id = newId()
+    const r1 = (await insertTx1_0(db, id)).rev
+    const del = await softDelete(db, id)
+    await db.query(`update public.transactions set note = 'bot' where id = $1`, [id])
+    await db.query(
+      'update public.transactions set deleted_at = null, deleted_batch = null, note = $3, base_rev = $2 where id = $1',
+      [id, r1, 'stale'],
+    )
+    const row = await one(db, 'select deleted_at, deleted_batch, note from public.transactions where id = $1', [id])
+    expect(time(row.deleted_at)).toBe(time(del.deleted_at))
+    expect(row.deleted_batch).toBe(del.deleted_batch)
+    expect(row.note).toBe('stale')
   })
 
   it('rls_auto_enable is revoked from client roles when present', async () => {
