@@ -499,3 +499,84 @@ describe('concurrency', () => {
     expect(remote.pushLog).toHaveLength(1)
   })
 })
+
+describe('field reality (stage 0)', () => {
+  const tx = {
+    kind: 'expense' as const,
+    amount: 10,
+    currency: 'USD',
+    account_id: 'a',
+    to_account_id: null,
+    to_amount: null,
+    to_currency: null,
+    category_id: null,
+    date: '2026-10-21',
+    note: 'first',
+    source: 'app' as const,
+  }
+
+  it('offline push keeps rows dirty and reports error, next sync sends them', async () => {
+    const a = device()
+    const row = await a.repo.put<Account>('accounts', acc)
+    const origPush = remote.push.bind(remote)
+    remote.push = async () => {
+      throw new TypeError('Failed to fetch')
+    }
+    const res = await a.sync.syncOnce()
+    expect(res.error).toContain('Failed to fetch')
+    expect(res.pushed).toBe(0)
+    expect((await a.db.accounts.get(row.id as string))!.dirty).toBe(1)
+    expect(remote.t('accounts').size).toBe(0)
+
+    remote.push = origPush
+    const res2 = await a.sync.syncOnce()
+    expect(res2.error).toBeUndefined()
+    expect((await a.db.accounts.get(row.id as string))!.dirty).toBe(0)
+    expect(remote.t('accounts').size).toBe(1)
+    expect(remote.t('accounts').has(row.id as string)).toBe(true)
+  })
+
+  it('a row saved twice while offline goes out once with the latest content', async () => {
+    const a = device()
+    const row = await a.repo.addTransaction(tx)
+    await a.sync.syncOnce()
+    remote.pushLog.length = 0
+
+    remote.failPush = true
+    await a.repo.updateTransaction(row.id, { note: 'second' })
+    await a.repo.updateTransaction(row.id, { note: 'third' })
+    const offline = await a.sync.syncOnce()
+    expect(offline.error).toMatch(/network down/)
+    expect(remote.pushLog).toHaveLength(0)
+
+    remote.failPush = false
+    const res = await a.sync.syncOnce()
+    expect(res.error).toBeUndefined()
+    expect(remote.pushLog).toHaveLength(1)
+    expect(remote.pushLog[0]).toMatchObject({ id: row.id, note: 'third' })
+    expect(remote.t('transactions').size).toBe(1)
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ note: 'third' })
+    expect((await a.db.transactions.get(row.id))!.dirty).toBe(0)
+  })
+
+  it('two devices edit the same row: the later push wins on both after pull', async () => {
+    const phone = device()
+    const pc = device()
+    const row = await phone.repo.addTransaction(tx)
+    await phone.sync.syncOnce()
+    await pc.sync.syncOnce()
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({ note: 'first', dirty: 0 })
+
+    // both edit the same row before either syncs
+    await phone.repo.updateTransaction(row.id, { note: 'from phone' })
+    await pc.repo.updateTransaction(row.id, { note: 'from pc' })
+
+    await phone.sync.syncOnce()
+    await pc.sync.syncOnce() // pc pushes last: its edit is the server's final version
+    await phone.sync.syncOnce()
+
+    expect(remote.t('transactions').get(row.id)).toMatchObject({ note: 'from pc' })
+    expect(await phone.db.transactions.get(row.id)).toMatchObject({ note: 'from pc', dirty: 0 })
+    expect(await pc.db.transactions.get(row.id)).toMatchObject({ note: 'from pc', dirty: 0 })
+  })
+})
