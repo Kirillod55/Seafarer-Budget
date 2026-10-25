@@ -33,8 +33,9 @@ function LimitForm({
     if (!categoryId) return setError('Выберите категорию')
     setBusy(true)
     try {
-      // a category whose limit was removed earlier reuses that (soft-deleted) row instead of adding a second one
-      const id = limit?.id ?? (await db.limits.filter((l) => l.category_id === categoryId).first())?.id
+      // a category whose limit was removed earlier reuses that (soft-deleted) row instead of adding a second one;
+      // a row deleted for good (`deleted`) is never reused: the server keeps it deleted, so a new id is made
+      const id = limit?.id ?? (await db.limits.filter((l) => l.category_id === categoryId && !l.deleted).first())?.id
       // remove() is soft since 1.1: bring the row out of the undo bin (the push carries base_rev = rev)
       await repo.put<Limit>('limits', { id, category_id: categoryId, monthly_usd: value, deleted: false, deleted_at: null, deleted_batch: null })
       onClose()

@@ -80,7 +80,16 @@ export function balanceUsd(bal: Record<string, number>, rates: FxRate[], today: 
   return round2(total)
 }
 
-/** USD set aside for goals (all goals, or only `goalId`). */
+/**
+ * Live moves of live goals: what counts as money set aside. A goal in the undo bin (or deleted for good)
+ * reserves nothing, even though its moves have no deletion mark of their own.
+ */
+export function liveGoalMoves(moves: GoalMove[], goals: Goal[]): GoalMove[] {
+  const live = new Set(goals.filter(alive).map((g) => g.id))
+  return moves.filter((m) => alive(m) && live.has(m.goal_id))
+}
+
+/** USD set aside for goals (all goals, or only `goalId`). Pass `liveGoalMoves(...)` for the free-money total. */
 export function reservedUsd(moves: GoalMove[], goalId?: string): number {
   return round2(
     sum(moves.filter((m) => alive(m) && (goalId === undefined || m.goal_id === goalId)).map((m) => m.amount_usd)),

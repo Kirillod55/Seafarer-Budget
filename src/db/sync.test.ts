@@ -634,7 +634,7 @@ describe('deletion wins (1.1)', () => {
     await phone.sync.syncOnce()
     await pc.sync.syncOnce()
     expect(await pc.db.transactions.get(row.id)).toMatchObject({ deleted_at: null, dirty: 0 })
-    const batch = await phone.repo.remove('transactions', row.id)
+    const batch = (await phone.repo.remove('transactions', row.id))!
     await phone.sync.syncOnce()
     expect(remote.t('transactions').get(row.id)).toMatchObject({ deleted_at: '2026-10-21T10:00:00.000Z', deleted_batch: batch })
     return { phone, pc, row, batch }

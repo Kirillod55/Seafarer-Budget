@@ -262,13 +262,29 @@ describe('remove (soft) and restore', () => {
   it('remove is soft and restorable', async () => {
     const tx = await repo.addTransaction(baseTx)
     await synced(tx.id)
-    const batch = await repo.remove('transactions', tx.id)
+    const batch = (await repo.remove('transactions', tx.id))!
     expect(batch).toEqual(expect.any(String))
     expect(await db.transactions.get(tx.id)).toMatchObject({ deleted: false, deleted_at: NOW_ISO, deleted_batch: batch, dirty: 1, rev: 3 })
 
     await synced(tx.id, 4)
     expect(await repo.restore(batch)).toBe(1)
     expect(await db.transactions.get(tx.id)).toMatchObject({ deleted: false, deleted_at: null, deleted_batch: null, dirty: 1, rev: 4 })
+  })
+
+  it('remove returns null for a missing id and for a table without a bin', async () => {
+    expect(await repo.remove('transactions', 'nope')).toBeNull()
+    await repo.put<Account>('accounts', { id: 'a1', name: 'Карта' })
+    expect(await repo.remove('accounts', 'a1')).toBeNull()
+  })
+
+  it('removing a row already in the bin keeps its deleted_at and batch and returns that batch', async () => {
+    const tx = await repo.addTransaction(baseTx)
+    const { batch } = await repo.wipe('day', 'all')
+    await synced(tx.id)
+    onChange.mockClear()
+    expect(await repo.remove('transactions', tx.id)).toBe(batch)
+    expect(await db.transactions.get(tx.id)).toMatchObject({ deleted_at: NOW_ISO, deleted_batch: batch, dirty: 0 })
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('goals, limits and categories are removed softly too', async () => {

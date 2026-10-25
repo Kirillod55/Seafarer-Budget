@@ -4,6 +4,7 @@ import type { Category, FxRate, Limit } from '@shared/types.ts'
 import { Limits } from './Limits.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
+import { createSync, type Remote } from '../db/sync.ts'
 
 const rate = (date: string, currency: string, uah_per_unit: number): FxRate => ({ date, currency, uah_per_unit })
 
@@ -152,6 +153,43 @@ describe('Limits', () => {
 
     expect(await screen.findByText('$0 из $80')).toBeTruthy()
     expect(await env.db.limits.toArray()).toMatchObject([{ id: limit.id, monthly_usd: 80, deleted: false, deleted_at: null, deleted_batch: null }])
+  })
+
+  it('a limit deleted for good (1.0 / purged) is not reused: a new row is made and stays live after sync', async () => {
+    await seed()
+    const limit = await setLimit(100)
+    // final deletion as 1.0 or the daily purge left it, already in sync with the server
+    await env.db.limits.update(limit.id, { deleted: true, dirty: 0, rev: 5 })
+    const server = new Map<string, Record<string, unknown>>([[limit.id, { ...(await env.db.limits.get(limit.id))!, rev: 5 }]])
+    let rev = 10
+    // like set_rev(): `deleted = true` is never undone
+    const remote: Remote = {
+      async push(_table, rows) {
+        return rows.map((r) => {
+          const row = r as Record<string, unknown> & { id: string }
+          const stored = { ...row, rev: ++rev, deleted: server.get(row.id)?.deleted === true || row.deleted === true }
+          server.set(row.id, stored)
+          return { id: row.id, rev: stored.rev, deleted: stored.deleted, deleted_at: (row.deleted_at as string | null) ?? null, deleted_batch: (row.deleted_batch as string | null) ?? null }
+        })
+      },
+      pull: async () => [],
+      fxRates: async () => [],
+      patchRates: async () => {},
+    }
+    renderWithApp(<Limits />, env)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Задать лимит' }))
+    fireEvent.change(await screen.findByLabelText('Категория'), { target: { value: cafe.id } })
+    fireEvent.change(screen.getByLabelText('Лимит в месяц, $'), { target: { value: '80' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('$0 из $80')).toBeTruthy()
+
+    await createSync(env.db, remote).syncOnce()
+    const live = (await env.db.limits.toArray()).filter((l) => l.category_id === cafe.id && !l.deleted && l.deleted_at === null)
+    expect(live).toHaveLength(1)
+    expect(live[0]).toMatchObject({ monthly_usd: 80, dirty: 0 })
+    expect(live[0].id).not.toBe(limit.id)
+    expect(await screen.findByText('$0 из $80')).toBeTruthy()
   })
 
   it('a limit on an archived category is not shown', async () => {

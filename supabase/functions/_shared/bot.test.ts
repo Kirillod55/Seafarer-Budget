@@ -297,6 +297,15 @@ describe('handleUpdate', () => {
     expect(textOf(r)).toContain('$2,000') // 3000 balance - 1000 reserved
   })
 
+  it('/left: a goal in the undo bin reserves nothing', async () => {
+    const s = new MemStore()
+    s.settingsRow = { ...SETTINGS, next_contract_date: '2026-12-21' }
+    s.txRows = [seedTx({ kind: 'income', amount: 3000, amount_usd: 3000, currency: 'USD', category_id: cat('Зарплата').id })]
+    s.goalRows = [{ id: 'g1', deleted: false, deleted_at: '2026-10-21T10:00:00.000Z', deleted_batch: 'b1', name: 'Машина', target_usd: 5000, deadline: null, archived: false }]
+    s.moveRows = [{ id: 'm1', deleted: false, goal_id: 'g1', amount_usd: 1000, date: TODAY, note: '', author: 'owner', source: 'app', created_at: '2026-10-01T12:00:00.000Z' }]
+    expect(textOf(await run(s, msg('/left')))).toContain('Свободно: $3,000 ')
+  })
+
   it('M1/M2: /left ignores archived accounts and shows whole dollars', async () => {
     const s = new MemStore()
     s.settingsRow = { ...SETTINGS, next_contract_date: '2026-12-21' }

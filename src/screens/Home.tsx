@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
-import { activeBalances, allowance, balanceUsd, contractStats, reservedUsd } from '@shared/calc.ts'
+import { activeBalances, allowance, balanceUsd, contractStats, liveGoalMoves, reservedUsd } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { round2, usdRate } from '@shared/fx.ts'
@@ -51,26 +51,27 @@ function ContractDate({ settings }: { settings: Settings }) {
 export function Home({ onOpenRecord }: { onOpenRecord?(id?: string): void } = {}) {
   const { db, now } = useApp()
   const data = useLiveQuery(async () => {
-    const [settings, txs, rates, moves, categories, accounts] = await Promise.all([
+    const [settings, txs, rates, moves, goals, categories, accounts] = await Promise.all([
       db.settings.filter(alive).first(),
       db.transactions.filter(alive).toArray(),
       db.fx_rates.toArray(),
       db.goal_moves.filter(alive).toArray(),
+      db.goals.toArray(),
       db.categories.toArray(),
       db.accounts.toArray(),
     ])
-    return { settings, txs, rates, moves, categories, accounts }
+    return { settings, txs, rates, moves, goals, categories, accounts }
   }, [db])
 
   if (!data) return <p className="muted pad">Загрузка…</p>
-  const { settings, txs, rates, moves, categories, accounts } = data
+  const { settings, txs, rates, moves, goals, categories, accounts } = data
 
   const quick = <QuickInput />
   if (!settings) return <div className="stack">{quick}</div>
 
   const today = localDate(now(), settings.timezone)
   const bal = activeBalances(txs, accounts) // archived accounts are not free money
-  const reserved = reservedUsd(moves)
+  const reserved = reservedUsd(liveGoalMoves(moves, goals)) // a goal in the undo bin reserves nothing
   const freeUsd = round2(balanceUsd(bal, rates, today) - reserved)
   const noRate = Object.keys(bal).filter((cur) => bal[cur] !== 0 && !usdRate(rates, cur, today))
   const al = allowance(freeUsd, settings, today)

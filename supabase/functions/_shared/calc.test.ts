@@ -8,6 +8,7 @@ import {
   goalProgress,
   limitCrossing,
   limitStatus,
+  liveGoalMoves,
   monthReport,
   reservedUsd,
 } from './calc.ts'
@@ -161,6 +162,30 @@ describe('reservedUsd', () => {
   it('sums non-deleted moves, optionally per goal', () => {
     expect(reservedUsd(moves)).toBe(150.3)
     expect(reservedUsd(moves, 'g1')).toBe(100.3)
+  })
+})
+
+describe('liveGoalMoves', () => {
+  const g = (id: string, p: Partial<Goal> = {}): Goal => ({
+    id, deleted: false, deleted_at: null, deleted_batch: null, name: id, target_usd: 1000, deadline: null, archived: false, ...p,
+  })
+  const moves = [
+    move({ id: 'm1', goal_id: 'live', amount_usd: 100 }),
+    move({ id: 'm2', goal_id: 'binned', amount_usd: 40 }),
+    move({ id: 'm3', goal_id: 'final', amount_usd: 30 }),
+    move({ id: 'm4', goal_id: 'missing', amount_usd: 20 }),
+    move({ id: 'm5', goal_id: 'live', amount_usd: 7, deleted: true }),
+  ]
+  const goals = [g('live'), g('binned', { deleted_at: '2026-10-21T10:00:00.000Z', deleted_batch: 'b1' }), g('final', { deleted: true })]
+
+  it('keeps only live moves of live goals, so a wiped goal reserves nothing', () => {
+    expect(liveGoalMoves(moves, goals).map((m) => m.id)).toEqual(['m1'])
+    expect(reservedUsd(liveGoalMoves(moves, goals))).toBe(100)
+  })
+
+  it('a restored goal reserves its money again', () => {
+    const restored = goals.map((x) => (x.id === 'binned' ? { ...x, deleted_at: null, deleted_batch: null } : x))
+    expect(reservedUsd(liveGoalMoves(moves, restored))).toBe(140)
   })
 })
 

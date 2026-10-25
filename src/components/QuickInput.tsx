@@ -32,7 +32,8 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
         setFeedback({ kind: 'hint', text: NO_SETTINGS_HINT })
         return
       }
-      const [categories, accounts] = await Promise.all([db.categories.toArray(), db.accounts.toArray()])
+      // only live rows: a category or account in the undo bin is never filed into
+      const [categories, accounts] = await Promise.all([db.categories.filter(alive).toArray(), db.accounts.filter(alive).toArray()])
       const parsed = parseMessage(value, {
         currencies: settings.currencies,
         defaultCurrency: settings.default_currency,

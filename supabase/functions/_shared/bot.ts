@@ -1,6 +1,16 @@
 // Telegram bot logic: pure, storage and transport are injected (BotStore, BotReply).
 // Runs in Deno (Edge Function) and in vitest. No npm imports.
-import { activeBalances, allowance, balanceUsd, contractStats, limitCrossing, limitStatus, monthReport, reservedUsd } from './calc.ts'
+import {
+  activeBalances,
+  allowance,
+  balanceUsd,
+  contractStats,
+  limitCrossing,
+  limitStatus,
+  liveGoalMoves,
+  monthReport,
+  reservedUsd,
+} from './calc.ts'
 import { localDate, monthOf } from './dates.ts'
 import { round2, usdRate } from './fx.ts'
 import { money } from './format.ts'
@@ -340,13 +350,14 @@ async function runCommand(
     }
 
     case 'left': {
-      const [txs, moves, rates, accounts] = await Promise.all([
+      const [txs, moves, goals, rates, accounts] = await Promise.all([
         store.transactions(),
         store.goalMoves(),
+        store.goals(),
         store.rates(),
         store.accounts(),
       ])
-      const free = round2(balanceUsd(activeBalances(txs, accounts), rates, today) - reservedUsd(moves))
+      const free = round2(balanceUsd(activeBalances(txs, accounts), rates, today) - reservedUsd(liveGoalMoves(moves, goals)))
       const lines = [`Свободно: ${money(free, 'USD', { whole: true })} (баланс за вычетом целей)`]
       if (settings.status === 'contract') {
         const st = contractStats(txs, settings, today)

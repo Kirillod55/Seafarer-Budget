@@ -41,6 +41,19 @@ describe('QuickInput', () => {
     expect(await env.db.transactions.count()).toBe(2) // opening balance + the new one
   })
 
+  it('never files into a category in the undo bin: «такси 15 eur» goes to «Прочее» once its category is removed', async () => {
+    const { env, submit, addTransaction } = await setup()
+    const categories = await env.db.categories.toArray()
+    const transport = categories.find((c) => c.name === 'Транспорт и такси')!
+    const other = categories.find((c) => c.name === 'Прочее')!
+    await env.repo.remove('categories', transport.id)
+
+    submit('такси 15 eur')
+
+    await waitFor(() => expect(addTransaction).toHaveBeenCalledTimes(1))
+    expect(addTransaction.mock.calls[0][0].category_id).toBe(other.id)
+  })
+
   it('«кофе» without an amount → hint with an example, nothing is saved', async () => {
     const { input, submit, addTransaction } = await setup()
 

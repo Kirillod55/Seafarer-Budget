@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from './Home.tsx'
 import { makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
-import type { Account, Settings } from '@shared/types.ts'
+import type { Account, Goal, GoalMove, Settings } from '@shared/types.ts'
 
 // "Example" settings: contract ends payout 2026-11-20 + 30 days lag = 2026-12-20, i.e. 60 days from 2026-10-21.
 // Free money $3 040 -> $50.67 per day (~$51) -> $1 540.27 per 30.4 days (~$1 540).
@@ -39,6 +39,23 @@ describe('Home', () => {
     const { container } = renderWithApp(<Home />, env)
     expect(await screen.findByText('$1,540 в месяц')).toBeTruthy()
     expect(container.querySelector('.big')!.textContent).toBe('$3,040')
+  })
+
+  it('goals in the undo bin reserve nothing: after wipeAll free money is $0, after restore it is back', async () => {
+    await seed({ next_contract_date: '2026-11-20' })
+    await env.repo.put<Goal>('goals', { id: 'g1', name: 'Машина', target_usd: 5000, deadline: null, archived: false, deleted_at: null, deleted_batch: null })
+    await env.repo.put<GoalMove>('goal_moves', {
+      id: 'm1', goal_id: 'g1', amount_usd: 1000, date: '2026-10-21', note: '', author: 'owner', source: 'app', created_at: '2026-10-21T10:00:00.000Z',
+    })
+    const { container } = renderWithApp(<Home />, env)
+    const free = () => container.querySelector('.big')?.textContent
+    await waitFor(() => expect(free()).toBe('$2,040'))
+
+    const { batch } = await env.repo.wipeAll()
+    await waitFor(() => expect(free()).toBe('$0'))
+
+    await env.repo.restore(batch)
+    await waitFor(() => expect(free()).toBe('$2,040'))
   })
 
   it('shows the allowance per month and per day', async () => {

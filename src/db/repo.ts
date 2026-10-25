@@ -44,9 +44,11 @@ export interface Repo {
   put<T extends Base>(table: SyncTable, row: Partial<T>): Promise<T>
   /**
    * Soft delete into the 24 h undo bin (deleted_at = now, deleted_batch = a new batch); returns the batch
-   * for «Отменить» / restore(). Settings, accounts and goal moves have no bin: their removal stays final.
+   * for «Отменить» / restore(). A row already in the bin keeps its own deleted_at and batch (returned).
+   * null: no such row, a row deleted for good, or a table without a bin (settings, accounts and goal moves,
+   * whose removal stays final).
    */
-  remove(table: SyncTable, id: string): Promise<string>
+  remove(table: SyncTable, id: string): Promise<string | null>
   /** Hide a record from the lists (it still counts in the balance and reports). */
   setArchived(id: string, archived: boolean): Promise<void>
   /** «Удалить записи…»: live records of the kind in the period go to the bin as one batch. */
@@ -122,16 +124,20 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
 
   const softTable = (table: SoftTable) => db.table<SoftRow, string>(table)
 
-  async function remove(table: SyncTable, id: string): Promise<string> {
-    const batch = deps.uuid()
+  async function remove(table: SyncTable, id: string): Promise<string | null> {
     const t = db.syncTable(table)
     const existing = await t.get(id)
-    if (!existing) return batch
-    if (isSoftTable(table)) {
-      await t.put({ ...existing, deleted_at: deps.now().toISOString(), deleted_batch: batch, dirty: 1 })
-    } else {
+    if (!existing) return null
+    if (!isSoftTable(table)) {
       await t.put({ ...existing, deleted: true, dirty: 1 })
+      deps.onChange()
+      return null
     }
+    const row = existing as unknown as SoftRow
+    if (row.deleted) return null // deleted for good: nothing to undo
+    if (row.deleted_at) return row.deleted_batch // already in the bin: it stays in its own batch
+    const batch = deps.uuid()
+    await t.put({ ...existing, deleted_at: deps.now().toISOString(), deleted_batch: batch, dirty: 1 })
     deps.onChange()
     return batch
   }
