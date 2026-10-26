@@ -85,6 +85,12 @@ export function createSupabaseRemote(client: SupabaseClient): SupabaseRemote {
       return Array.isArray(list) ? (list as FxRate[]) : []
     },
 
+    async fxRatesBatch(dates: string[], currencies: string[]) {
+      const { data, error } = await client.functions.invoke('fx-rates', { body: { dates, currencies } })
+      if (error) throw new Error(error.message)
+      return Array.isArray(data) ? (data as FxRate[]) : []
+    },
+
     // Only the rate columns, and only while the row is still pending and not in the bin on the server, so a
     // deletion or a category change made by the bot in the meantime is never overwritten, and a binned row
     // is not written at all.

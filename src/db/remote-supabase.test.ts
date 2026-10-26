@@ -145,4 +145,10 @@ describe('fxRates (I2)', () => {
     await createSupabaseRemote(client).fxRates('2026-10-21', ['UAH', 'USD', 'GBP'])
     expect(invoke).toHaveBeenCalledWith('fx-rates', { body: { date: '2026-10-21', currencies: ['UAH', 'USD', 'GBP'] } })
   })
+
+  it('fxRatesBatch sends all dates in one {dates} request', async () => {
+    const { client, invoke } = fakeClient(() => ({ data: null, error: null, status: 200 }))
+    expect(await createSupabaseRemote(client).fxRatesBatch!(['2026-10-20', '2026-10-21'], ['UAH', 'USD'])).toEqual([])
+    expect(invoke).toHaveBeenCalledWith('fx-rates', { body: { dates: ['2026-10-20', '2026-10-21'], currencies: ['UAH', 'USD'] } })
+  })
 })

@@ -419,6 +419,26 @@ describe('fx rates', () => {
     expect(await a.db.transactions.get('bot-q')).toMatchObject({ category_id: 'new', amount_usd: 1, rate_pending: false, dirty: 0 })
   })
 
+  it('batched resolvePendingRates: one fxRatesBatch call for every pending date (chunks of 60), no per-date calls', async () => {
+    const a = device()
+    // 65 pending rows on 65 different dates (a big CSV import)
+    const dates = Array.from({ length: 65 }, (_, i) => new Date(Date.UTC(2026, 7, 1 + i)).toISOString().slice(0, 10))
+    dates.forEach((date, i) => remote.seed('transactions', botTx(`imp-${i}`, { currency: 'UAH', amount: 40, rate_usd: 0, amount_usd: 0, rate_pending: true, date })))
+    const batches: { dates: string[]; currencies: string[] }[] = []
+    const batched = remote as typeof remote & { fxRatesBatch: (d: string[], c: string[]) => Promise<FxRate[]> }
+    batched.fxRatesBatch = async (ds, cs) => {
+      batches.push({ dates: ds, currencies: cs })
+      return ds.flatMap((date) => [{ date, currency: 'UAH', uah_per_unit: 1 }, { date, currency: 'USD', uah_per_unit: 40 }])
+    }
+    const res = await a.sync.syncOnce()
+    expect(res.error).toBeUndefined()
+    expect(batches.map((b) => b.dates.length)).toEqual([60, 5])
+    expect(new Set(batches.flatMap((b) => b.dates))).toEqual(new Set(dates))
+    expect(batches[0].currencies).toContain('UAH')
+    expect(remote.fxCalls.filter((d) => d !== '2026-10-22' && dates.includes(d))).toEqual([])
+    expect(await a.db.transactions.get('imp-64')).toMatchObject({ amount_usd: 1, rate_pending: false })
+  })
+
   it('I3: a failed rate patch is kept in the local marker and retried on the next sync', async () => {
     const a = device()
     remote.seed('transactions', botTx('bot-p', { currency: 'UAH', amount: 80, rate_usd: 0, amount_usd: 0, rate_pending: true, date: '2026-10-21' }))

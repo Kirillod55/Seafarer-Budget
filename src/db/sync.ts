@@ -13,6 +13,9 @@ export class RowRejectedError extends Error {
 }
 
 /** Column-scoped rate fix for a transaction that was saved without an exact rate. */
+/** Dates per fx-rates `{dates}` request (the function accepts up to 60). */
+const FX_BATCH = 60
+
 export interface RatePatch {
   id: string
   rate_usd: number
@@ -43,6 +46,8 @@ export interface Remote {
   pushColumns(table: SyncTable, row: object): Promise<PushResult[]>
   pull(table: SyncTable, sinceRev: number): Promise<object[]>
   fxRates(date: string, currencies: string[]): Promise<FxRate[]>
+  /** Several dates in one fx-rates call (`{dates}`, ≤ 60). Optional: without it, one call per date. */
+  fxRatesBatch?(dates: string[], currencies: string[]): Promise<FxRate[]>
   /** Sets rate_usd / amount_usd / rate_pending=false only on rows that are still rate_pending on the server. */
   patchRates(rows: RatePatch[]): Promise<void>
 }
@@ -287,11 +292,20 @@ export function createSync(
     const pending = await db.transactions.filter((t) => t.rate_pending && alive(t)).toArray()
     if (pending.length === 0) return
     const dates = [...new Set(pending.map((t) => t.date))].sort()
-    for (const date of dates) {
-      const currencies = new Set(settings?.currencies ?? [])
-      for (const t of pending) if (t.date === date) currencies.add(t.currency)
-      const fetched = await remote.fxRates(date, [...currencies])
-      if (fetched.length) await db.fx_rates.bulkPut(fetched)
+    if (remote.fxRatesBatch) {
+      // one request per 60 dates (a big CSV import has hundreds), not one per date
+      const currencies = [...new Set([...(settings?.currencies ?? []), ...pending.map((t) => t.currency)])]
+      for (let i = 0; i < dates.length; i += FX_BATCH) {
+        const fetched = await remote.fxRatesBatch(dates.slice(i, i + FX_BATCH), currencies)
+        if (fetched.length) await db.fx_rates.bulkPut(fetched)
+      }
+    } else {
+      for (const date of dates) {
+        const currencies = new Set(settings?.currencies ?? [])
+        for (const t of pending) if (t.date === date) currencies.add(t.currency)
+        const fetched = await remote.fxRates(date, [...currencies])
+        if (fetched.length) await db.fx_rates.bulkPut(fetched)
+      }
     }
     for (const { id } of pending) {
       // The fetches above took time: re-read the row and recompute from its CURRENT values.
