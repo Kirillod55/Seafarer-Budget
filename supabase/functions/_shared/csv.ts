@@ -111,14 +111,19 @@ export interface ImportError {
   reason: string
 }
 
-const KIND_BY_LABEL: Record<string, TxKind> = {
-  '': 'expense',
-  расход: 'expense',
-  доход: 'income',
-  корректировка: 'adjustment',
-  перевод: 'transfer',
-  обмен: 'exchange',
-}
+// Maps, not object literals: a cell «constructor» or «__proto__» must not find Object.prototype's members
+const KIND_BY_LABEL = new Map<string, TxKind>([
+  ['', 'expense'],
+  ['расход', 'expense'],
+  ['доход', 'income'],
+  ['корректировка', 'adjustment'],
+  ['перевод', 'transfer'],
+  ['обмен', 'exchange'],
+])
+
+/** A 1.0 file has no second leg of transfers and exchanges («Счёт куда / Сумма куда» came in 1.1). */
+const OLD_FILE_TRANSFER = 'В старом файле нет второй половины перевода — сверь баланс через «Сверка»'
+const OLD_FILE_EXCHANGE = 'В старом файле нет второй половины обмена — сверь баланс через «Сверка»'
 
 /** Header names and labels are compared trimmed, lower-case and with «ё» read as «е» («Счет» = «Счёт»). */
 const norm = (s: string) => s.trim().toLowerCase().replaceAll('ё', 'е')
@@ -227,23 +232,23 @@ function parseAmount(raw: string, signed = false): number | null {
 }
 
 /** Signs and words people write instead of the code (compared lower-case, without a trailing dot). */
-const CURRENCY_WORDS: Record<string, string> = {
-  '₴': 'UAH',
-  грн: 'UAH',
-  гривна: 'UAH',
-  $: 'USD',
-  дол: 'USD',
-  '€': 'EUR',
-  евро: 'EUR',
-  лей: 'MDL',
-  l: 'MDL',
-}
+const CURRENCY_WORDS = new Map<string, string>([
+  ['₴', 'UAH'],
+  ['грн', 'UAH'],
+  ['гривна', 'UAH'],
+  ['$', 'USD'],
+  ['дол', 'USD'],
+  ['€', 'EUR'],
+  ['евро', 'EUR'],
+  ['лей', 'MDL'],
+  ['l', 'MDL'],
+])
 
 /** A currency cell → a 3-letter code; '' → null (the caller decides), anything unknown → undefined. */
 function parseCurrency(raw: string): string | null | undefined {
   const s = raw.trim()
   if (s === '') return null
-  const word = CURRENCY_WORDS[s.toLowerCase().replace(/\.$/, '')]
+  const word = CURRENCY_WORDS.get(s.toLowerCase().replace(/\.$/, ''))
   if (word) return word
   return /^[A-Za-z]{3}$/.test(s) ? s.toUpperCase() : undefined
 }
@@ -272,14 +277,26 @@ export function parseCsv(text: string, partnerName: string | null): { rows: Impo
     return i === undefined ? '' : (cells[i] ?? '').trim()
   }
   const partnerLabel = norm(partnerLabelOf(partnerName))
+  const hasToAccount = index.has(norm('Счёт куда'))
+  const hasToAmount = index.has(norm('Сумма куда'))
 
   for (const { line, cells } of records.slice(1)) {
     if (cells.every((c) => c.trim() === '')) continue // «;;;» left by a spreadsheet
     const fail = (reason: string) => errors.push({ line, reason })
 
-    const kind = KIND_BY_LABEL[norm(get(cells, 'Тип'))]
+    const kind = KIND_BY_LABEL.get(norm(get(cells, 'Тип')))
     if (kind === undefined) {
       fail('Неизвестный тип')
+      continue
+    }
+
+    // a 1.0 export: the transfer's «Счёт» reads «Основной → Карта», an exchange has no received amount
+    if (kind === 'transfer' && !hasToAccount) {
+      fail(OLD_FILE_TRANSFER)
+      continue
+    }
+    if (kind === 'exchange' && !hasToAmount) {
+      fail(OLD_FILE_EXCHANGE)
       continue
     }
 
@@ -434,7 +451,14 @@ export function planImport(
   existing: Transaction[],
   categories: Category[],
   accounts: Account[],
-): { fresh: ImportRow[]; duplicates: ImportRow[]; unknownCategories: string[]; unknownAccounts: string[] } {
+): {
+  fresh: ImportRow[]
+  duplicates: ImportRow[]
+  unknownCategories: string[]
+  unknownAccounts: string[]
+  /** rows that cannot be written as they are (a transfer to an unknown or the same account); not in fresh */
+  errors: ImportError[]
+} {
   // an existing record's category / account is resolved among all of them, so one under an archived (or
   // binned) category or account still matches
   const categoryName = new Map(categories.map((c) => [c.id, c.name.trim()]))
@@ -466,6 +490,7 @@ export function planImport(
   const duplicates: ImportRow[] = []
   const unknownCategories: string[] = []
   const unknownAccounts: string[] = []
+  const errors: ImportError[] = []
   const liveAccountNames = new Set(accounts.filter(alive).map((a) => a.name.trim()))
   const noteAccount = (name: string) => {
     const n = name.trim()
@@ -473,6 +498,18 @@ export function planImport(
   }
 
   for (const row of rows) {
+    if (row.kind === 'transfer') {
+      // an unknown «Счёт куда» would fall back to the default account — often the «Счёт» itself
+      const to = row.toAccount.trim()
+      if (!liveAccountNames.has(to)) {
+        errors.push({ line: row.line, reason: `Нет счёта «${to}» — перевод пропущу` })
+        continue
+      }
+      if (accountOf(row.account) === accountOf(to)) {
+        errors.push({ line: row.line, reason: 'Перевод на тот же счёт' })
+        continue
+      }
+    }
     const k = key({
       ...row,
       account: accountOf(row.account),
@@ -493,5 +530,5 @@ export function planImport(
     noteAccount(row.account)
     noteAccount(row.toAccount)
   }
-  return { fresh, duplicates, unknownCategories, unknownAccounts }
+  return { fresh, duplicates, unknownCategories, unknownAccounts, errors }
 }

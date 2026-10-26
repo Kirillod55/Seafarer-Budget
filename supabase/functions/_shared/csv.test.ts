@@ -290,7 +290,8 @@ describe('planImport', () => {
 
   it('lists unknown account names once (their rows go to the default account)', () => {
     const { rows } = parseCsv('Дата;Тип;Сумма;Счёт;Счёт куда\n2026-10-21;Расход;1;Карта;\n2026-10-21;Перевод;1;Сейф;Банка\n2026-10-21;Расход;1;Сейф;\n2026-10-21;Расход;1;;', null)
-    expect(planImport(rows, [], [food], [main, card]).unknownAccounts).toEqual(['Сейф', 'Банка'])
+    // the transfer into an unknown «Банка» is a row error (planImport.errors), so «Банка» is not listed
+    expect(planImport(rows, [], [food], [main, card]).unknownAccounts).toEqual(['Сейф'])
   })
 
   it('round trip with every kind: corrections, transfers, exchanges, partner rows and kopecks are all duplicates', () => {
@@ -322,5 +323,53 @@ describe('planImport', () => {
     const plan = planImport(rows, [], [food, { ...salary, deleted_at: '2026-10-22T00:00:00Z' }], [main])
     expect(plan.unknownCategories).toEqual(['Кино', 'Книги'])
     expect(plan.fresh).toHaveLength(5)
+  })
+})
+
+describe('stage 1 carry-overs (Task 13)', () => {
+  it('a «Тип» or «Валюта» cell naming an Object.prototype key is an error, not garbage', () => {
+    const { rows, errors } = parseCsv(
+      ['Дата;Тип;Сумма;Валюта', '2026-10-21;constructor;5;UAH', '2026-10-21;toString;5;UAH', '2026-10-21;Расход;5;constructor', '2026-10-21;Расход;5;__proto__'].join('\n'),
+      null,
+    )
+    expect(rows).toEqual([])
+    expect(errors).toEqual([
+      { line: 2, reason: 'Неизвестный тип' },
+      { line: 3, reason: 'Неизвестный тип' },
+      { line: 4, reason: 'Непонятная валюта' },
+      { line: 5, reason: 'Непонятная валюта' },
+    ])
+  })
+
+  it('a 1.0 file (no «Счёт куда» / «Сумма куда» columns): transfers and exchanges explain how to fix the balance', () => {
+    const { rows, errors } = parseCsv(
+      [
+        'Дата;Тип;Сумма;Валюта;Сумма USD;Категория;Счёт;Заметка',
+        '2026-10-21;Расход;5;UAH;0,12;Продукты;Основной;',
+        '2026-10-21;Перевод;100;UAH;2,4;;Основной → Карта;',
+        '2026-10-21;Обмен;4150;UAH;100;;Основной;',
+      ].join('\r\n'),
+      null,
+    )
+    expect(rows).toHaveLength(1)
+    expect(errors).toEqual([
+      { line: 3, reason: 'В старом файле нет второй половины перевода — сверь баланс через «Сверка»' },
+      { line: 4, reason: 'В старом файле нет второй половины обмена — сверь баланс через «Сверка»' },
+    ])
+  })
+
+  it('a transfer to an unknown «Счёт куда» is a row error, not a transfer onto the same account', () => {
+    const { rows } = parseCsv(
+      ['Дата;Тип;Сумма;Валюта;Счёт;Счёт куда', '2026-10-21;Перевод;100;UAH;Основной;Банка', '2026-10-21;Перевод;50;UAH;Основной;Карта', '2026-10-21;Перевод;7;UAH;Сейф;Основной'].join('\n'),
+      null,
+    )
+    const plan = planImport(rows, [], [food], [main, card])
+    expect(plan.fresh.map((r) => r.line)).toEqual([3])
+    expect(plan.duplicates).toEqual([])
+    expect(plan.errors).toEqual([
+      { line: 2, reason: 'Нет счёта «Банка» — перевод пропущу' },
+      { line: 4, reason: 'Перевод на тот же счёт' },
+    ])
+    expect(plan.unknownAccounts).toEqual([])
   })
 })
