@@ -8,13 +8,6 @@
   flex-direction: column;
 }
 
-.calendar .label {
-  color: var(--muted);
-  font-size: 0.765rem; /* 13 */
-  text-transform: none;
-  letter-spacing: 0;
-}
-
 /* ---------- ‹ › next to the month ---------- */
 
 .cal-arrows {

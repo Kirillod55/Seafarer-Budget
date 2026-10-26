@@ -605,7 +605,7 @@
   padding: 0;
 }
 
-/* the row itself: scoped under .swipe so the 1.0 `.tx` rules (styles.css, the report) never reach it */
+/* the row itself, scoped under .swipe */
 .swipe > .tx {
   position: relative;
   display: flex;

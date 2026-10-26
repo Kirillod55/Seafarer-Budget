@@ -9,13 +9,6 @@
   gap: 18px;
 }
 
-.home .label {
-  color: var(--muted);
-  font-size: 0.765rem; /* 13 */
-  text-transform: none;
-  letter-spacing: 0;
-}
-
 /* ---------- header: date pill · cloud · ＋ (10 px + the iPhone safe area from the top) ---------- */
 
 .home-top {

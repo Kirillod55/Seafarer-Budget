@@ -12,13 +12,6 @@
   min-width: 0;
 }
 
-.goals .label {
-  color: var(--muted);
-  font-size: 0.765rem; /* 13 */
-  text-transform: none;
-  letter-spacing: 0;
-}
-
 /* «＋ Добавить» — the screen's main button: lime text */
 .goals .navbtn.strong {
   gap: 4px;

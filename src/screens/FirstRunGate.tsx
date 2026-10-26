@@ -31,7 +31,7 @@ export function FirstRunGate({
       <main className="page narrow center">
         <h1>Нужен интернет для первого запуска</h1>
         <p className="muted">Приложению нужно один раз загрузить ваши данные. Подключитесь к сети и повторите.</p>
-        <button type="button" className="btn btn-primary" onClick={() => void check()}>
+        <button type="button" className="btn-acc" onClick={() => void check()}>
           Повторить
         </button>
       </main>

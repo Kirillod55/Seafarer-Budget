@@ -1,41 +1,13 @@
 /*
- * 1.1 tokens, theme, font and base elements live in ui/tokens.css. Below: the shared classes of the 1.0 screens,
- * kept until each screen is replaced (stage 2, tasks 2–14) and then deleted with it.
+ * App-wide base: the 1.1 tokens, theme, font and elements (ui/tokens.css), then the few plain classes every screen
+ * uses — as in prototype v60 (.card, .label, .muted). Screen and component styles live next to their code.
  */
 @import './ui/tokens.css';
-
-/* 1.0 variable names, mapped onto the 1.1 tokens so the old screens follow both themes */
-:root {
-  --surface: var(--card);
-  --border: var(--line);
-  --pos: var(--ok);
-  --neg: var(--danger);
-  --warn-bg: color-mix(in srgb, var(--pill-warn) 16%, transparent);
-  --level-ok: var(--accent);
-  --level-warn: var(--pill-warn);
-  --level-over: var(--warn);
-  --radius: var(--r-card);
-  --tap: 48px;
-}
 
 html,
 body,
 #root {
   min-height: 100%;
-}
-
-h1 {
-  font-size: 1.6rem;
-  margin: 0 0 0.5rem;
-}
-
-h2 {
-  font-size: 1.1rem;
-  margin: 0 0 0.5rem;
-}
-
-p {
-  margin: 0;
 }
 
 .muted {
@@ -56,284 +28,43 @@ p {
   text-align: center;
 }
 
-.neg {
-  color: var(--neg);
-}
-
-.pos {
-  color: var(--pos);
-}
-
 .error {
-  color: var(--neg);
+  color: var(--danger);
 }
 
-/* ---------- layout ---------- */
-
+/* the plain pages outside the tabs: «Нет подключения к Supabase», «Нужен интернет для первого запуска» */
 .page {
   flex: 1;
-  padding: 0.5rem 1rem calc(88px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 2rem) 16px calc(24px + env(safe-area-inset-bottom));
 }
 
 .page.narrow {
   max-width: 480px;
   margin: 0 auto;
-  padding-top: calc(env(safe-area-inset-top) + 2rem);
 }
 
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.page > h1 {
+  font-size: 1.647rem; /* 28, as the login and the wizard */
+  font-weight: 700;
 }
 
-.row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-}
-
-.grow {
-  flex: 1;
-  min-width: 0;
-}
-
-.w-cur {
-  width: 6.5rem;
-}
-
+/* prototype .card */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
 }
 
+/* prototype .label: a muted 13 px caption */
 .label {
   color: var(--muted);
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.big {
-  font-size: 2.2rem;
-  font-weight: 700;
-  line-height: 1.15;
-}
-
-/* ---------- controls ---------- */
-
-label {
-  display: block;
-  font-size: 0.9rem;
-  color: var(--muted);
-  margin-bottom: 0.25rem;
-}
-
-.field {
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0.5rem 0.75rem;
-  font: inherit;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.field:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.btn {
-  min-height: var(--tap);
-  padding: 0.5rem 1.1rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.btn-primary {
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.btn-block {
-  width: 100%;
-}
-
-.btn-link {
-  min-height: 36px;
-  padding: 0.25rem 0.5rem;
-  background: none;
-  border: none;
-  color: var(--accent-text);
-  font-weight: 500;
-}
-
-.choice {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin: 1rem 0 0.5rem;
-}
-
-.choice-btn {
-  min-height: 72px;
-  font-size: 1.05rem;
-}
-
-.choice-btn.active {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent);
-}
-
-/* ---------- transactions ---------- */
-
-.tx-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.tx {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.9rem;
-  min-height: var(--tap);
-}
-
-.tx + .tx {
-  border-top: 1px solid var(--border);
-}
-
-.tx-icon {
-  font-size: 1.4rem;
-  width: 1.8rem;
-  text-align: center;
-}
-
-.tx-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.tx-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tx-sub {
-  font-size: 0.8rem;
-}
-
-.tx-amount {
-  font-weight: 600;
-  white-space: nowrap;
+  font-size: 0.765rem; /* 13 */
 }
 
 .empty {
   padding: 1rem 0;
-}
-
-.tx-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  min-height: var(--tap);
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.tx-amounts {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-/* ---------- record form ---------- */
-
-.btn-danger {
-  color: var(--neg);
-  border-color: var(--neg);
-}
-
-/* ---------- goals, limits, accounts (the progress bar itself: ui/ui.css) ---------- */
-
-.balances {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 1rem;
-  font-size: 1.2rem;
-  font-weight: 600;
-}
-
-/* ---------- settings ---------- */
-
-.set-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.set-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: var(--tap);
-}
-
-.set-row + .set-row {
-  border-top: 1px solid var(--border);
-}
-
-.set-row.archived {
-  color: var(--muted);
-}
-
-.set-icon {
-  flex: none;
-  width: 1.8rem;
-  text-align: center;
-  font-size: 1.3rem;
-}
-
-.set-name {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.set-sub {
-  display: block;
-}
-
-.recon-row + .recon-row {
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
 }
