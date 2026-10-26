@@ -1,3 +1,7 @@
+import { DeskKeys } from './desk/DeskKeys.tsx'
+import { UpdateToast } from './desk/UpdateToast.tsx'
+import { appUpdater } from './desk/updater.ts'
+import { Sidebar, activeItem, routeOf } from './desk/Sidebar.tsx'
 import { Navigator, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
 import { Archive } from './screens/Archive.tsx'
@@ -53,10 +57,37 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
 
   return (
     <>
-      <Navigator renderScreen={renderScreen} onNavigate={closeRecord} />
+      <Navigator
+        renderScreen={renderScreen}
+        onNavigate={closeRecord}
+        sidebar={(route, open) => (
+          <>
+            <Sidebar
+              current={activeItem(route)}
+              onOpen={(item, part) => {
+                open(routeOf(item))
+                if (part) scrollToCard('Второй человек в боте')
+              }}
+            />
+            <DeskKeys />
+          </>
+        )}
+      />
       {/* the one toast host: screens call useToast() */}
       <ToastHost />
+      <UpdateToast updater={appUpdater()} />
     </>
   )
 }
 
+
+/** After opening «Настройки»: bring a group into view once the screen has read its data. */
+function scrollToCard(title: string) {
+  let tries = 0
+  const find = () => {
+    const h = [...document.querySelectorAll('.screen:not(.below) h3')].find((el) => el.textContent === title)
+    if (h) h.closest('section')?.scrollIntoView?.({ block: 'start' })
+    else if (++tries < 40) setTimeout(find, 25)
+  }
+  setTimeout(find, 0)
+}

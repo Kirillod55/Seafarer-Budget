@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useDesk } from '../desk/layout.ts'
 import { ChevronLeft } from '../ui/icons.ts'
 import { useNav, useScreenActive } from './Navigator.tsx'
 
@@ -32,9 +33,10 @@ export function NavBar({
   const [solid, setSolid] = useState(false)
   // a screen hidden under a deeper one keeps its look and listens to nothing
   const active = useScreenActive()
+  const desk = useDesk()
 
   useEffect(() => {
-    if (!active) return
+    if (!active || desk) return
     // two rect reads per scroll event; React skips the render when the state does not change
     const sync = () => {
       const bar = barRef.current
@@ -48,7 +50,36 @@ export function NavBar({
       window.removeEventListener('scroll', sync)
       window.removeEventListener('resize', sync)
     }
-  }, [active])
+  }, [active, desk])
+
+  // PC (spec §11 «Вид Windows 11»): a page header — the title on the left (after the «Главная ›» path when there is
+  // somewhere to go back to; «‹ Ещё» is not: those screens are in the menu), the actions on the right as Windows buttons
+  if (desk) {
+    return (
+      <div className="dhead">
+        <div className="dtitle">
+          {back && back.label !== 'Ещё' && (
+            <>
+              <button type="button" className="crumb" aria-label={`Назад, ${back.label}`} onClick={nav.back}>
+                {back.label}
+              </button>
+              <span className="csep" aria-hidden="true">
+                ›
+              </span>
+            </>
+          )}
+          <h1 ref={titleRef} className="large" tabIndex={-1}>
+            {heading ?? title}
+          </h1>
+        </div>
+        <div className="dact">
+          {leading}
+          {aside}
+          {trailing}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>

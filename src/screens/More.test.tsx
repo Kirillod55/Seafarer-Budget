@@ -328,7 +328,9 @@ describe('More: «Второй человек в боте»', () => {
     await seed()
     await serverSettings({ partner_name: 'Маша' })
     renderMore()
-    const name = await screen.findByLabelText('Имя')
+    const name = (await screen.findByLabelText('Имя')) as HTMLInputElement
+    // the stored name first: otherwise its late arrival can overwrite the emptied field
+    await waitFor(() => expect(name.value).toBe('Маша'))
     fireEvent.change(name, { target: { value: '  ' } })
     fireEvent.keyDown(name, { key: 'Enter' })
     await waitFor(async () => expect((await settingsRow()).partner_name).toBeNull())
@@ -356,11 +358,12 @@ describe('More: «Telegram-бот»', () => {
     renderMore()
     const seg = await screen.findByRole('group', { name: 'Напоминание' })
     expect([...seg.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Выкл', '2', '3', '5', '7'])
-    expect(within(seg).getByRole('button', { name: '2' }).getAttribute('aria-pressed')).toBe('true')
+    // the stored choice may arrive just after the group shows
+    await waitFor(() => expect(within(seg).getByRole('button', { name: '2' }).getAttribute('aria-pressed')).toBe('true'))
     fireEvent.click(within(seg).getByRole('button', { name: '5' }))
     await waitFor(async () => expect((await settingsRow()).remind_after_days).toBe(5))
     expect((await changed())._changed).toEqual(['remind_after_days'])
-    expect((await card('Telegram-бот')).textContent).toContain('5 дней')
+    await waitFor(async () => expect((await card('Telegram-бот')).textContent).toContain('5 дней'))
     fireEvent.click(within(seg).getByRole('button', { name: 'Выкл' }))
     await waitFor(async () => expect((await settingsRow()).remind_after_days).toBe(0))
   })

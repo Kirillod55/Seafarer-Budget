@@ -3,9 +3,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
 import { useApp } from '../context.tsx'
+import { useDesk } from '../desk/layout.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { useNav } from '../nav/Navigator.tsx'
 import { Archive, ChevronRight, CreditCard, Gauge, Tag, type LucideIcon } from '../ui/icons.ts'
+import { AboutSection } from './more/AboutSection.tsx'
 import { AppearanceSection } from './more/AppearanceSection.tsx'
 import { BudgetSection } from './more/BudgetSection.tsx'
 import { CurrenciesSection } from './more/CurrenciesSection.tsx'
@@ -34,6 +36,9 @@ const MENU: { screen: MenuScreen; label: string; icon: LucideIcon; color: string
 export function More({ onSignOut }: { onSignOut(): void }) {
   const { db, now } = useApp()
   const nav = useNav()
+  // PC: the same screen is «Настройки», and its links to Лимиты / Счета / Категории / Архив are in the menu instead
+  const desk = useDesk()
+  const title = desk ? 'Настройки' : 'Ещё'
   const data = useLiveQuery(async () => {
     const [settings, txs, rates, moves, goals, accounts, categories] = await Promise.all([
       db.settings.filter(alive).first(),
@@ -50,7 +55,7 @@ export function More({ onSignOut }: { onSignOut(): void }) {
   if (!data)
     return (
       <>
-        <NavBar title="Ещё" />
+        <NavBar title={title} />
         <p className="muted pad">Загрузка…</p>
       </>
     )
@@ -58,7 +63,7 @@ export function More({ onSignOut }: { onSignOut(): void }) {
   if (!settings)
     return (
       <>
-        <NavBar title="Ещё" />
+        <NavBar title={title} />
         <p className="muted pad">Сначала завершите настройку</p>
       </>
     )
@@ -69,10 +74,11 @@ export function More({ onSignOut }: { onSignOut(): void }) {
 
   return (
     <>
-      <NavBar title="Ещё" />
+      <NavBar title={title} />
       <div className="more">
         <BudgetSection settings={settings} txs={txs} rates={rates} moves={moves} goals={goals} accounts={accounts} today={today} />
 
+        {!desk && (
         <div className="group menu">
           {MENU.map(({ screen, label, icon: Icon, color }) => {
             const count = screen === 'archive' && archived > 0 ? archived : 0
@@ -95,6 +101,7 @@ export function More({ onSignOut }: { onSignOut(): void }) {
             )
           })}
         </div>
+        )}
 
         <AppearanceSection />
         <PartnerSection settings={settings} />
@@ -104,6 +111,7 @@ export function More({ onSignOut }: { onSignOut(): void }) {
         <ReconcileSection settings={settings} accounts={accounts} txs={txs} today={today} />
         <BackupSection today={today} partnerName={settings.partner_name} />
         <WipeSection settings={settings} today={today} />
+        {desk && <AboutSection />}
 
         <button type="button" className="btn-gray danger msignout" onClick={onSignOut}>
           Выйти

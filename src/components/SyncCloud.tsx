@@ -1,7 +1,11 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { SYNC_TABLES } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
+import { useDesk } from '../desk/layout.ts'
+import { useScreenActive } from '../nav/Navigator.tsx'
+import { useToast } from '../ui/Toast.tsx'
 import { PARKED_PREFIX, type ParkedRow } from '../db/sync.ts'
 import './sync-cloud.css'
 
@@ -51,6 +55,7 @@ export function SyncCloud() {
   const { db, scheduler } = useApp()
   const status = useSyncExternalStore(scheduler.status$.subscribe, scheduler.status$.get)
   const online = useOnline()
+  const desk = useDesk()
   const counts = useLiveQuery(async () => {
     let pending = 0
     let parked = 0
@@ -103,14 +108,25 @@ export function SyncCloud() {
     setPop(state === 'ok' && (last === 'sync' || Date.now() - syncedAt < POP_WINDOW_MS))
   }
 
+  const cls = `syncind ${state}${state === 'sync' ? ' syncing' : ''}${pop ? ' pop' : ''}`
+  const icon = <CloudIcon />
+  if (desk) {
+    return (
+      <DeskCloud cls={cls} label={label} state={state} lastSyncAt={status.lastSyncAt}>
+        {icon}
+      </DeskCloud>
+    )
+  }
   return (
-    <span
-      className={`syncind ${state}${state === 'sync' ? ' syncing' : ''}${pop ? ' pop' : ''}`}
-      role="img"
-      aria-label={label}
-      title={label}
-      data-state={state}
-    >
+    <span className={cls} role="img" aria-label={label} title={label} data-state={state}>
+      {icon}
+    </span>
+  )
+}
+
+function CloudIcon() {
+  return (
+    <>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d={CLOUD} />
         <g className="bd b-ok">
@@ -134,6 +150,115 @@ export function SyncCloud() {
           </g>
         </g>
       </svg>
-    </span>
+    </>
+  )
+}
+
+const hhmm = (t: number) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+
+/** «сегодня, 14:05» or «12 окт., 14:05» */
+function when(t: number): string {
+  const d = new Date(t)
+  const today = new Date().toDateString() === d.toDateString()
+  return `${today ? 'сегодня' : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, ${hhmm(t)}`
+}
+
+/*
+ * PC only (spec §11 «Облачко синхронизации — кнопка»): the cloud is a button; it opens a small solid flyout under it
+ * with the state, the last sync time or what went wrong, and «Синхронизировать сейчас». It closes on a second
+ * click, a click elsewhere, Esc (focus back on the cloud) or leaving the section.
+ */
+function DeskCloud({
+  cls,
+  label,
+  state,
+  lastSyncAt,
+  children,
+}: {
+  cls: string
+  label: string
+  state: CloudState
+  lastSyncAt: number | null
+  children: ReactNode
+}) {
+  const { scheduler } = useApp()
+  const toast = useToast()
+  const active = useScreenActive()
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btn = useRef<HTMLButtonElement>(null)
+  const fly = useRef<HTMLDivElement>(null)
+  const shown = open && active
+
+  useLayoutEffect(() => {
+    if (!shown || !btn.current) return
+    const r = btn.current.getBoundingClientRect()
+    setPos({ top: r.bottom + 8, left: Math.max(8, Math.min(r.right - 300, window.innerWidth - 308)) })
+  }, [shown])
+
+  useEffect(() => {
+    if (!shown) return
+    const away = (e: PointerEvent) => {
+      const t = e.target as Node
+      if (!fly.current?.contains(t) && !btn.current?.contains(t)) setOpen(false)
+    }
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      setOpen(false)
+      btn.current?.focus()
+    }
+    document.addEventListener('pointerdown', away, true)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('pointerdown', away, true)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [shown])
+
+  const syncNow = async () => {
+    const st = await scheduler.syncNow()
+    if (st.state !== 'error') toast('Синхронизировано')
+  }
+
+  const title =
+    state === 'ok' ? 'Всё синхронизировано' : state === 'err' ? 'Синхронизация не удалась' : state === 'sync' ? 'Синхронизирую…' : label
+  const sub =
+    state === 'err'
+      ? label.replace(/^Синхронизация не удалась: /, 'Не удалось отправить: ')
+      : lastSyncAt
+        ? `Последняя синхронизация: ${when(lastSyncAt)}`
+        : 'Ещё не синхронизировалось на этом устройстве'
+
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        className={cls}
+        aria-label={label}
+        title={label}
+        data-state={state}
+        aria-expanded={shown}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {children}
+      </button>
+      {shown &&
+        createPortal(
+          <div ref={fly} className={`syncfly${state === 'err' ? ' err' : state === 'sync' ? ' busy' : ''}`} role="dialog" aria-label="Синхронизация" style={pos}>
+            <div className="sf-head">
+              <span className="sf-dot" aria-hidden="true" />
+              {title}
+            </div>
+            <div className="sf-sub">{sub}</div>
+            <button type="button" className="fbtn" disabled={state === 'sync'} onClick={() => void syncNow()}>
+              {state === 'sync' ? 'Синхронизирую…' : 'Синхронизировать сейчас'}
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }

@@ -10,6 +10,8 @@ import { DayGroups } from '../components/DayGroups.tsx'
 import { QuickInput } from '../components/QuickInput.tsx'
 import { SyncCloud, isNetworkError } from '../components/SyncCloud.tsx'
 import { useApp } from '../context.tsx'
+import { useDesk } from '../desk/layout.ts'
+import { Overview } from '../desk/Overview.tsx'
 import { useNav, useScreenActive } from '../nav/Navigator.tsx'
 import { ProgressBar } from '../ui/ProgressBar.tsx'
 import { PullToRefresh } from '../ui/PullToRefresh.tsx'
@@ -42,6 +44,7 @@ export function Home() {
   const { openRecord } = useRecordSheet()
   const nav = useNav()
   const active = useScreenActive()
+  const desk = useDesk()
   const data = useLiveQuery(async () => {
     const [settings, txs, rates, moves, goals, categories, accounts] = await Promise.all([
       db.settings.filter(alive).first(),
@@ -87,7 +90,9 @@ export function Home() {
   const landing = settings.next_contract_date
 
   return (
-    <PullToRefresh onRefresh={refresh} disabled={!active}>
+    <PullToRefresh onRefresh={refresh} disabled={!active || desk}>
+      {/* PC: the same home in the work column, «Обзор» on the right (spec §11 «Главная — панель») */}
+      <div className={desk ? 'dgrid' : 'home-wrap'}>
       <div className="home">
         <div className="home-top">
           <button type="button" className="navbtn datebtn" onClick={() => nav.push({ tab: 'home', screen: 'calendar' })}>
@@ -98,6 +103,12 @@ export function Home() {
             <SyncCloud />
             <button type="button" className="addbtn" aria-label="Новая запись" onClick={() => openRecord()}>
               <Plus aria-hidden="true" strokeWidth={2.6} />
+              {desk && (
+                <>
+                  <span className="lbl">Новая запись</span>
+                  <kbd>N</kbd>
+                </>
+              )}
             </button>
           </span>
         </div>
@@ -150,6 +161,8 @@ export function Home() {
           maxDays={3}
           onOpen={openRecord}
         />
+      </div>
+      {desk && <Overview today={today} />}
       </div>
     </PullToRefresh>
   )

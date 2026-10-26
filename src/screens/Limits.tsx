@@ -7,6 +7,7 @@ import { money } from '@shared/format.ts'
 import { round2 } from '@shared/fx.ts'
 import type { Category, Limit } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
+import { useDesk } from '../desk/layout.ts'
 import { parseAmount } from '../lib/amount.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
@@ -198,6 +199,7 @@ export function Limits() {
   const [panel, setPanel] = useState<Panel>(null)
   const screenRef = useRef<HTMLDivElement>(null)
   const amountRef = useRef<HTMLInputElement>(null)
+  const desk = useDesk()
   const data = useLiveQuery(async () => {
     const [settings, categories, limits, txs] = await Promise.all([
       db.settings.filter(alive).first(),
@@ -259,7 +261,68 @@ export function Limits() {
           {panel?.kind === 'new' && free.length > 0 && (
             <NewLimitCard choices={free} amountRef={amountRef} onClose={() => setPanel(null)} />
           )}
-          {shown.map(({ category, limit }) => {
+          {desk && shown.length > 0 && (
+            // PC (spec §11 «Лимиты — таблица»): category, spent, limit, left, bar, status, «Убрать»; a click on the name edits
+            <table className="dtable" data-flip-key="table">
+              <thead>
+                <tr>
+                  <th>Категория</th>
+                  <th className="num">Потрачено</th>
+                  <th className="num">Лимит</th>
+                  <th className="num">Осталось</th>
+                  <th aria-label="Доля" />
+                  <th>Статус</th>
+                  <th className="ract" aria-label="Действия" />
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(({ category, limit }) => {
+                  const status = limitStatus(limit, data.txs, month)
+                  const editing = panel?.kind === 'edit' && panel.id === limit.id
+                  return [
+                    <tr key={limit.id} aria-label={category.name}>
+                      <td>
+                        <button
+                          type="button"
+                          className="limname cname"
+                          aria-label={`Изменить лимит «${category.name}»`}
+                          aria-expanded={editing}
+                          onClick={() => setPanel(editing ? null : { kind: 'edit', id: limit.id })}
+                        >
+                          <CategoryIcon category={category} size="sm" />
+                          <span className="limname-t">{category.name}</span>
+                        </button>
+                      </td>
+                      <td className="num">{usd(status.spentUsd)}</td>
+                      <td className="num">{usd(limit.monthly_usd)}</td>
+                      <td className="num">{usd(Math.max(0, limit.monthly_usd - status.spentUsd))}</td>
+                      <td>
+                        <span className={`tbar${status.level === 'ok' ? '' : ` ${status.level}`}`} aria-hidden="true">
+                          <i style={{ width: `${Math.min(100, status.share * 100)}%` }} />
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`pill ${status.level}`}>{LEVEL[status.level]}</span>
+                      </td>
+                      <td className="ract">
+                        <button type="button" className="fbtn danger" aria-label={`Убрать лимит «${category.name}»`} onClick={() => void removeLimit(limit)}>
+                          Убрать
+                        </button>
+                      </td>
+                    </tr>,
+                    editing ? (
+                      <tr key={`${limit.id}-edit`}>
+                        <td colSpan={7}>
+                          <EditAmount limit={limit} onClose={() => setPanel(null)} />
+                        </td>
+                      </tr>
+                    ) : null,
+                  ]
+                })}
+              </tbody>
+            </table>
+          )}
+          {!desk && shown.map(({ category, limit }) => {
             const status = limitStatus(limit, data.txs, month)
             const editing = panel?.kind === 'edit' && panel.id === limit.id
             return (

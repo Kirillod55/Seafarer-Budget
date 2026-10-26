@@ -13,6 +13,7 @@ import { curLabel, curName } from '../ui/currencies.ts'
 import { Picker } from '../ui/Picker.tsx'
 import { Segmented } from '../ui/Segmented.tsx'
 import { Sheet, type SheetHandle } from '../ui/Sheet.tsx'
+import { currentLayout } from '../desk/layout.ts'
 import { useToast } from '../ui/Toast.tsx'
 import './record.css'
 
@@ -152,6 +153,7 @@ function RecordForm({
   const { repo } = useApp()
   const toast = useToast()
   const sheet = useRef<SheetHandle>(null)
+  const amountRef = useRef<HTMLInputElement>(null)
   const catLabel = useId()
   const multi = settings.accounts_mode === 'multi'
   const isEdit = existing !== null
@@ -275,6 +277,11 @@ function RecordForm({
     })()
   }
 
+  // PC: a new record opens with the cursor in «Сумма» — «N → сумма → Enter → N …» without the mouse (spec §11)
+  useEffect(() => {
+    if (!isEdit && currentLayout() !== 'phone') amountRef.current?.focus({ preventScroll: true })
+  }, [isEdit])
+
   const enterSaves = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -307,6 +314,7 @@ function RecordForm({
           <div className="fld">
             <label htmlFor="rec-amount">Сумма</label>
             <input
+              ref={amountRef}
               id="rec-amount"
               className="inp num"
               type="text"

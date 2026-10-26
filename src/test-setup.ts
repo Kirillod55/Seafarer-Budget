@@ -2,6 +2,7 @@
 import 'fake-indexeddb/auto'
 import { cleanup, configure } from '@testing-library/react'
 import { afterEach } from 'vitest'
+import { applyLayout } from './desk/layout.ts'
 
 // The full suite runs in parallel workers: under that load a first render (Dexie live queries) can take over the
 // default 1 s, so findBy*/waitFor wait up to 3 s.
@@ -19,5 +20,8 @@ if (typeof window !== 'undefined') {
 
 afterEach(() => {
   cleanup()
-  if (typeof window !== 'undefined') window.scrollTo(0, 0)
+  if (typeof window !== 'undefined') {
+    window.scrollTo(0, 0)
+    applyLayout('phone') // a PC-layout test leaves the phone layout behind it
+  }
 })

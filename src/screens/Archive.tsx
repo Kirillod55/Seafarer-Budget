@@ -7,6 +7,7 @@ import { money } from '@shared/format.ts'
 import type { Account, Category, Goal, Transaction } from '@shared/types.ts'
 import { KIND_TITLE, amounts, capitalize } from '../components/TxRow.tsx'
 import { useApp } from '../context.tsx'
+import { useDesk } from '../desk/layout.ts'
 import { bareCategory } from '../lib/records.ts'
 import { EMPTY_BALANCE } from '../db/repo.ts'
 import { NavBar } from '../nav/NavBar.tsx'
@@ -148,11 +149,14 @@ export function Archive() {
     },
   }
 
+  // PC: one table of everything (spec §11 «Архив — одна таблица»); the rows are collected as they are built
+  const desk = useDesk()
+  const items: { key: Key; p: RowProps }[] = []
+
   /** A row: tile, name and line under it, «Вернуть» / «Удалить», and the confirm line when asked. */
-  const row = (
-    key: Key,
-    p: { icon: ReactNode; name: string; sub: string; onBack(): void; onDelete?(): void; ask: string },
-  ) => (
+  const row = (key: Key, p: RowProps) => {
+    items.push({ key, p })
+    return (
     <div key={key} className="aitem" data-flip-key={key}>
       <div className="arow">
         {p.icon}
@@ -189,6 +193,7 @@ export function Archive() {
       )}
     </div>
   )
+  }
 
   const tile = (Icon: typeof Target) => (
     <span className="ic" style={{ '--c': 'var(--anchor)' } as CSSProperties} aria-hidden="true">
@@ -270,10 +275,16 @@ export function Archive() {
             Здесь то, что ты убрал с глаз. Архивные цели, категории и счета не участвуют в бюджете. Архивные записи
             скрыты из списков, но их сумма остаётся в балансе и отчётах. Вернуть можно в любой момент.
           </p>
-          {section('t', 'Записи', txRows)}
-          {section('g', 'Цели', goalRows)}
-          {section('c', 'Категории', categoryRows)}
-          {section('a', 'Счета', accountRows)}
+          {desk ? (
+            <ArchiveTable items={items} confirm={confirm} setConfirm={setConfirm} />
+          ) : (
+            <>
+              {section('t', 'Записи', txRows)}
+              {section('g', 'Цели', goalRows)}
+              {section('c', 'Категории', categoryRows)}
+              {section('a', 'Счета', accountRows)}
+            </>
+          )}
         </>
       )}
     </div>
@@ -302,5 +313,80 @@ function Section({ id, title, rows, confirm }: { id: string; title: string; rows
         )}
       </div>
     </section>
+  )
+}
+
+interface RowProps {
+  icon: ReactNode
+  name: string
+  sub: string
+  onBack(): void
+  onDelete?(): void
+  ask: string
+}
+
+const TYPE: Record<string, string> = { t: 'Запись', g: 'Цель', c: 'Категория', a: 'Счёт' }
+
+/** PC: name, type, details, «Вернуть» and «Удалить» — the confirm on a line under the row. */
+function ArchiveTable({
+  items,
+  confirm,
+  setConfirm,
+}: {
+  items: { key: Key; p: RowProps }[]
+  confirm: Key | null
+  setConfirm(f: (k: Key | null) => Key | null): void
+}) {
+  if (!items.length) return <p className="label">Архив пуст</p>
+  return (
+    <table className="dtable">
+      <thead>
+        <tr>
+          <th>Название</th>
+          <th>Тип</th>
+          <th>Подробности</th>
+          <th className="ract" aria-label="Действия" />
+        </tr>
+      </thead>
+      <tbody>
+        {items.map(({ key, p }) => [
+          <tr key={key}>
+            <td>
+              <span className="cname">
+                {p.icon}
+                {p.name}
+              </span>
+            </td>
+            <td className="label">{TYPE[key[0]]}</td>
+            <td className="label num">{p.sub}</td>
+            <td className="ract">
+              <button type="button" className="fbtn" onClick={p.onBack}>
+                Вернуть
+              </button>
+              {p.onDelete && (
+                <button type="button" className="fbtn danger" aria-expanded={confirm === key} onClick={() => setConfirm((k) => (k === key ? null : key))}>
+                  Удалить
+                </button>
+              )}
+            </td>
+          </tr>,
+          confirm === key && p.onDelete ? (
+            <tr key={`${key}-conf`} className="confrow">
+              <td colSpan={4}>
+                <div className="row-conf">
+                  <span>{p.ask}</span>
+                  <button type="button" className="fbtn danger" onClick={p.onDelete}>
+                    Удалить
+                  </button>
+                  <button type="button" className="fbtn" onClick={() => setConfirm(() => null)}>
+                    Нет
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ) : null,
+        ])}
+      </tbody>
+    </table>
   )
 }

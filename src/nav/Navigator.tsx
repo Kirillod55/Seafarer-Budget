@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChartPie, Ellipsis, House, Target, type LucideIcon } from '../ui/icons.ts'
+import { useDesk } from '../desk/layout.ts'
 import { useBackSwipe } from './useBackSwipe.ts'
 import './nav.css'
 
@@ -16,7 +17,7 @@ export type Who = 'all' | 'me' | 'partner'
 
 export type Route = { tab: Tab } & (
   | { screen: 'root' }
-  | { screen: 'calendar' }
+  | { screen: 'calendar'; /** PC overview: the day clicked in its month calendar */ day?: string }
   | {
       screen: 'records'
       month: string
@@ -34,6 +35,8 @@ export interface Nav {
   push(r: Route): void
   back(): void
   switchTab(t: Tab): void
+  /** PC menu: this screen alone (the stack starts over), with the one PC section animation. */
+  open(r: Route): void
 }
 
 /** Tabs 0; calendar, limits, accounts, categories, archive 1; «Расходы» 2 (from «Категории» — deeper than them). */
@@ -48,7 +51,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'more', label: 'Ещё', icon: Ellipsis },
 ]
 
-type Transition = 'push' | 'pop' | 'tab' | 'none'
+type Transition = 'push' | 'pop' | 'tab' | 'none' | 'desk'
 /**
  * A stack entry stays mounted while deeper screens are on top of it (hidden, inert, out of flow), so going back
  * shows the same page with its data, local state and scroll position — and the back swipe reveals it underneath.
@@ -66,7 +69,12 @@ interface State {
   tabChanges: number
 }
 
-const ANIM: Record<Transition, string> = { push: ' v-push', pop: ' v-pop', tab: ' v-tab', none: '' }
+const ANIM: Record<Transition, string> = { push: ' v-push', pop: ' v-pop', tab: ' v-tab', none: '', desk: ' v-desk' }
+
+/** The screen's name for CSS (html.desk widths per section): root → its tab, otherwise the screen. */
+export function viewOf(r: Route): string {
+  return r.screen === 'root' ? r.tab : r.screen
+}
 
 const NavContext = createContext<Nav | null>(null)
 /** false while a screen is hidden under a deeper one: its window listeners (scroll, resize) stay off. */
@@ -94,8 +102,11 @@ export function useRoute(): Route {
 export function Navigator({
   renderScreen,
   onNavigate,
+  sidebar,
 }: {
   renderScreen(route: Route): ReactNode
+  /** PC layout: the menu instead of the tabs (Shell passes it: it needs the app context). */
+  sidebar?(route: Route, open: (r: Route) => void): ReactNode
   /** Called on every push / back / tab tap (the shell drops its open record form). */
   onNavigate?(): void
 }) {
@@ -140,10 +151,17 @@ export function Navigator({
     })
   }, [])
 
+  const open = useCallback((route: Route) => {
+    navigated.current?.()
+    const id = ++seq.current
+    setState((s) => ({ stack: [{ id, route, y: 0 }], transition: 'desk', tabChanges: s.tabChanges }))
+  }, [])
+
+  const desk = useDesk()
   const { stack, transition } = state
   const top = stack[stack.length - 1]
   const route = top.route
-  const nav = useMemo<Nav>(() => ({ route, push, back, switchTab }), [route, push, back, switchTab])
+  const nav = useMemo<Nav>(() => ({ route, push, back, switchTab, open }), [route, push, back, switchTab, open])
   underRef.current = stack.length > 1 ? (els.current.get(stack[stack.length - 2].id) ?? null) : null
 
   // When the top screen changes: lower screens keep showing their saved spot inside their fixed box (that is what
@@ -169,7 +187,7 @@ export function Navigator({
   }, [top.id])
 
   useBackSwipe(topEl, {
-    enabled: stack.length > 1,
+    enabled: stack.length > 1 && !desk, // no swipes on the PC
     underRef,
     scrimRef,
     onCommit: () => pop('none'), // the page has already slid away: no second animation
@@ -187,7 +205,9 @@ export function Navigator({
                 if (el) els.current.set(e.id, el)
                 else els.current.delete(e.id)
               }}
-              className={isTop ? `screen${ANIM[transition]}` : 'screen below'}
+              // on the PC every change of section is the same short rise (spec §11 «Одна анимация открытия»)
+              className={isTop ? `screen${desk && transition !== 'none' ? ANIM.desk : ANIM[transition]}` : 'screen below'}
+              data-view={viewOf(e.route)}
               tabIndex={-1}
               inert={!isTop}
               aria-hidden={isTop ? undefined : true}
@@ -200,6 +220,9 @@ export function Navigator({
         })}
         {/* dims the page revealed by the back swipe (opacity only); between it (z 1) and the dragged page (z 2) */}
         <div ref={scrimRef} className="backscrim" aria-hidden="true" />
+        {desk && sidebar ? (
+          sidebar(route, open)
+        ) : (
         <nav className="tabs" aria-label="Разделы">
           {TABS.map(({ id, label, icon: Icon }) => {
             const active = route.tab === id
@@ -220,6 +243,7 @@ export function Navigator({
             )
           })}
         </nav>
+        )}
       </div>
     </NavContext.Provider>
   )

@@ -1,19 +1,27 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
-import '@fontsource-variable/onest'
+import './ui/fonts.css'
 import App from './App'
 import { AppProvider } from './context.tsx'
 import { db } from './db/local.ts'
+import { watchLayout } from './desk/layout.ts'
+import { createUpdater, setAppUpdater, tauriCheck } from './desk/updater.ts'
 import { isDemo } from './dev/is-demo.ts'
 import { createUpdateGate } from './pwa-update.ts'
 import { isTauri } from './runtime.ts'
 import { Shell } from './Shell.tsx'
 import { applyTextScale, applyTheme, loadTheme, watchSystemTheme } from './ui/theme.ts'
 import './styles.css'
+import './desk/desk.css'
 
 // The desktop (Tauri) build ships its own assets; a service worker there would only get in the way.
-if (!isTauri()) {
+if (isTauri()) {
+  // the Windows app updates itself from GitHub Releases (spec §11 «Автообновление»)
+  const updater = createUpdater({ check: tauriCheck })
+  setAppUpdater(updater)
+  updater.start()
+} else {
   // The record sheet (stage 2) sets data-editing="1" on <html> while it is open; until then this is always false.
   const gate = createUpdateGate({
     doc: document,
@@ -24,6 +32,7 @@ if (!isTauri()) {
 }
 
 applyTextScale()
+watchLayout() // html.desk / html.desk-s by the window width, before the first paint
 watchSystemTheme()
 const root = createRoot(document.getElementById('root')!)
 
