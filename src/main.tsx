@@ -5,6 +5,7 @@ import '@fontsource-variable/onest'
 import App from './App'
 import { AppProvider } from './context.tsx'
 import { db } from './db/local.ts'
+import { watchLayout } from './desk/layout.ts'
 import { isDemo } from './dev/is-demo.ts'
 import { createUpdateGate } from './pwa-update.ts'
 import { isTauri } from './runtime.ts'
@@ -24,6 +25,7 @@ if (!isTauri()) {
 }
 
 applyTextScale()
+watchLayout() // html.desk / html.desk-s by the window width, before the first paint
 watchSystemTheme()
 const root = createRoot(document.getElementById('root')!)
 
