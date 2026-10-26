@@ -86,6 +86,42 @@ describe('QuickInput', () => {
     )
   })
 
+  it('new records carry the 1.1 fields explicitly: author owner, not archived', async () => {
+    const { submit, addTransaction } = await setup()
+    submit('кофе 80')
+    await waitFor(() => expect(addTransaction).toHaveBeenCalled())
+    expect(addTransaction.mock.calls[0][0]).toMatchObject({ author: 'owner', archived: false })
+  })
+
+  it('the hint shows only on focus, after an error or after a record (§6)', async () => {
+    const { input, submit } = await setup()
+    const hint = () => document.querySelector('.qhint') as HTMLElement
+    expect(hint().className).not.toContain('show')
+    await waitFor(() => expect(hint().textContent).toMatch(/Сумма, валюта \(₴ по умолчанию\)/))
+
+    fireEvent.focus(input)
+    expect(hint().className).toContain('show')
+    fireEvent.blur(input)
+    expect(hint().className).not.toContain('show')
+
+    submit('кофе')
+    await waitFor(() => expect(hint().className).toContain('err'))
+    expect(hint().className).toContain('show')
+
+    submit('кофе 80')
+    // an expense without «−»: «Записал: Кафе и рестораны · ₴80»
+    await waitFor(() => expect(hint().textContent).toBe('Записал: Кафе и рестораны · ₴80'))
+    expect(hint().className).toContain('show')
+    expect(hint().className).not.toContain('err')
+  })
+
+  it('the send button is the lime arrow up «Записать», never «＋»', async () => {
+    await setup()
+    const send = screen.getByRole('button', { name: 'Записать' })
+    expect(send.className).toContain('qsend')
+    expect(send.textContent).toBe('')
+  })
+
   it('ignores an empty submit', async () => {
     const { submit, addTransaction } = await setup()
     submit('   ')

@@ -31,7 +31,7 @@ async function setup() {
 describe('Shell navigation', () => {
   it('«+ Запись» on Home opens the empty record sheet over Home; «Отмена» closes it', async () => {
     await setup()
-    fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Новая запись' }))
     expect(await screen.findByRole('dialog', { name: 'Новая запись' })).toBeTruthy()
     expect((screen.getByLabelText('Сумма') as HTMLInputElement).value).toBe('')
     expect(document.documentElement.dataset.editing).toBe('1')
@@ -39,7 +39,7 @@ describe('Shell navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(document.documentElement.dataset.editing).toBeUndefined()
-    expect(screen.getByRole('button', { name: '+ Запись' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Новая запись' })).toBeTruthy()
   })
 
   it('tapping a transaction opens it in the sheet; «Удалить запись» → «Удалить» removes it from Home', async () => {
@@ -58,8 +58,8 @@ describe('Shell navigation', () => {
     await setup()
     const tabs = screen.getByRole('navigation', { name: 'Разделы' })
     expect([...tabs.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Главная', 'Отчёт', 'Цели', 'Ещё'])
-    // the sync badge (the toast host has its own, always-present status region)
-    await waitFor(() => expect(document.querySelector('.topbar [role="status"]')).toBeTruthy())
+    // the sync cloud sits in the home header
+    await waitFor(() => expect(document.querySelector('.home-top .syncind[role="img"]')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
     expect(await screen.findByText('Октябрь 2026')).toBeTruthy()
@@ -70,7 +70,7 @@ describe('Shell navigation', () => {
   it('a navigation closes an open record sheet without saving it', async () => {
     const { env } = await setup()
     const before = await env.db.transactions.count()
-    fireEvent.click(await screen.findByRole('button', { name: '+ Запись' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Новая запись' }))
     fireEvent.change(await screen.findByLabelText('Сумма'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

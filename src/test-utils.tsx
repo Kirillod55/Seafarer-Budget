@@ -16,6 +16,7 @@ export function stubScheduler(): Scheduler {
   return {
     kick: vi.fn(),
     stop: vi.fn(),
+    syncNow: vi.fn(async () => status),
     status$: { get: () => status, subscribe: () => () => {} },
   }
 }

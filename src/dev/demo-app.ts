@@ -19,6 +19,7 @@ function demoScheduler(): Scheduler {
   return {
     kick: () => {},
     stop: () => {},
+    syncNow: async () => status,
     status$: { get: () => status, subscribe: () => () => {} },
   }
 }

@@ -2,22 +2,8 @@ import { useEffect, useRef } from 'react'
 import { alive } from '@shared/alive.ts'
 import { money } from '@shared/format.ts'
 import type { Account, Category, Transaction } from '@shared/types.ts'
+import { MONTHS_GEN } from '../ui/dates.ts'
 import { TxRow } from './TxRow.tsx'
-
-const MONTHS_GEN = [
-  'января',
-  'февраля',
-  'марта',
-  'апреля',
-  'мая',
-  'июня',
-  'июля',
-  'августа',
-  'сентября',
-  'октября',
-  'ноября',
-  'декабря',
-]
 
 /** «Сегодня», «21 октября»; another year gets its number: «30 декабря 2025». */
 export function dayTitle(date: string, today: string): string {

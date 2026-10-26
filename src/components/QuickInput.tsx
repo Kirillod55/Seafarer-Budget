@@ -1,9 +1,13 @@
 import { useState, type FormEvent } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { parseMessage } from '@shared/parser.ts'
+import { CURRENCY_SYMBOL } from '@shared/defaults.ts'
 import { useApp } from '../context.tsx'
+import { ArrowUp } from '../ui/icons.ts'
+import './quick-input.css'
 
 const EXAMPLE_HINT = 'Не нашёл сумму. Напишите, например: кофе 80, такси 15 eur, +3000 usd'
 const GOAL_HINT = 'Цели появятся позже. Пока записывайте расходы и доходы: кофе 80'
@@ -15,11 +19,24 @@ interface Feedback {
   text: string
 }
 
+/** The standing hint (shown on focus): the default currency by its sign, or its code. */
+function usageHint(currency: string | undefined): string {
+  const cur = currency ? (CURRENCY_SYMBOL[currency] ?? currency) : '$'
+  return `Сумма, валюта (${cur} по умолчанию) и слово про трату. «+» перед суммой — доход`
+}
+
+/*
+ * Quick input (spec §3 item 5, §6 «Подсказка под строкой ввода»): «кофе 80…» + the lime send button with an arrow up
+ * («＋» is the new record in the header). The hint shows only while the field has focus, after an error or after a
+ * record («Записал: Кафе и рестораны · ₴80» — an expense without «−»).
+ */
 export function QuickInput({ onSaved }: { onSaved?: () => void }) {
   const { db, repo, now } = useApp()
   const [text, setText] = useState('')
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [busy, setBusy] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const defaultCurrency = useLiveQuery(async () => (await db.settings.filter(alive).first())?.default_currency, [db])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -82,12 +99,14 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
         date: parsed.date,
         note: parsed.note,
         source: 'app',
+        author: 'owner',
+        archived: false,
       })
       const category = categories.find((c) => c.id === categoryId)
-      const sign = parsed.kind === 'expense' ? '-' : '+'
+      const sign = parsed.kind === 'income' ? '+' : ''
       setFeedback({
         kind: 'ok',
-        text: `Записано: ${sign}${money(parsed.amount, parsed.currency)} · ${category?.name ?? 'Без категории'}`,
+        text: `Записал: ${category?.name ?? 'Без категории'} · ${sign}${money(parsed.amount, parsed.currency)}`,
       })
       setText('')
       onSaved?.()
@@ -98,28 +117,29 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
     }
   }
 
+  const show = focused || feedback !== null
   return (
-    <form className="quick" onSubmit={submit}>
-      <div className="quick-row">
+    <div className="qwrap">
+      <form className="qform" onSubmit={submit} autoComplete="off">
         <input
-          className="quick-input"
+          className="qinput"
           type="text"
           aria-label="Быстрая запись"
-          placeholder="Например: кофе 80"
+          placeholder="кофе 80, такси 15 eur…"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           autoComplete="off"
           enterKeyHint="done"
         />
-        <button className="btn btn-primary" type="submit" disabled={busy}>
-          Добавить
+        <button className="qsend" type="submit" disabled={busy} aria-label="Записать">
+          <ArrowUp strokeWidth={2.6} aria-hidden="true" />
         </button>
-      </div>
-      {feedback && (
-        <p className={`quick-feedback ${feedback.kind === 'ok' ? 'ok' : 'hint'}`} role="status">
-          {feedback.text}
-        </p>
-      )}
-    </form>
+      </form>
+      <p className={`qhint${show ? ' show' : ''}${feedback?.kind === 'hint' ? ' err' : ''}`} aria-live="polite">
+        {feedback ? feedback.text : usageHint(defaultCurrency)}
+      </p>
+    </div>
   )
 }

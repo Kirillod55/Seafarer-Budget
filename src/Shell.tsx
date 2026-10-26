@@ -1,5 +1,4 @@
 import { Suspense, lazy, type CSSProperties } from 'react'
-import { SyncBadge } from './components/SyncBadge.tsx'
 import { NavBar } from './nav/NavBar.tsx'
 import { Navigator, useNav, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
@@ -35,15 +34,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
   const renderScreen = (route: Route) => {
     switch (route.screen) {
       case 'root':
-        if (route.tab === 'home')
-          return (
-            <>
-              <header className="topbar">
-                <SyncBadge />
-              </header>
-              <Home />
-            </>
-          )
+        if (route.tab === 'home') return <Home />
         if (route.tab === 'report')
           return (
             <Suspense fallback={<p className="splash muted">Загрузка…</p>}>

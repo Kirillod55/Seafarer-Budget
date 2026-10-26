@@ -1,0 +1,70 @@
+/* The sync cloud (prototype v60 .syncind): an indicator, no glass; the badge swaps with a spring. */
+
+.syncind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  color: var(--accent-text);
+  transition: color 0.35s var(--ios);
+}
+
+.syncind svg {
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+}
+
+.syncind.err {
+  color: var(--danger);
+}
+
+.syncind.off {
+  color: var(--muted);
+}
+
+.syncind .bd {
+  opacity: 0;
+  transform: scale(0.4);
+  transform-box: view-box;
+  transform-origin: 18px 18px;
+  transition:
+    opacity 0.3s var(--ios),
+    transform 0.45s var(--spring);
+}
+
+.syncind.ok .b-ok,
+.syncind.err .b-err,
+.syncind.off .b-up,
+.syncind.sync .b-sync {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.syncind .spinr {
+  transform-box: view-box;
+  transform-origin: 18px 18px;
+}
+
+.syncind.syncing .spinr {
+  animation: syncSpin 0.9s linear infinite;
+}
+
+.syncind.pop .b-ok {
+  animation: syncPop 0.5s var(--spring);
+}
+
+@keyframes syncSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes syncPop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}

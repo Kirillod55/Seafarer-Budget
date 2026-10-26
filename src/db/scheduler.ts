@@ -12,6 +12,11 @@ export interface StatusStore {
 
 export interface Scheduler {
   kick(): void
+  /**
+   * Sync right now (pull to refresh): skips the debounce; if a sync is running, one more runs after it.
+   * Resolves with the status once the runs are over (or at once after stop()).
+   */
+  syncNow(): Promise<SchedulerStatus>
   stop(): void
   status$: StatusStore
 }
@@ -31,6 +36,13 @@ export function startScheduler(
   let running = false
   let again = false
   let debounce: ReturnType<typeof setTimeout> | null = null
+  /** syncNow() callers waiting for the current chain of runs to end */
+  let waiters: (() => void)[] = []
+  const settle = () => {
+    const w = waiters
+    waiters = []
+    for (const f of w) f()
+  }
 
   async function run(): Promise<void> {
     if (stopped) return
@@ -51,8 +63,9 @@ export function startScheduler(
     }
     if (again && !stopped) {
       again = false
-      void run()
+      return run()
     }
+    settle()
   }
 
   function kick(): void {
@@ -80,8 +93,21 @@ export function startScheduler(
 
   return {
     kick,
+    syncNow() {
+      if (debounce) {
+        clearTimeout(debounce)
+        debounce = null
+      }
+      return new Promise<SchedulerStatus>((resolve) => {
+        if (stopped) return resolve(status)
+        waiters.push(() => resolve(status))
+        if (running) again = true
+        else void run()
+      })
+    },
     stop() {
       stopped = true
+      settle()
       if (debounce) clearTimeout(debounce)
       clearInterval(poll)
       unsubscribe()

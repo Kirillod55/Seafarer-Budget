@@ -104,4 +104,47 @@ describe('scheduler', () => {
     expect(s.status$.get()).toMatchObject({ state: 'idle', error: null })
     s.stop()
   })
+
+  it('syncNow runs at once (no debounce) and resolves with the status after the run', async () => {
+    const { sync, s } = setup()
+    await vi.advanceTimersByTimeAsync(2000)
+    sync.syncOnce.mockClear()
+    s.kick() // a pending debounced kick is folded into the immediate run
+    const status = await s.syncNow()
+    expect(sync.syncOnce).toHaveBeenCalledTimes(1)
+    expect(status).toMatchObject({ state: 'idle', error: null })
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(sync.syncOnce).toHaveBeenCalledTimes(1)
+    s.stop()
+  })
+
+  it('syncNow during a running sync waits for one more run after it', async () => {
+    let release: () => void = () => {}
+    const sync = {
+      syncOnce: vi.fn(() => new Promise<{ error?: string }>((r) => (release = () => r({})))),
+    }
+    const s = startScheduler(sync, { debounceMs: 10, pollMs: 60000, subscribe: () => () => {} })
+    await vi.advanceTimersByTimeAsync(10)
+    expect(sync.syncOnce).toHaveBeenCalledTimes(1)
+    let done = false
+    const p = s.syncNow().then((st) => {
+      done = true
+      return st
+    })
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sync.syncOnce).toHaveBeenCalledTimes(2)
+    expect(done).toBe(false)
+    release()
+    expect((await p).state).toBe('idle')
+    s.stop()
+  })
+
+  it('syncNow reports an error status and resolves after stop()', async () => {
+    const sync = { syncOnce: vi.fn(async () => ({ error: 'boom' })) }
+    const s = startScheduler(sync, { debounceMs: 10, pollMs: 60000, subscribe: () => () => {} })
+    expect(await s.syncNow()).toMatchObject({ state: 'error', error: 'boom' })
+    s.stop()
+    expect((await s.syncNow()).state).toBe('error')
+  })
 })

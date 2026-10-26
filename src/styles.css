@@ -70,13 +70,6 @@ p {
 
 /* ---------- layout ---------- */
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: calc(env(safe-area-inset-top) + 0.5rem) 1rem 0.25rem;
-}
-
 .page {
   flex: 1;
   padding: 0.5rem 1rem calc(88px + env(safe-area-inset-bottom));
@@ -138,8 +131,7 @@ label {
   margin-bottom: 0.25rem;
 }
 
-.field,
-.quick-input {
+.field {
   width: 100%;
   min-height: var(--tap);
   padding: 0.5rem 0.75rem;
@@ -150,8 +142,7 @@ label {
   border-radius: 12px;
 }
 
-.field:focus,
-.quick-input:focus {
+.field:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -207,73 +198,6 @@ label {
 .choice-btn.active {
   border-color: var(--accent);
   outline: 2px solid var(--accent);
-}
-
-/* ---------- quick input ---------- */
-
-.quick {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  padding: 0.5rem 0;
-  background: var(--bg);
-}
-
-.quick-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.quick-input {
-  min-height: 56px;
-  font-size: 1.15rem;
-  border-width: 2px;
-}
-
-.quick-feedback {
-  margin-top: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  font-size: 0.95rem;
-}
-
-.quick-feedback.ok {
-  color: var(--pos);
-}
-
-.quick-feedback.hint {
-  background: var(--warn-bg);
-}
-
-/* ---------- home ---------- */
-
-.allow {
-  font-weight: 700;
-}
-
-.allow-month {
-  font-size: 1.7rem;
-}
-
-.allow-day {
-  font-size: 1.3rem;
-}
-
-.stats {
-  display: grid;
-  gap: 0.75rem;
-  margin: 0;
-}
-
-.stats dt {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.stats dd {
-  margin: 0;
-  font-size: 1.6rem;
-  font-weight: 700;
 }
 
 /* ---------- transactions ---------- */
@@ -460,35 +384,6 @@ label {
   gap: 0.25rem 1rem;
   font-size: 1.2rem;
   font-weight: 600;
-}
-
-/* ---------- sync badge + nav ---------- */
-
-.sync-badge {
-  font-size: 0.85rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.sync-ok {
-  color: var(--pos);
-}
-
-.sync-wait {
-  color: var(--muted);
-}
-
-.sync-off {
-  color: var(--neg);
-}
-
-.sync-err {
-  color: var(--neg);
-  border-color: var(--neg);
-  max-width: 100%;
-  overflow-wrap: anywhere;
 }
 
 /* ---------- settings ---------- */

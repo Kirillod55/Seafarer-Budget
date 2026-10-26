@@ -1,0 +1,112 @@
+/* Pull to refresh (prototype v60 .ptr): a strip above the page that grows with the finger and folds away. */
+
+.ptr-wrap {
+  position: relative;
+}
+
+.ptr {
+  height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  transition: height 0.5s var(--ios);
+}
+
+.ptr.dragging {
+  transition: none;
+}
+
+.ptr .pi {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  color: var(--accent-text);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 0.3s var(--ios),
+    transform 0.45s var(--spring);
+}
+
+.ptr.dragging .pi {
+  transition: transform 0.45s var(--spring);
+}
+
+.ptr.armed .pi {
+  transform: scale(1.12) !important;
+}
+
+.ptr.loading .pi,
+.ptr.done .pi,
+.ptr.error .pi {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.ptr.error .pi {
+  color: var(--danger);
+}
+
+.ptr .pr,
+.ptr .pk,
+.ptr .px {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  transition:
+    opacity 0.25s var(--ios),
+    transform 0.45s var(--spring);
+}
+
+.ptr .pi svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ptr .pk,
+.ptr .px {
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+.ptr.loading .pr {
+  animation: ptrSpin 0.9s linear infinite;
+}
+
+.ptr.done .pr,
+.ptr.error .pr {
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+.ptr.done .pk,
+.ptr.error .px {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.ptr-text {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptr.error .ptr-text {
+  color: var(--danger);
+}
+
+@keyframes ptrSpin {
+  from {
+    transform: rotate(var(--r0, 0deg));
+  }
+  to {
+    transform: rotate(calc(var(--r0, 0deg) + 360deg));
+  }
+}

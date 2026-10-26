@@ -265,11 +265,6 @@
   padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
 }
 
-.screen > .topbar {
-  padding-left: 0;
-  padding-right: 0;
-}
-
 /* ---------- «Ещё» menu (prototype .group.menu; Task 10 redoes «Ещё») ---------- */
 
 .menu {
