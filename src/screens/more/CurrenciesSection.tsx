@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Settings } from '@shared/types.ts'
 import { curLabel, curOptions } from '../../ui/currencies.ts'
 import { X } from '../../ui/icons.ts'
 import { Picker } from '../../ui/Picker.tsx'
+import { useFlip } from '../../ui/useFlip.ts'
 import { MoreCard, onEnter, useSaveSettings } from './common.tsx'
 
 const CODE = /^[A-Z]{3}$/
@@ -17,6 +18,9 @@ export function CurrenciesSection({ settings }: { settings: Settings }) {
   const save = useSaveSettings(settings)
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
+  const chipsRef = useRef<HTMLDivElement>(null)
+  // a pill added or removed: the others slide to their place, the new one fades in (spec §6 «Плавная перерисовка»)
+  useFlip(chipsRef, [settings.currencies.join(','), settings.default_currency])
   const locked = (c: string) => c === settings.base_currency || c === settings.default_currency
 
   const remove = (c: string) => {
@@ -34,9 +38,9 @@ export function CurrenciesSection({ settings }: { settings: Settings }) {
 
   return (
     <MoreCard title="Валюты">
-      <div className="mchips">
+      <div ref={chipsRef} className="mchips">
         {settings.currencies.map((c) => (
-          <span key={c} className={`tag${locked(c) ? '' : ' has-x'}`}>
+          <span key={c} className={`tag${locked(c) ? '' : ' has-x'}`} data-flip-key={`cur-${c}`}>
             {curLabel(c)}
             {!locked(c) && (
               <button type="button" className="x" aria-label={`Убрать ${c}`} onClick={() => remove(c)}>

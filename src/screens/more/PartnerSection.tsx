@@ -27,10 +27,11 @@ export function PartnerSection({ settings }: { settings: Settings }) {
     if (document.activeElement !== ref.current) setName(settings.partner_name ?? '')
   }, [settings.partner_name])
 
-  const commit = () => {
+  const commit = async () => {
     const next = partnerNameOf(name)
     setName(next ?? '')
-    if (next !== settings.partner_name) void save({ partner_name: next })
+    // a failed save shows the stored name again (the toast says it did not work)
+    if (next !== settings.partner_name && !(await save({ partner_name: next }))) setName(settings.partner_name ?? '')
   }
 
   const shown = partnerLabel(settings.partner_name)
@@ -51,8 +52,8 @@ export function PartnerSection({ settings }: { settings: Settings }) {
           autoCapitalize="words"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onBlur={commit}
-          onKeyDown={onEnter(commit)}
+          onBlur={() => void commit()}
+          onKeyDown={onEnter(() => void commit())}
         />
       </div>
       <div className="mrow">

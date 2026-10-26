@@ -95,6 +95,7 @@
 }
 
 .tag .x {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -106,6 +107,13 @@
   background: var(--track);
   color: var(--muted);
   cursor: pointer;
+}
+
+/* the 36 px circle answers taps ≥ 44 px around it (spec §6: round buttons get an invisible larger area) */
+.tag .x::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .tag .x svg {

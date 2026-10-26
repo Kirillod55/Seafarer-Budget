@@ -62,8 +62,12 @@ beforeEach(() => {
   env = makeEnv()
 })
 
+// the download tests stub these; put the originals back so a throwing stub never leaks into the next test
+const urlFns = { createObjectURL: URL.createObjectURL, revokeObjectURL: URL.revokeObjectURL }
+
 afterEach(() => {
   vi.restoreAllMocks()
+  Object.assign(URL, urlFns)
   document.documentElement.removeAttribute('data-theme')
 })
 
@@ -125,6 +129,24 @@ describe('More: «Бюджет до посадки»', () => {
     renderMore()
     fireEvent.change(await screen.findByLabelText('Дата посадки'), { target: { value: '2026-12-20' } })
     await waitFor(async () => expect((await changed()).next_contract_date).toBe('2026-12-20'))
+    expect((await changed())._changed).toEqual(['next_contract_date'])
+  })
+
+  it('an emptied date field (mid-edit) saves nothing; leaving it empty clears the date', async () => {
+    await seed()
+    await serverSettings({ next_contract_date: '2026-12-20' })
+    renderMore()
+    const field = await screen.findByLabelText('Дата посадки')
+    await waitFor(() => expect((field as HTMLInputElement).value).toBe('2026-12-20'))
+    fireEvent.change(field, { target: { value: '' } })
+    await new Promise((r) => setTimeout(r, 30))
+    expect((await changed()).next_contract_date).toBe('2026-12-20')
+    expect((await changed())._changed).toBeUndefined()
+    fireEvent.change(field, { target: { value: '2026-12-21' } })
+    await waitFor(async () => expect((await changed()).next_contract_date).toBe('2026-12-21'))
+    fireEvent.change(field, { target: { value: '' } })
+    fireEvent.blur(field)
+    await waitFor(async () => expect((await changed()).next_contract_date).toBeNull())
     expect((await changed())._changed).toEqual(['next_contract_date'])
   })
 
@@ -225,9 +247,23 @@ describe('More: «Валюты»', () => {
     await seed()
     renderMore()
     const input = await screen.findByLabelText('Добавить валюту')
+    fireEvent.change(input, { target: { value: 'pln' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(async () => expect((await settingsRow()).currencies).toEqual(['UAH', 'USD', 'EUR', 'MDL', 'PLN']))
+    await waitFor(() => expect((input as HTMLInputElement).value).toBe(''))
     fireEvent.change(input, { target: { value: 'eur' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(await screen.findByText('Такая валюта уже есть')).toBeTruthy()
+  })
+
+  it('each pill is a flip block, so adding or removing one re-flows smoothly', async () => {
+    await seed()
+    renderMore()
+    const chips = (await card('Валюты')).querySelector('.mchips')!
+    await waitFor(() => expect(chips.querySelectorAll('[data-flip-key]').length).toBe(4))
+    expect([...chips.querySelectorAll<HTMLElement>('[data-flip-key]')].map((e) => e.dataset.flipKey)).toEqual([
+      'cur-UAH', 'cur-USD', 'cur-EUR', 'cur-MDL',
+    ])
   })
 
   it('the default currency cannot be removed (no ✕, and USD neither); another one can, writing only currencies', async () => {
@@ -296,6 +332,20 @@ describe('More: «Второй человек в боте»', () => {
     fireEvent.change(name, { target: { value: '  ' } })
     fireEvent.keyDown(name, { key: 'Enter' })
     await waitFor(async () => expect((await settingsRow()).partner_name).toBeNull())
+  })
+
+  it('a failed save puts the stored name back in the field', async () => {
+    await seed()
+    await serverSettings({ partner_name: 'Маша' })
+    renderMore()
+    const name = (await screen.findByLabelText('Имя')) as HTMLInputElement
+    await waitFor(() => expect(name.value).toBe('Маша'))
+    vi.spyOn(env.repo, 'put').mockRejectedValue(new Error('boom'))
+    fireEvent.change(name, { target: { value: 'даша' } })
+    fireEvent.blur(name)
+    expect(await screen.findByText('Не получилось — попробуй ещё раз')).toBeTruthy()
+    await waitFor(() => expect(name.value).toBe('Маша'))
+    expect((await settingsRow()).partner_name).toBe('Маша')
   })
 })
 

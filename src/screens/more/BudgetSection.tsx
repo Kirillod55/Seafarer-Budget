@@ -12,7 +12,8 @@ const fmtReserve = (n: number | null | undefined) => String(n ?? 0)
 /**
  * «Бюджет до посадки» (spec §2, §4; prototype more()): the landing date and the reserve, and under them the live
  * line «= $X в день на N дней, к посадке останется $R» — it follows what is typed before it is saved. The date is
- * saved when picked, the reserve on leaving the field or Enter; each writes only its own field.
+ * saved when a full date is picked (an emptied field clears it on blur), the reserve on leaving the field or
+ * Enter; each writes only its own field.
  */
 export function BudgetSection({
   settings,
@@ -46,10 +47,14 @@ export function BudgetSection({
   const typed = parseAmount(reserve)
   const reserveOk = Number.isFinite(typed) && typed >= 0
 
+  // a native date field reports '' while a part of it is being retyped: only a full date is saved at once;
+  // a field left empty clears the date when it loses focus
   const pickDate = (value: string) => {
     setDate(value)
-    const next = value || null
-    if (next !== settings.next_contract_date) void save({ next_contract_date: next })
+    if (value && value !== settings.next_contract_date) void save({ next_contract_date: value })
+  }
+  const leaveDate = () => {
+    if (!date && settings.next_contract_date) void save({ next_contract_date: null })
   }
 
   const commitReserve = () => {
@@ -75,7 +80,14 @@ export function BudgetSection({
       <div className="grid2">
         <div className="fld">
           <label htmlFor="m-board">Дата посадки</label>
-          <input id="m-board" className="inp" type="date" value={date} onChange={(e) => pickDate(e.target.value)} />
+          <input
+            id="m-board"
+            className="inp"
+            type="date"
+            value={date}
+            onChange={(e) => pickDate(e.target.value)}
+            onBlur={leaveDate}
+          />
         </div>
         <div className="fld">
           <label htmlFor="m-reserve">Запас, $</label>
