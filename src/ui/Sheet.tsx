@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
+import { currentLayout } from '../desk/layout.ts'
 import { createTracker, prefersReducedMotion, project, rubber, spring } from './motion.ts'
 import { lockScroll } from './scrollLock.ts'
 import './sheet.css'
@@ -20,6 +21,19 @@ export interface SheetHandle {
 
 /** How long the closing slide takes (CSS .sheet.closing); the sheet is unmounted after it. */
 const CLOSE_MS = 320
+/** PC: the centred dialog fades out in 0.14 s (spec §11 «Запись — окно по центру»; CSS html.desk .sheet.closing). */
+const DESK_CLOSE_MS = 140
+const desk = () => currentLayout() !== 'phone'
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+
+/** Makes everything else on <body> inert while the sheet is up (not the toasts: «Отменить» stays reachable). */
+function inertOthers(keep: (Element | null)[]): () => void {
+  const others = [...document.body.children].filter(
+    (el): el is HTMLElement => el instanceof HTMLElement && !keep.includes(el) && !el.classList.contains('toast-region') && !el.inert,
+  )
+  others.forEach((el) => (el.inert = true))
+  return () => others.forEach((el) => (el.inert = false))
+}
 /** px/s: synthetic or glitchy touch samples must not fling the spring */
 const MAX_V = 6000
 /** A glass menu (Picker) is open: the sheet does not follow the finger. */
@@ -74,6 +88,7 @@ export function Sheet({
   // the page under it pinned, the update gate held, focus moved in — from the first frame until it has gone
   useLayoutEffect(() => {
     const unlock = lockScroll()
+    const uninert = inertOthers([sheetRef.current, backdropRef.current])
     const html = document.documentElement
     html.dataset.editing = '1'
     let done = false
@@ -81,6 +96,7 @@ export function Sheet({
       if (done) return
       done = true
       unlock()
+      uninert()
       delete html.dataset.editing
     }
     releaseRef.current = release
@@ -101,7 +117,12 @@ export function Sheet({
     springRef.current = null
     releaseRef.current?.()
     const back = returnFocus.current
-    if (back?.isConnected && !back.closest('[inert]')) back.focus({ preventScroll: true })
+    if (back?.isConnected && !back.closest('[inert]') && back !== document.body) back.focus({ preventScroll: true })
+    else if (desk()) {
+      // PC: focus never falls out of the app (spec §11 «Фокус не теряется»): «Новая запись», or the page itself
+      const page = document.querySelector<HTMLElement>('.screen:not(.below)')
+      ;(page?.querySelector<HTMLElement>('.addbtn') ?? page)?.focus({ preventScroll: true })
+    }
     afterRef.current?.()
     onCloseRef.current()
   }, [])
@@ -115,6 +136,12 @@ export function Sheet({
       springRef.current = null
       if (prefersReducedMotion()) {
         finish()
+        return true
+      }
+      if (desk()) {
+        // the dialog: CSS .closing fades it out where it is
+        setClosing(true)
+        timerRef.current = setTimeout(finish, DESK_CLOSE_MS)
         return true
       }
       // after a pull the inline `animation: none` would hide the .closing slide: set it here, from where it is
@@ -211,7 +238,7 @@ export function Sheet({
     }
 
     const start = (x: number, py: number) => {
-      if (finishedRef.current || busyRef.current || menuOpen()) return
+      if (finishedRef.current || busyRef.current || menuOpen() || desk()) return // no pulling on the PC
       if (closingRef.current && !dragClose) return // closing by a button: no catching
       tr.reset()
       tr.add(py)
@@ -368,6 +395,22 @@ export function Sheet({
           if (e.key === 'Escape' && !e.defaultPrevented) {
             e.preventDefault()
             close()
+            return
+          }
+          // Tab goes round inside the sheet
+          if (e.key === 'Tab' && sheetRef.current) {
+            const all = [...sheetRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.closest('[inert]'))
+            if (!all.length) return
+            const first = all[0]
+            const last = all[all.length - 1]
+            const at = document.activeElement
+            if (e.shiftKey && (at === first || at === sheetRef.current)) {
+              e.preventDefault()
+              last.focus()
+            } else if (!e.shiftKey && at === last) {
+              e.preventDefault()
+              first.focus()
+            }
           }
         }}
       >
