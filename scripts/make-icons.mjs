@@ -42,6 +42,31 @@ function inRoundedSquare(x, y, r) {
   return Math.hypot(qx, qy) <= r
 }
 
+// Bitcoin badge (Kirill's pick 2026-10-26, variant 1): in 100-unit icon coords the anchor box is 72 units at (14, 16),
+// and a dark circle r 15 at (77, 23) with a lime ring 3.5 around it carries a lime ₿ (strokes 2.6 in a 24-unit box).
+const BADGE = { cx: 77, cy: 23, r: 15, ring: 3.5 }
+const BTC_SCALE = (BADGE.r * 1.25) / 24
+const BTC_HALF = 2.6 / 2
+const BTC_SEGMENTS = [
+  [8, 5.5, 13.2, 5.5], [13.2, 11.5, 8, 11.5], [8, 11.5, 14, 11.5], [14, 17.9, 8, 17.9], [8, 4, 8, 19.4],
+  [10, 3.2, 10, 5.5], [13, 3.2, 13, 5.5], [10, 17.9, 10, 20.3], [13, 17.9, 13, 20.3],
+]
+const BTC_ARCS = [[13.2, 8.5, 3], [14, 14.7, 3.2]] // right halves of the two bowls
+/** Is the point (u, v) in the ₿ box (24 units) painted? */
+function btc(u, v) {
+  if (BTC_SEGMENTS.some(([ax, ay, bx, by]) => distToSegment(u, v, ax, ay, bx, by) <= BTC_HALF)) return true
+  return BTC_ARCS.some(([cx, cy, r]) => u >= cx && Math.abs(Math.hypot(u - cx, v - cy) - r) <= BTC_HALF)
+}
+/** Colour of the badge at icon coords (x, y in 0..100), or null outside it. */
+function badgeAt(x, y) {
+  const d = Math.hypot(x - BADGE.cx, y - BADGE.cy)
+  if (d > BADGE.r + BADGE.ring) return null
+  if (d > BADGE.r) return BG
+  const u = (x - (BADGE.cx - 12 * BTC_SCALE)) / BTC_SCALE
+  const v = (y - (BADGE.cy - 11.8 * BTC_SCALE)) / BTC_SCALE
+  return btc(u, v) ? BG : FG
+}
+
 // Sidebar proportions: corner 11/34 of the side, the 24-unit anchor box drawn 20/34 of the side.
 const CORNER = 11 / 17
 const GLYPH = 20 / 34
@@ -50,7 +75,7 @@ const GLYPH = 20 / 34
  * @param size   pixels
  * @param opts.corner  corner radius (0..1 of half-size); 0 = full-bleed square (the OS applies its own mask)
  */
-function pixels(size, { corner }) {
+function pixels(size, { corner, scale = 1 }) {
   const rgba = Buffer.alloc(size * size * 4)
   const box = size * GLYPH // anchor viewBox size in pixels
   const off = (size - box) / 2
@@ -65,7 +90,10 @@ function pixels(size, { corner }) {
           const fx = px + (sx + 0.5) / SS
           const fy = py + (sy + 0.5) / SS
           if (!inRoundedSquare((fx / size) * 2 - 1, (fy / size) * 2 - 1, corner)) continue
-          const c = anchor(((fx - off) / box) * 24, ((fy - off) / box) * 24) ? FG : BG
+          // scale < 1 draws the picture smaller around the centre (the round bot avatar keeps the badge inside)
+          const x = 50 + ((fx / size) * 100 - 50) / scale
+          const y = 50 + ((fy / size) * 100 - 50) / scale
+          const c = badgeAt(x, y) ?? (anchor(((x - 14) / 72) * 24, ((y - 16) / 72) * 24) ? FG : BG)
           r += c[0]
           g += c[1]
           b += c[2]
@@ -210,9 +238,9 @@ for (const [name, data] of TAURI_FILES) {
   console.log('wrote src-tauri/icons/' + name)
 }
 
-// Telegram bot avatar (set by hand in @BotFather → /setuserpic): full-bleed, Telegram crops it to a circle and the
-// anchor stays inside it.
+// Telegram bot avatar (setMyProfilePhoto): full-bleed; Telegram crops it to a circle, so the picture is drawn at 82 %
+// and the bitcoin badge stays inside the circle.
 const BOT = fileURLToPath(new URL('../docs/design/', import.meta.url))
 mkdirSync(BOT, { recursive: true })
-writeFileSync(BOT + 'bot-avatar-640.png', render(640, fullBleed))
+writeFileSync(BOT + 'bot-avatar-640.png', render(640, { corner: 0, scale: 0.82 }))
 console.log('wrote docs/design/bot-avatar-640.png')
