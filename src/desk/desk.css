@@ -30,9 +30,16 @@ html.desk .app {
   padding-left: var(--sidew);
 }
 
+/* the scrollbar keeps its place on every page: a tall page and a short one start at the same x */
+html.desk {
+  scrollbar-gutter: stable;
+}
+
+/* every section starts at the same x (Windows Settings style): only the right edge depends on the page,
+   so switching sections in the menu never moves the title or the content sideways */
 html.desk .screen {
   max-width: 1120px;
-  margin: 0 auto;
+  margin: 0;
   padding: 24px 32px 48px;
   display: flex;
   flex-direction: column;
