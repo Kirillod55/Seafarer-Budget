@@ -8,6 +8,7 @@ import type { Author } from '../_shared/types.ts'
 import { WHISPER_MODEL } from '../_shared/groq.ts'
 import type { GroqPort } from '../_shared/groq.ts'
 import { redact } from '../_shared/redact.ts'
+import { safeEqual } from '../_shared/secret.ts'
 import { createStore } from './store.ts'
 
 const TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') ?? ''
@@ -115,7 +116,7 @@ async function deliver(replies: BotReply[]): Promise<void> {
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
-  if (!SECRET || req.headers.get('X-Telegram-Bot-Api-Secret-Token') !== SECRET) {
+  if (!safeEqual(req.headers.get('X-Telegram-Bot-Api-Secret-Token'), SECRET)) {
     return new Response('Unauthorized', { status: 401 })
   }
 

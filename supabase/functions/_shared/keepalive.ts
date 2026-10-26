@@ -9,6 +9,7 @@ import { addDays, localDate } from './dates.ts'
 import { money } from './format.ts'
 import { round2, usdRate } from './fx.ts'
 import { purgeDue, RESTORE_MS } from './wipe.ts'
+import { safeEqual } from './secret.ts'
 import { SOFT_TABLES } from './types.ts'
 import type { Account, Category, FxRate, Goal, GoalMove, Settings, SoftTable, Transaction } from './types.ts'
 
@@ -203,7 +204,7 @@ export async function runKeepalive(deps: KeepaliveDeps, o: KeepaliveOptions): Pr
 /** The HTTP entry: POST with X-Keepalive-Secret only (401 otherwise, nothing done). */
 export async function handleKeepalive(req: Request, deps: KeepaliveDeps, o: KeepaliveOptions, secret: string): Promise<Response> {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
-  if (!secret || req.headers.get('X-Keepalive-Secret') !== secret) return new Response('Unauthorized', { status: 401 })
+  if (!safeEqual(req.headers.get('X-Keepalive-Secret'), secret)) return new Response('Unauthorized', { status: 401 })
   try {
     const r = await runKeepalive(deps, o)
     return new Response(JSON.stringify({ ok: true, ...r }), { status: 200, headers: { 'Content-Type': 'application/json' } })
