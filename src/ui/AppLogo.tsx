@@ -17,10 +17,10 @@ export function AppLogo() {
         <circle cx="12" cy="5" r="2" />
         <path d="M12 7v14M5 12H3a9 9 0 0 0 18 0h-2" />
       </g>
-      <circle cx="77" cy="23" r="18.5" fill="var(--accent)" />
-      <circle cx="77" cy="23" r="15" fill="var(--on-accent)" />
+      <circle cx="73" cy="27" r="16" fill="var(--accent)" />
+      <circle cx="73" cy="27" r="13" fill="var(--on-accent)" />
       <g
-        transform="translate(62.3 8.6) scale(0.78125)"
+        transform="translate(64.88 19.01) scale(0.67708)"
         fill="none"
         stroke="var(--accent)"
         strokeWidth={2.6}

@@ -43,8 +43,8 @@ function inRoundedSquare(x, y, r) {
 }
 
 // Bitcoin badge (Kirill's pick 2026-10-26, variant 1): in 100-unit icon coords the anchor box is 72 units at (14, 16),
-// and a dark circle r 15 at (77, 23) with a lime ring 3.5 around it carries a lime ₿ (strokes 2.6 in a 24-unit box).
-const BADGE = { cx: 77, cy: 23, r: 15, ring: 3.5 }
+// and a dark circle r 13 at (73, 27) with a lime ring 3 around it carries a lime ₿ (strokes 2.6 in a 24-unit box).
+const BADGE = { cx: 73, cy: 27, r: 13, ring: 3 } // fully inside the rounded tile corner
 const BTC_SCALE = (BADGE.r * 1.25) / 24
 const BTC_HALF = 2.6 / 2
 const BTC_SEGMENTS = [
