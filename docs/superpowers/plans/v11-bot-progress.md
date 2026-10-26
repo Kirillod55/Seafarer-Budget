@@ -8,3 +8,4 @@ One line per finished task: stage.task — what — commit.
 - 4.2,4.6–4.13 bot/*.ts: two chats, replies, edits by reply, categories, groups 1–7, /help, /clear, удали <описание> — 1766e53 (+ tests next commit)
 - 4.14 index.ts: PARTNER_CHAT_ID, chat map, sendDocument — d852863
 - 4 stage done; allowance removed; roadmap updated
+- 5.1 groq.ts: request, schema, validation, fallback, cap — e3f2552

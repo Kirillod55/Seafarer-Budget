@@ -40,8 +40,8 @@ describe('validateAi', () => {
   const today = '2026-10-21'
   it('keeps good records and maps them to dates', () => {
     const v = validateAi(answer({ records: [rec({ days_ago: 1, account: 'ProCreditBank' })] }), lists, today)
-    expect(v.records).toEqual([{ kind: 'expense', amount: 100, currency: 'UAH', category: 'Транспорт и такси', account: 'ProCreditBank', date: '2026-10-20', note: 'такси' }])
-    expect(v.dropped).toBe(0)
+    expect(v!.records).toEqual([{ kind: 'expense', amount: 100, currency: 'UAH', category: 'Транспорт и такси', account: 'ProCreditBank', date: '2026-10-20', note: 'такси' }])
+    expect(v!.dropped).toBe(0)
   })
 
   it.each([
@@ -54,14 +54,14 @@ describe('validateAi', () => {
     ['an unknown account', rec({ account: 'Монобанк' })],
   ])('drops %s', (_, r) => {
     const v = validateAi(answer({ records: [r, rec()] }), lists, today)
-    expect(v.records).toHaveLength(1)
-    expect(v.dropped).toBe(1)
+    expect(v!.records).toHaveLength(1)
+    expect(v!.dropped).toBe(1)
   })
 
   it('no more than 20 records', () => {
     const v = validateAi(answer({ records: Array.from({ length: 25 }, () => rec()) }), lists, today)
-    expect(v.records).toHaveLength(20)
-    expect(v.dropped).toBe(5)
+    expect(v!.records).toHaveLength(20)
+    expect(v!.dropped).toBe(5)
   })
 
   it('garbage is not an answer', () => {
