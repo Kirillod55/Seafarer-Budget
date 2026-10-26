@@ -66,7 +66,7 @@ export function nameError(name: string, categories: Category[], self?: string): 
 type Kind = Category['kind']
 
 /*
- * «Новая категория» / «Категория» (edit, from the swipe «Изменить»; spec §4, 2026-10-26) (spec §4 «Категории»; prototype catNewForm()): Расход / Доход, the name (≤ 30, saved with a
+ * «Новая категория» / «Категория» (edit, from the swipe «Изменить», 2026-10-26) — spec §4 «Категории», prototype catNewForm(): Расход / Доход, the name (≤ 30, saved with a
  * capital letter), a colour of 10 (5×2) and a glyph of 18 (6×3) drawn in that colour; «Создать» / «Отмена».
  * `categories` are all not deleted for good — archived and binned included (a repeat of any is refused; the sort
  * goes after all of them). The new category writes its `color` and `glyph`, and the matching emoji as `icon` for
