@@ -2,7 +2,7 @@ import { useRef, useState, type MouseEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { monthReport } from '@shared/calc.ts'
-import { localDate, monthOf } from '@shared/dates.ts'
+import { addDays, localDate, monthOf } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { round2 } from '@shared/fx.ts'
 import type { Account, Category, Transaction } from '@shared/types.ts'
@@ -76,9 +76,14 @@ export function Calendar() {
   if (!data) return <p className="muted pad">Загрузка…</p>
   const { settings, txs, categories, accounts } = data
 
+  // the card never shows a day outside the grid: paging picks today in this month, otherwise the month's day
+  // nearest to today (the last day of a past month, the 1st of a future one)
   const pageMonth = (k: number) => {
     slideFrom(k)
-    setMonth(shiftMonth(shown, k))
+    const next = shiftMonth(shown, k)
+    setMonth(next)
+    const current = monthOf(today)
+    setPicked(next === current ? null : next < current ? addDays(`${shiftMonth(next, 1)}-01`, -1) : `${next}-01`)
   }
 
   const pick = (day: string, e: MouseEvent<HTMLButtonElement>) => {

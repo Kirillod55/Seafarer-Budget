@@ -114,6 +114,26 @@ describe('Calendar: the month grid', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Ноябрь 2026' })).toBeTruthy()
     expect(cell('2026-11-01').disabled).toBe(true)
   })
+
+  it('paging resets the picked day: the card always shows a day of the grid (today back in the current month)', async () => {
+    await seed({}, [{ kind: 'expense', amount: 99, date: '2026-09-30', note: 'сентябрь' }])
+    renderCalendar()
+    await screen.findByRole('heading', { level: 1, name: 'Октябрь 2026' })
+    fireEvent.click(cell('2026-10-05'))
+    expect(within(dayCard()).getByRole('heading', { level: 3 }).textContent).toBe('5 октября')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Предыдущий месяц' }))
+    expect(within(dayCard()).getByRole('heading', { level: 3 }).textContent).toBe('30 сентября')
+    expect(cell('2026-09-30').classList.contains('sel')).toBe(true)
+    expect(within(dayCard()).getByText('Сентябрь')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий месяц' }))
+    expect(cell('2026-10-21').classList.contains('sel')).toBe(true)
+    expect(cell('2026-10-05').classList.contains('sel')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Следующий месяц' }))
+    expect(within(dayCard()).getByRole('heading', { level: 3 }).textContent).toBe('1 ноября')
+  })
 })
 
 describe('Calendar: the day card', () => {
