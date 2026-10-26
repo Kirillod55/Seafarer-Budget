@@ -119,12 +119,16 @@ async function softDelete(db: PGlite, id: string): Promise<Row> {
 
 const time = (v: unknown) => (v as Date).getTime()
 
-describe('v1.1 migration on PGlite', () => {
+// A fresh PGlite with every migration takes ~0.8 s alone and several seconds while the full suite loads all cores:
+// the default 5 s test / 10 s hook timeouts are not a judgement on the SQL here.
+const SLOW = 60_000
+
+describe('v1.1 migration on PGlite', { timeout: SLOW }, () => {
   let db: PGlite
 
   beforeAll(async () => {
     db = await openDb()
-  })
+  }, SLOW)
 
   afterAll(async () => {
     await db?.close()

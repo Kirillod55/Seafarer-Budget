@@ -263,7 +263,7 @@ describe('TxRow and DayGroups', () => {
 
     await waitFor(() => expect(screen.queryByText('Кофе')).toBeNull())
     expect((await env.db.transactions.get('t1'))!.archived).toBe(true)
-    expect(screen.getByText('Запись в архиве')).toBeTruthy()
+    expect(await screen.findByText('Запись в архиве')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
     expect(await screen.findByText('Кофе')).toBeTruthy()
