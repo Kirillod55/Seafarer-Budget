@@ -7,6 +7,7 @@ import { round2, usdRate } from '../fx.ts'
 import type { Account, Author, Category, FxRate, Goal, GoalMove, Limit, Settings, Transaction } from '../types.ts'
 import type { BotReply, BotStore } from './types.ts'
 import type { GroqPort } from '../groq.ts'
+import type { PingInfo } from './ping.ts'
 
 export type Button = { text: string; callback_data: string }
 export type Keyboard = Button[][]
@@ -25,6 +26,8 @@ export interface Ctx {
   groq: boolean
   /** the Groq port, or null without GROQ_API_KEY */
   ai: GroqPort | null
+  /** getWebhookInfo for /ping (index.ts) */
+  pingInfo?: () => Promise<PingInfo>
   /** the user's message being answered (questions are sent as a reply to it) */
   messageId?: number
 }

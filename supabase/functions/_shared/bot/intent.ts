@@ -7,6 +7,7 @@ import { createCategory, CREATE_RE } from './categories.ts'
 import { clearPhrase, deleteByDescription, restoreLatest, startClear } from './clear.ts'
 import * as cmd from './commands.ts'
 import { send } from './ctx.ts'
+import { ping } from './ping.ts'
 import type { Ctx } from './ctx.ts'
 import { convert, CONVERT_RE, exchange, EXCHANGE_RE, rate, RATE_RE, reconcile, RECONCILE_RE, transfer, TRANSFER_RE } from './money.ts'
 import { accountDelete, ACCOUNT_DELETE_RE, PREF_RE, prefPhrase, settingsMenu, SUMMARY_RE, summaryToggle } from './prefs.ts'
@@ -63,15 +64,10 @@ export async function runCommand(ctx: Ctx, c: Command): Promise<BotReply[]> {
     case 'settings': return settingsMenu(ctx)
     case 'clear': return startClear(ctx)
     case 'last': return search(ctx, '/last')
-    case 'ping': return pingHandler(ctx)
+    case 'ping': return ping(ctx, ctx.pingInfo)
   }
 }
 
-/** Replaced by the full /ping of stage 6 (index.ts passes it in). */
-export let pingHandler: (ctx: Ctx) => Promise<BotReply[]> = async (ctx) => [send(ctx, '🏓 На связи')]
-export function setPingHandler(h: (ctx: Ctx) => Promise<BotReply[]>) {
-  pingHandler = h
-}
 
 /**
  * Route one text. `confirmed` is true when a «Сохранить» button re-reads the text.

@@ -12,6 +12,7 @@ import { AI_FAILED, aiAnswer, voice } from './bot/ai.ts'
 import { fallback, route, runCommand } from './bot/intent.ts'
 import type { Command } from './bot/intent.ts'
 import type { GroqPort } from './groq.ts'
+import type { PingInfo } from './bot/ping.ts'
 import { prefCallback } from './bot/prefs.ts'
 import { replyEdit } from './bot/replyEdit.ts'
 import { NEED_APP } from './bot/texts.ts'
@@ -28,6 +29,8 @@ export interface BotOptions {
   groq?: GroqPort | null
   /** downloads a Telegram file (getFile + file URL) for voice messages */
   voiceFile?: (fileId: string) => Promise<Uint8Array>
+  /** getWebhookInfo for /ping */
+  pingInfo?: () => Promise<PingInfo>
 }
 
 function chatMap(chats: Chats): { authorOf: (id: unknown) => Author | null; owner: number; partner: number | null } {
@@ -73,7 +76,7 @@ export async function handleUpdate(
 
   const ctx: Ctx = {
     chatId: chatId as number, author, ownerChatId: map.owner, partnerChatId: map.partner, settings, store, now,
-    today: localDate(now, settings.timezone), uuid, groq: Boolean(opts.groq), ai: opts.groq ?? null, messageId: update?.message?.message_id,
+    today: localDate(now, settings.timezone), uuid, groq: Boolean(opts.groq), ai: opts.groq ?? null, pingInfo: opts.pingInfo, messageId: update?.message?.message_id,
   }
   if (isCallback) return handleCallback(ctx, update.callback_query)
   if (typeof text !== 'string') return voice(ctx, media, opts.voiceFile, (heard) => handleText(ctx, heard))
