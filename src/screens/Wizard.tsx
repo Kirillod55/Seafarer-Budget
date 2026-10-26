@@ -11,7 +11,9 @@ import { parseAmount } from '../lib/amount.ts'
 import { CUR_BASE, curOptions } from '../ui/currencies.ts'
 import { plural } from '../ui/dates.ts'
 import { onEnter as enterRuns } from '../ui/keys.ts'
-import { ChevronRight, CreditCard, Wallet, X } from '../ui/icons.ts'
+import { Check, ChevronRight, CreditCard, Wallet, X } from '../ui/icons.ts'
+import { AuthBrand } from '../desk/AuthBrand.tsx'
+import { useDesk } from '../desk/layout.ts'
 import { Morph } from '../ui/Morph.tsx'
 import { prefersReducedMotion } from '../ui/motion.ts'
 import { Picker } from '../ui/Picker.tsx'
@@ -300,7 +302,8 @@ export function Wizard({ onDone, startAt = 'mode' }: { onDone(): void; startAt?:
   const reserveNum = reserve.trim() === '' ? 0 : parseAmount(reserve)
   const calc = calcLine(opening, date, Number.isFinite(reserveNum) && reserveNum > 0 ? reserveNum : 0, data?.rates ?? [], today)
 
-  return (
+  const desk = useDesk()
+  const main = (
     <main className="wz">
       {!balanceOnly && (
         <>
@@ -436,5 +439,33 @@ export function Wizard({ onDone, startAt = 'mode' }: { onDone(): void; startAt?:
         )}
       </Morph>
     </main>
+  )
+  if (!desk) return main
+  // PC: the steps on the left as in a Windows installer — the current one lit, the passed ones a lime tick (spec §11)
+  const STEPS = ['Режим счетов', 'Остаток', 'Посадка']
+  return (
+    <div className="au">
+      <AuthBrand>
+        {!balanceOnly && (
+          <ol className="au-steps" aria-label="Шаги настройки">
+            {STEPS.map((name, i) => {
+              const n = i + 1
+              const st = n < step ? 'done' : n === step ? 'cur' : ''
+              return (
+                <li key={name} className={st} aria-current={n === step ? 'step' : undefined}>
+                  <span className="au-dot" aria-hidden="true">
+                    {n < step ? <Check strokeWidth={3} /> : n}
+                  </span>
+                  <b>{name}</b>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+      </AuthBrand>
+      <div className="au-main">
+        <div className="au-center">{main}</div>
+      </div>
+    </div>
   )
 }

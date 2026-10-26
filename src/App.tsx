@@ -86,9 +86,11 @@ export default function App() {
   if (auth === 'out') {
     return (
       <Login
-        onLogin={async (email, password) => {
+        onLogin={async (email, password, remember = true) => {
           try {
             const { error } = await client.auth.signInWithPassword({ email, password })
+            // PC «Оставаться в системе» off: the stored session goes when the window closes
+            if (!error && !remember) window.addEventListener('pagehide', clearStoredSession, { once: true })
             if (!error) return null
             return isNetworkError(error) ? NO_CONNECTION : BAD_CREDENTIALS
           } catch (e) {

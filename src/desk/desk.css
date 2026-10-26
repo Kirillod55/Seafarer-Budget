@@ -1250,3 +1250,367 @@ html.desk .mcard > h3 {
   width: 100%;
   accent-color: var(--accent);
 }
+
+/* ---------- sign-in and setup: two panes (spec §11 «Вход и мастер первого запуска на ПК») ---------- */
+
+.au {
+  display: grid;
+  grid-template-columns: minmax(340px, 40%) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.au-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 56px 56px 32px;
+  border-right: 1px solid var(--line);
+  background:
+    radial-gradient(110% 70% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
+    color-mix(in srgb, var(--track) 50%, var(--bg));
+}
+
+.au-logo {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.au-logo svg {
+  width: 30px;
+  height: 30px;
+}
+
+.au-name {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.au-tag {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.au-feats,
+.au-steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.au-feats {
+  gap: 22px;
+  max-width: 420px;
+}
+
+.au-feats li {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: start;
+  gap: 14px;
+}
+
+.au-fi {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--accent-text);
+}
+
+.au-fi svg {
+  width: 19px;
+  height: 19px;
+}
+
+.au-feats b,
+.au-steps b {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.au-feats small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.au-ver {
+  margin: auto 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.au-steps {
+  gap: 6px;
+  max-width: 360px;
+}
+
+.au-steps li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.au-steps li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 25px;
+  top: 44px;
+  width: 2px;
+  height: 16px;
+  border-radius: 1px;
+  background: var(--line);
+}
+
+.au-steps li.done::after {
+  background: var(--accent-text);
+}
+
+.au-steps li.cur {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.au-steps li.done,
+.au-steps li.cur {
+  color: var(--text);
+}
+
+.au-dot {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.au-steps li.cur .au-dot {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+
+.au-steps li.done .au-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.au-dot svg {
+  width: 14px;
+  height: 14px;
+}
+
+.au-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.au-center {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 56px;
+}
+
+.au-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+  animation: auIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes auIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.au-h {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.au-pass {
+  position: relative;
+  display: block;
+}
+
+.au-pass input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.au-eye {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.au-eye:hover {
+  background: var(--track);
+  color: var(--text);
+}
+
+.au-eye svg {
+  width: 17px;
+  height: 17px;
+}
+
+.au-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.au-check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.au-box {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--muted);
+  border-radius: 4px;
+  color: transparent;
+}
+
+.au-box svg {
+  width: 12px;
+  height: 12px;
+}
+
+.au-check input:checked + .au-box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.au-check input:focus-visible + .au-box {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.au-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.au-actions .fbtn {
+  min-width: 120px;
+}
+
+.au-link {
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.au-link:hover {
+  text-decoration: underline;
+}
+
+/* the setup wizard inside the right pane */
+.au .wz {
+  width: 100%;
+  max-width: 560px;
+  min-height: 0;
+  padding: 0;
+  background: none;
+}
+
+.au .wzstep .group.menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  border: 0;
+  background: none;
+}
+
+.au .wzstep .group.menu > button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.au .wzstep .group.menu > button::before {
+  display: none;
+}
+
+.au .wzstep .group.menu > button:hover {
+  border-color: var(--accent-text);
+}
+
+@media (max-width: 1180px) {
+  .au {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+
+  .au-brand {
+    padding: 40px 32px 24px;
+  }
+}
