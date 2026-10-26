@@ -38,7 +38,14 @@ const commands = await call('setMyCommands', {
     { command: 'month', description: 'Итог месяца' },
     { command: 'left', description: 'Сколько можно тратить' },
     { command: 'undo', description: 'Отменить последнюю запись' },
-    { command: 'help', description: 'Как писать боту' },
+    { command: 'ping', description: 'Проверка связи' },
+    { command: 'balance', description: 'Сколько денег' },
+    { command: 'settings', description: 'Настройки бота' },
+    { command: 'week', description: 'Траты за неделю' },
+    { command: 'goals', description: 'Как цели' },
+    { command: 'limits', description: 'Как лимиты' },
+    { command: 'export', description: 'Выгрузка CSV' },
+    { command: 'help', description: 'Как пользоваться ботом и что он умеет' },
   ],
 })
 

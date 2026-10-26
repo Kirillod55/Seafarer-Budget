@@ -46,7 +46,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_AT_RELEASE_STAGE7_WITH_TAURI_SIGNER_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE0ODBFQjM2NzIxODNBOUQKUldTZE9oaHlOdXVBcEJuOGpic3A1enRwMThzQXViZVJ3a205TW04U0g4THN1d0IzRHUwa05GRm4K",
       "endpoints": [
         "https://github.com/Kirillod55/Seafarer-Budget/releases/latest/download/latest.json"
       ],
