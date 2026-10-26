@@ -3,7 +3,8 @@ import { alive } from '@shared/alive.ts'
 import { useApp } from '../context.tsx'
 import { partnerLabel } from '../lib/records.ts'
 import type { Route } from '../nav/Navigator.tsx'
-import { Anchor, Archive, ChartPie, CreditCard, Gauge, House, Settings, Tag, Target, type LucideIcon } from '../ui/icons.ts'
+import { Archive, ChartPie, CreditCard, Gauge, House, Settings, Tag, Target, type LucideIcon } from '../ui/icons.ts'
+import { AppLogo } from '../ui/AppLogo.tsx'
 
 /*
  * The PC menu (spec §11 «Меню слева», «Вид Windows 11»; prototype renderSide): the anchor and «Seafarer Budget»,
@@ -75,7 +76,7 @@ export function Sidebar({ current, onOpen }: { current: SideItem; /** `part`: th
     <aside className="side" aria-label="Разделы">
       <div className="brand">
         <span className="logo" aria-hidden="true">
-          <Anchor strokeWidth={2.2} />
+          <AppLogo />
         </span>
         <span className="bt">Seafarer Budget</span>
       </div>

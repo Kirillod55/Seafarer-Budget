@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { AuthBrand } from '../desk/AuthBrand.tsx'
 import { useDesk } from '../desk/layout.ts'
-import { Anchor, CalendarDays, Check, Eye, EyeOff, MonitorSmartphone, UsersRound } from '../ui/icons.ts'
+import { CalendarDays, Check, Eye, EyeOff, MonitorSmartphone, UsersRound } from '../ui/icons.ts'
 import './record.css'
 import './goals.css'
 import './login.css'
+import { AppLogo } from '../ui/AppLogo.tsx'
 
 /*
  * «Вход» (spec §6 «Все экраны переводятся на эту систему», «вход и мастер — проявление с лёгким масштабом»;
@@ -152,7 +153,7 @@ export function Login({
     <main className="login">
       <form className="login-col rec" onSubmit={submit}>
         <div className="login-logo" aria-hidden="true">
-          <Anchor strokeWidth={2.2} />
+          <AppLogo />
         </div>
         <h1>Seafarer Budget</h1>
         <p className="muted">Войди, чтобы данные синхронизировались между телефоном, компьютером и ботом.</p>

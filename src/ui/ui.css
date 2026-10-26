@@ -966,3 +966,11 @@
 :where(input, select, textarea)::placeholder {
   color: var(--muted);
 }
+
+/* the app mark fills its lime tile (src/ui/AppLogo.tsx); beats the tiles' own `svg` size rules */
+.side .logo svg.applogo,
+.au-logo svg.applogo,
+.login-logo svg.applogo {
+  width: 100%;
+  height: 100%;
+}

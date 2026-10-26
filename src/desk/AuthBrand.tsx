@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Anchor } from '../ui/icons.ts'
+import { AppLogo } from '../ui/AppLogo.tsx'
 
 /*
  * The left pane of the PC sign-in and setup (spec §11 «Вход и мастер первого запуска на ПК»; prototype auBrand): the
@@ -11,7 +11,7 @@ export function AuthBrand({ children }: { children: ReactNode }) {
     <aside className="au-brand">
       <div>
         <span className="au-logo" aria-hidden="true">
-          <Anchor strokeWidth={2.2} />
+          <AppLogo />
         </span>
         <p className="au-name">Seafarer Budget</p>
         <p className="au-tag">Личный бюджет моряка — от рейса до посадки</p>
