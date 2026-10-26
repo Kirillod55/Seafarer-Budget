@@ -35,7 +35,7 @@ export function Donut({
   onPick(i: number): void
 }) {
   const gap = parts.length > 1 ? 2.4 : 0
-  const shown = parts[active ?? 0]
+  const shown = parts[active ?? 0] ?? parts[0]
   let off = 0
   return (
     <div className={`dwrap${active !== null ? ' hl' : ''}`} onMouseLeave={() => onActive(null)}>
