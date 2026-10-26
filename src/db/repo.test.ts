@@ -194,6 +194,66 @@ describe('initDefaults', () => {
   })
 })
 
+describe('addOpening (the wizard from «Остаток» after «Удалить все данные»)', () => {
+  it('writes only opening balances on the default account: settings and accounts stay as they are', async () => {
+    await repo.initDefaults('multi', [{ currency: 'UAH', amount: 100, accountName: 'Карта' }])
+    const settings = (await db.settings.toCollection().first())!
+    await repo.put<Settings>('settings', { id: settings.id, next_contract_date: '2026-12-20', reserve_usd: 500, default_currency: 'USD' })
+    const accountsBefore = await db.accounts.toArray()
+    const settingsBefore = await db.settings.toArray()
+    const card = accountsBefore.find((a) => a.name === 'Карта')!
+    // the default is not the first by sort
+    await repo.put<Account>('accounts', { id: card.id, is_default: false })
+    const cash = await repo.put<Account>('accounts', { name: 'Наличные', aliases: [], is_default: true, archived: false, sort: 1 })
+    const txBefore = await db.transactions.count()
+    onChange.mockClear()
+
+    await repo.addOpening([
+      { currency: 'USD', amount: 300 },
+      { currency: 'EUR', amount: 0 },
+      { currency: 'UAH', amount: 1200.5 },
+    ])
+
+    expect(await db.transactions.count()).toBe(txBefore + 2) // zero skipped
+    const added = (await db.transactions.filter((t) => t.account_id === cash.id).toArray()) as Transaction[]
+    expect(added.map((t) => [t.currency, t.amount]).sort()).toEqual([
+      ['UAH', 1200.5],
+      ['USD', 300],
+    ])
+    for (const t of added) {
+      expect(t).toMatchObject({
+        kind: 'adjustment',
+        account_id: cash.id,
+        note: 'Начальный остаток',
+        date: TODAY,
+        source: 'app',
+        author: 'owner',
+        archived: false,
+        deleted: false,
+        deleted_at: null,
+        deleted_batch: null,
+      })
+    }
+    expect(await db.settings.toArray()).toEqual(settingsBefore)
+    expect((await db.accounts.toArray()).map((a) => a.name).sort()).toEqual(['Карта', 'Наличные']) // no account made
+    expect(onChange).toHaveBeenCalled()
+  })
+
+  it('without a default account it uses the first active one by sort; with none at all it makes «Основной»', async () => {
+    const b = await repo.put<Account>('accounts', { name: 'Б', aliases: [], is_default: false, archived: false, sort: 2 })
+    await repo.put<Account>('accounts', { name: 'Архив', aliases: [], is_default: false, archived: true, sort: 0 })
+    await repo.addOpening([{ currency: 'UAH', amount: 10 }])
+    expect((await db.transactions.toArray())[0]).toMatchObject({ account_id: b.id })
+
+    await db.accounts.clear()
+    await db.transactions.clear()
+    await repo.addOpening([{ currency: 'UAH', amount: 10 }])
+    const accounts = await db.accounts.toArray()
+    expect(accounts).toMatchObject([{ name: 'Основной', is_default: true, archived: false, sort: 0 }])
+    expect((await db.transactions.toArray())[0]).toMatchObject({ account_id: accounts[0].id })
+  })
+})
+
 describe('Dexie upgrade', () => {
   it('v1 database upgrades to v2 with defaults', async () => {
     const name = `repo-test-upgrade-${++n}`

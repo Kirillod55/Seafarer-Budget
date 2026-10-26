@@ -1,0 +1,78 @@
+/*
+ * «Вход» (prototype v60 login(): .center-col with the lime anchor tile, .field, .btn-acc; spec §6). Fields reuse the
+ * record sheet's .rec .fld/.inp. Shows with a light scale (spec §6 «вход и мастер — проявление с лёгким масштабом»).
+ */
+
+.login {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  background: var(--bg);
+}
+
+.login-col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  animation: loginIn 0.42s var(--ios);
+}
+
+@keyframes loginIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+.login-logo {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.login-logo svg {
+  width: 32px;
+  height: 32px;
+}
+
+.login h1 {
+  margin: 0;
+  font-size: 1.647rem; /* 28 */
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.login .muted {
+  margin: 0;
+  font-size: 0.882rem; /* 15 */
+  line-height: 1.4;
+}
+
+.login .btn-acc {
+  width: 100%;
+}
+
+.login .btn-acc:disabled {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-col {
+    animation: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .login .muted {
+    color: var(--text);
+  }
+}

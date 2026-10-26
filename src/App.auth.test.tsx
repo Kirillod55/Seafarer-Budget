@@ -114,7 +114,7 @@ describe('auth state (C1)', () => {
 describe('Login errors (C1)', () => {
   async function submit() {
     render(<App />)
-    fireEvent.change(await screen.findByLabelText('Почта'), { target: { value: 'a@b.c' } })
+    fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'a@b.c' } })
     fireEvent.change(screen.getByLabelText('Пароль'), { target: { value: 'pw' } })
     fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
   }

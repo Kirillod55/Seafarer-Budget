@@ -88,6 +88,13 @@ export interface Repo {
     mode: 'single' | 'multi',
     opening: { currency: string; amount: number; accountName?: string }[],
   ): Promise<void>
+  /**
+   * The wizard's «Остаток» step on its own (after «Удалить все данные», spec §4): opening balances as adjustments
+   * («Начальный остаток», dated today) on the default account — or the first active one by sort, or a new «Основной»
+   * when there is none. Settings and the other accounts are not touched (initDefaults would overwrite them); zero
+   * amounts are skipped.
+   */
+  addOpening(opening: { currency: string; amount: number }[]): Promise<void>
 }
 
 const MAIN_ACCOUNT = 'Основной'
@@ -534,7 +541,39 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     deps.onChange()
   }
 
+  async function addOpening(opening: { currency: string; amount: number }[]): Promise<void> {
+    const date = await today()
+    const rates = await db.fx_rates.toArray()
+    await db.transaction('rw', db.accounts, db.transactions, async () => {
+      const active = (await db.accounts.filter((a) => alive(a) && !a.archived).toArray()).sort((a, b) => a.sort - b.sort)
+      let account = active.find((a) => a.is_default) ?? active[0]
+      if (!account) {
+        account = { id: deps.uuid(), name: MAIN_ACCOUNT, aliases: [], is_default: true, archived: false, sort: 0, deleted: false, dirty: 1 }
+        await db.accounts.put(account)
+      }
+      for (const o of opening) {
+        if (o.amount === 0) continue
+        const tx = buildFrom(rates, {
+          kind: 'adjustment',
+          amount: o.amount,
+          currency: o.currency,
+          account_id: account.id,
+          to_account_id: null,
+          to_amount: null,
+          to_currency: null,
+          category_id: null,
+          date,
+          note: OPENING_NOTE,
+          source: 'app',
+        })
+        await db.transactions.put({ ...tx, dirty: 1 })
+      }
+    })
+    deps.onChange()
+  }
+
   return {
+    addOpening,
     put,
     remove,
     removeCategory,
