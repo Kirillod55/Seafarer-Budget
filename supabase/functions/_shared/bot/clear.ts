@@ -117,7 +117,7 @@ const LAST_WORDS = new Set(['последнюю', 'последняя', 'пос�
 export function clearPhrase(text: string): { scope?: WipeScope; kind?: ClearKind } | null {
   const t = normalize(text)
   if (/^(очисти|почисти)\s+(историю|всё|все|записи)/.test(t)) return {}
-  const m = /^(?:удали|сотри|очисти)\s+(вс[её]|траты|доходы|записи|историю)\b(.*)$/.exec(t)
+  const m = /^(?:удали|сотри|очисти)\s+(вс[её]|траты|доходы|записи|историю)(?![\p{L}\d])(.*)$/u.exec(t)
   if (!m) return null
   const rest = m[2]
   const scope: WipeScope | undefined = /сегодня|сутки|день/.test(rest) ? 'day' : /недел/.test(rest) ? 'week'

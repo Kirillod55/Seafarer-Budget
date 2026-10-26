@@ -220,7 +220,7 @@ export async function prefPhrase(ctx: Ctx, text: string, confirmed: boolean): Pr
 // ---------------------------------------------------------------------------
 // accounts: «удали счёт Монобанк», «закрой счёт прокредит», «убери счёт … в архив»
 // ---------------------------------------------------------------------------
-export const ACCOUNT_DELETE_RE = /^(удали|закрой|убери|архивируй)\s+сч[её]т\b/
+export const ACCOUNT_DELETE_RE = /^(удали|закрой|убери|архивируй)\s+сч[её]т(?![\p{L}\d])/u
 
 function findAccount(words: string[], snap: Snapshot): Account | undefined {
   const live = activeAccounts(snap.accounts)
@@ -358,9 +358,10 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
       if (Math.abs(v) < 0.005) continue
       const r = usdRate(snap.rates, cur, ctx.today)
       await ctx.store.insertTx({
-        id: ctx.uuid(), deleted: false, kind: v > 0 ? 'transfer' : 'adjustment', amount: v > 0 ? v : -v, currency: cur,
+        // a positive rest moves to the main account; a debt is covered from it
+        id: ctx.uuid(), deleted: false, kind: 'transfer', amount: Math.abs(v), currency: cur,
         rate_usd: r ? r.rate : 0, amount_usd: r ? round2(Math.abs(v) * r.rate) : 0, rate_pending: !r || !r.exact,
-        account_id: v > 0 ? acc.id : acc.id, to_account_id: v > 0 ? main.id : null, to_amount: null, to_currency: null, category_id: null,
+        account_id: v > 0 ? acc.id : main.id, to_account_id: v > 0 ? main.id : acc.id, to_amount: null, to_currency: null, category_id: null,
         date: ctx.today, note: `Остаток со счёта «${acc.name}»`, source: 'bot', created_at: ctx.now.toISOString(), author: ctx.author,
         archived: false, deleted_at: null, deleted_batch: null,
       })

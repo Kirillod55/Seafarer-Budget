@@ -19,7 +19,7 @@ export type Command = 'start' | 'help' | 'today' | 'week' | 'month' | 'left' | '
 
 const SLASH = /^\/(start|help|today|week|month|left|undo|balance|goals|limits|export|settings|clear|last|ping)(?:@\w+)?(?:\s|$)/
 
-const FILLERS = /\b(ээ+|эм+|слушай|пожалуйста|пж|плиз|а|ну|скажи|подскажи)\b/g
+const FILLERS = /(?<![\p{L}\d])(ээ+|эм+|слушай|пожалуйста|пж|плиз|а|ну|скажи|подскажи)(?![\p{L}\d])/gu
 const PHRASES: [RegExp, Command][] = [
   [/^(сделай проверку|проверь связь|проверь базу|жива ли база|база жива|ты тут|ты здесь|работаешь|вс[её] работает|пинг|проверка|ping)$/, 'ping'],
   [/^(что сегодня|сколько потратил сегодня|сколько потратила сегодня|траты за сегодня|сегодня)$/, 'today'],
@@ -82,7 +82,7 @@ export async function route(ctx: Ctx, text: string, confirmed = false): Promise<
   const t = normalize(text).replace(/[?!]+$/, '')
 
   if (CREATE_RE.test(t)) return createCategory(ctx, text)
-  if (/^(удали|убери|архивируй)\s+(категорию|цель)\b/.test(t)) return [send(ctx, IN_APP)]
+  if (/^(удали|убери|архивируй)\s+(категорию|цель)(?![\p{L}\d])/u.test(t)) return [send(ctx, IN_APP)]
   if (ACCOUNT_DELETE_RE.test(t)) return accountDelete(ctx, text)
   if (/^верни (удал[её]нное|вс[её])/.test(t)) return restoreLatest(ctx)
   const clear = clearPhrase(text)

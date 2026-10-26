@@ -26,13 +26,13 @@ const EMOJI: Record<string, string> = {
   health: '💊', ticket: '🎬', cart: '🛒', wallet: '💰', tag: '🏷',
 }
 
-export const CREATE_RE = /^(создай|добавь|заведи|сделай|новая|создать|добавить)\s+(новую\s+)?категори[юяи]\b|^хочу отдельно считать\s/
+export const CREATE_RE = /^(создай|добавь|заведи|сделай|новая|создать|добавить)\s+(новую\s+)?категори[юяи](?![\p{L}\d])|^хочу отдельно считать\s/u
 
 export function parseCreate(text: string): { name: string; kind: 'expense' | 'income'; rest: string } | null {
   const t = text.trim().replace(/\s+/g, ' ')
   const low = t.toLowerCase()
   if (!CREATE_RE.test(low)) return null
-  const kind = /\bдоход(ов|а)?\b/.test(low) ? 'income' : 'expense'
+  const kind = /(?<![\p{L}])доход(ов|а)?(?![\p{L}])/u.test(low) ? 'income' : 'expense'
   let name = ''
   let rest = ''
   const q = /["«“]([^"»”]+)["»”]/.exec(t)

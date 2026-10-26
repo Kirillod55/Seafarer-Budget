@@ -29,7 +29,7 @@ function namedMonth(words: string[], today: string): string | null {
 const sumUsd = (txs: Transaction[]) => round2(txs.reduce((s, t) => s + t.amount_usd, 0))
 const exp = (txs: Transaction[]) => txs.filter((t) => t.kind === 'expense')
 
-export const REPORT_RE = /^(сколько|траты|итог|сравни|мои траты|кто сколько|отч[её]т за|расходы)\b/
+export const REPORT_RE = /^(сколько|траты|итог|сравни|мои траты|кто сколько|отч[её]т за|расходы)(?![\p{L}\d])/u
 
 /** A report phrase, or null when the text is not one. */
 export async function report(ctx: Ctx, text: string): Promise<BotReply[] | null> {
@@ -99,7 +99,7 @@ function compare(_ctx: Ctx, snap: Snapshot, month: string): string {
   return [...lines, '', ...rows.map((r) => r.line)].join('\n')
 }
 
-export const SEARCH_RE = /^(найди|найти|поиск|последние|\/last)\b/
+export const SEARCH_RE = /^(найди|найти|поиск|последние|\/last)(?![\p{L}\d])/u
 
 /** «найди такси», «найди 420», «последние 10 записей», /last: up to 10 records of 90 days, newest first. */
 export async function search(ctx: Ctx, text: string): Promise<BotReply[]> {

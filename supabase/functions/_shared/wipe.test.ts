@@ -54,6 +54,12 @@ describe('selectForWipe', () => {
     expect(ids(selectForWipe(set, 'all', 'expense', TODAY))).toEqual(['2026-09-22', '2026-09-23', '2026-10-16', '2026-10-22'])
   })
 
+  it('an author limits the selection to that person (the second person deletes only her own)', () => {
+    const two = [tx('mine', TODAY), tx('hers', TODAY, { author: 'partner' })]
+    expect(selectForWipe(two, 'day', 'all', TODAY, 'partner').map((t) => t.id)).toEqual(['hers'])
+    expect(selectForWipe(two, 'day', 'all', TODAY).map((t) => t.id)).toEqual(['mine', 'hers'])
+  })
+
   it("kind 'income' takes only incomes, 'all' takes every kind", () => {
     const mixed = [
       tx('e', TODAY),

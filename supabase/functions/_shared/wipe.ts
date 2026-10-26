@@ -1,7 +1,7 @@
 // «Удаление данных» and the 24 h undo bin. Pure code shared by the app and the bot (/clear).
 import { alive } from './alive.ts'
 import { addDays } from './dates.ts'
-import type { SoftDeletable, Transaction } from './types.ts'
+import type { Author, SoftDeletable, Transaction } from './types.ts'
 
 export type WipeScope = 'day' | 'week' | 'month' | 'all'
 export type WipeKind = 'expense' | 'income' | 'all'
@@ -16,12 +16,16 @@ export function wipeFrom(scope: WipeScope, today: string): string | null {
   return scope === 'all' ? null : addDays(today, 1 - SPAN[scope])
 }
 
-/** Live transactions of the kind dated in [wipeFrom, today]; future dates are never touched. */
-export function selectForWipe<T extends Transaction>(txs: T[], scope: WipeScope, kind: WipeKind, today: string): T[] {
+/**
+ * Live transactions of the kind dated in [wipeFrom, today]; future dates are never touched.
+ * `author` limits the selection to one person's records (the second person may only delete her own).
+ */
+export function selectForWipe<T extends Transaction>(txs: T[], scope: WipeScope, kind: WipeKind, today: string, author?: Author): T[] {
   const from = wipeFrom(scope, today)
   return txs.filter(
     (t) =>
       alive(t) &&
+      (author === undefined || t.author === author) &&
       (kind === 'all' || t.kind === kind) &&
       t.date <= today &&
       (from === null || t.date >= from),
