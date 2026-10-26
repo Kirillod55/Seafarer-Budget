@@ -17,7 +17,7 @@ export type Who = 'all' | 'me' | 'partner'
 
 export type Route = { tab: Tab } & (
   | { screen: 'root' }
-  | { screen: 'calendar' }
+  | { screen: 'calendar'; /** PC overview: the day clicked in its month calendar */ day?: string }
   | {
       screen: 'records'
       month: string

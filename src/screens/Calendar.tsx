@@ -10,6 +10,7 @@ import { DayGroups, dayTitle } from '../components/DayGroups.tsx'
 import { useApp } from '../context.tsx'
 import { bareCategory } from '../lib/records.ts'
 import { NavBar } from '../nav/NavBar.tsx'
+import { useRoute } from '../nav/Navigator.tsx'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
 import { Morph } from '../ui/Morph.tsx'
 import { prefersReducedMotion, useSlideIn } from '../ui/motion.ts'
@@ -59,9 +60,12 @@ export function Calendar() {
   }, [db])
   useDayTick(now, data?.settings?.timezone)
 
-  // the month on screen and the picked day; null = follow today (it moves at midnight)
-  const [month, setMonth] = useState<string | null>(null)
-  const [picked, setPicked] = useState<string | null>(null)
+  // the month on screen and the picked day; null = follow today (it moves at midnight). The PC overview opens it
+  // on the day clicked there.
+  const route = useRoute()
+  const startDay = route.screen === 'calendar' ? (route.day ?? null) : null
+  const [month, setMonth] = useState<string | null>(startDay && monthOf(startDay))
+  const [picked, setPicked] = useState<string | null>(startDay)
   const [dir, setDir] = useState(1)
   const gridRef = useRef<HTMLDivElement>(null)
   const pickAnim = useRef<Animation | null>(null)
