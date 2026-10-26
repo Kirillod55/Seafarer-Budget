@@ -13,3 +13,8 @@ One line per finished task: stage.task — what — commit.
 - 6.1–6.3 keepalive.ts (reminder, summary, webhook, rates, purge, cleanup, backup, handler) — e9b9ff7
 - 6.4 /ping — 9b8b820
 - 6.5 keepalive Edge Function, workflow, pages.yml, fx batch, README — 21a7a2c, eff7743, fb3163b; stage 6 done
+- merge v1.1 (stage 3) — 1b1b0cd and again at 7d19c96
+- ruling Q1: account delete only empty non-main after «Да · Нет», no undo — 9e9e771
+- ruling Q2: batched resolvePendingRates (fxRatesBatch, 60 dates) — 057d8d5
+- ruling Q3: «Записать» re-asks Groq — noted in roadmap
+- note: src/desk/settings.test.tsx (stage 3) failed once under full-suite load, green alone and on rerun — flaky
