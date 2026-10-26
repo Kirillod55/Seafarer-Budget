@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  allowance,
   balances,
   balanceUsd,
   contractStats,
@@ -258,30 +257,6 @@ describe('monthReport', () => {
   it('handles January -> previous December', () => {
     const r = monthReport([tx({ amount_usd: 4, date: '2025-12-31' })], '2026-01')
     expect(r.prevTotalUsd).toBe(4)
-  })
-})
-
-describe('allowance', () => {
-  it('splits the free money until next contract + salary lag', () => {
-    const a = allowance(
-      3040,
-      settings({ next_contract_date: '2026-11-20', salary_lag_days: 30 }),
-      '2026-10-21',
-    )
-    expect(a).toEqual({ status: 'ok', days: 60, perDay: 50.67, perMonth: 1540.27 })
-  })
-
-  it('no_date without next contract date', () => {
-    expect(allowance(3040, settings(), '2026-10-21')).toEqual({ status: 'no_date' })
-  })
-
-  it('expired when date + lag is not after today', () => {
-    expect(
-      allowance(100, settings({ next_contract_date: '2026-09-20', salary_lag_days: 30 }), '2026-10-21'),
-    ).toEqual({ status: 'expired' })
-    expect(
-      allowance(100, settings({ next_contract_date: '2026-10-01', salary_lag_days: 20 }), '2026-10-21'),
-    ).toEqual({ status: 'expired' })
   })
 })
 

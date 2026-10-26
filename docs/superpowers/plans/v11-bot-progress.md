@@ -6,3 +6,5 @@ One line per finished task: stage.task — what — commit.
 - 4.3–4.4 parser: currency typos, number words/slang, dates, quantity, fuzzy accounts, dictionary — 9166364
 - 4.5 several records per message (multi.ts) — 910f0c3
 - 4.2,4.6–4.13 bot/*.ts: two chats, replies, edits by reply, categories, groups 1–7, /help, /clear, удали <описание> — 1766e53 (+ tests next commit)
+- 4.14 index.ts: PARTNER_CHAT_ID, chat map, sendDocument — d852863
+- 4 stage done; allowance removed; roadmap updated

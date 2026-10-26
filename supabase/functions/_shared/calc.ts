@@ -133,23 +133,6 @@ export function monthReport(txs: Transaction[], month: string): MonthReport {
   }
 }
 
-export type Allowance =
-  | { status: 'ok'; days: number; perDay: number; perMonth: number }
-  | { status: 'no_date' }
-  | { status: 'expired' }
-
-/**
- * How much can be spent per day / per month until the next contract pays out (date + salary lag).
- * @deprecated use dailyBudget — removed in stage 4
- */
-export function allowance(freeUsd: number, s: Settings, today: string): Allowance {
-  if (!s.next_contract_date) return { status: 'no_date' }
-  const days = daysBetween(today, addDays(s.next_contract_date, s.salary_lag_days))
-  if (days <= 0) return { status: 'expired' }
-  const perDay = freeUsd / days
-  return { status: 'ok', days, perDay: round2(perDay), perMonth: round2(perDay * DAYS_PER_MONTH) }
-}
-
 export type DailyBudget =
   | {
       state: 'ok' | 'overspent' | 'reserve'
