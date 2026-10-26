@@ -1,3 +1,4 @@
+import { Sidebar, activeItem, routeOf } from './desk/Sidebar.tsx'
 import { Navigator, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
 import { Archive } from './screens/Archive.tsx'
@@ -53,7 +54,11 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
 
   return (
     <>
-      <Navigator renderScreen={renderScreen} onNavigate={closeRecord} />
+      <Navigator
+        renderScreen={renderScreen}
+        onNavigate={closeRecord}
+        sidebar={(route, open) => <Sidebar current={activeItem(route)} onOpen={(item) => open(routeOf(item))} />}
+      />
       {/* the one toast host: screens call useToast() */}
       <ToastHost />
     </>
