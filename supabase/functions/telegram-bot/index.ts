@@ -71,6 +71,13 @@ const groq: GroqPort | null = GROQ_API_KEY
   }
   : null
 
+/** getWebhookInfo for /ping. */
+async function pingInfo() {
+  const res = await fetch(`https://api.telegram.org/bot${TOKEN}/getWebhookInfo`)
+  const json = await res.json().catch(() => null)
+  return { webhook: res.ok ? (json?.result ?? null) : null, webhookUrl: `${Deno.env.get('SUPABASE_URL')}/functions/v1/telegram-bot` }
+}
+
 /** getFile + download of a voice message (Telegram keeps the token in the URL: never log it). */
 async function voiceFile(fileId: string): Promise<Uint8Array> {
   const meta = await fetch(`https://api.telegram.org/bot${TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`)
@@ -119,7 +126,7 @@ Deno.serve(async (req: Request) => {
     if (!known) console.log(`update from chat ${chatId} (not a known chat)`) // how Kirill finds Masha's chat id
 
     try {
-      const replies = await handleUpdate(update, CHATS, store, new Date(), () => crypto.randomUUID(), { groq, voiceFile })
+      const replies = await handleUpdate(update, CHATS, store, new Date(), () => crypto.randomUUID(), { groq, voiceFile, pingInfo })
       await deliver(replies)
     } catch (e) {
       console.error('handleUpdate failed:', safe(e))

@@ -1,0 +1,71 @@
+# Daily ping of the Supabase project (spec §10): 07:17 and 19:17 UTC (odd minutes: GitHub delays the top of the hour).
+# Up to 3 tries 60 s apart; when all fail, Kirill and Masha get a Telegram message straight from here (works while
+# Supabase sleeps) and the job fails (GitHub e-mails Kirill). On the 1st of the month a commit to .github/keepalive
+# keeps scheduled workflows from being disabled after 60 days without changes.
+# Repository secrets: KEEPALIVE_URL (https://<project>.supabase.co/functions/v1/keepalive), KEEPALIVE_SECRET,
+# TELEGRAM_BOT_TOKEN, OWNER_CHAT_ID, PARTNER_CHAT_ID (optional).
+name: Keepalive
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+    - cron: '17 19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Ping the keepalive function (3 tries)
+        id: ping
+        env:
+          URL: ${{ secrets.KEEPALIVE_URL }}
+          SECRET: ${{ secrets.KEEPALIVE_SECRET }}
+        run: |
+          for i in 1 2 3; do
+            if curl --fail --silent --show-error --max-time 60 -X POST -H "X-Keepalive-Secret: $SECRET" "$URL" > /dev/null; then
+              echo "ok on try $i"; exit 0
+            fi
+            [ "$i" -lt 3 ] && sleep 60
+          done
+          exit 1
+
+      - name: Tell Kirill and Masha in Telegram
+        if: failure() && steps.ping.outcome == 'failure'
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          OWNER: ${{ secrets.OWNER_CHAT_ID }}
+          PARTNER: ${{ secrets.PARTNER_CHAT_ID }}
+        run: |
+          TEXT='⚠️ База не отвечает — зайди в Supabase и нажми Restore: https://supabase.com/dashboard/project/qvhernqypfbototyisfr'
+          for CHAT in "$OWNER" "$PARTNER"; do
+            [ -n "$CHAT" ] && curl --silent --max-time 30 -o /dev/null "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${CHAT}" --data-urlencode "text=${TEXT}" || true
+          done
+
+  monthly-commit:
+    # the 60-day rule: a commit on the 1st keeps the schedule alive (pages.yml ignores this path)
+    if: github.event_name == 'schedule' && github.event.schedule == '17 7 * * *'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Is it the 1st?
+        id: day
+        run: echo "first=$([ "$(date -u +%d)" = "01" ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.day.outputs.first == 'yes'
+        with:
+          ref: main
+      - name: Commit .github/keepalive
+        if: steps.day.outputs.first == 'yes'
+        run: |
+          date -u +%Y-%m-%d > .github/keepalive
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/keepalive
+          git commit -m 'chore: keepalive' && git push origin HEAD:main || echo 'nothing to commit'
