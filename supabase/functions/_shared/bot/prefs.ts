@@ -14,6 +14,7 @@ import { answer, edit } from './callbacks.ts'
 import type { Query } from './callbacks.ts'
 import { activeAccounts, byShort, dayMonth, defaultAccount, isMulti, load, partnerName, send, short, toOwner, usd, usdWhole } from './ctx.ts'
 import type { Ctx, Keyboard, Snapshot } from './ctx.ts'
+import { ONLY_OWNER_ACCOUNTS } from './texts.ts'
 import { restorePatch } from './types.ts'
 import type { BotReply } from './types.ts'
 
@@ -245,6 +246,7 @@ function deleteBlocker(acc: Account, snap: Snapshot, today: string): string | nu
 }
 
 export async function accountDelete(ctx: Ctx, text: string): Promise<BotReply[]> {
+  if (ctx.author !== 'owner') return [send(ctx, ONLY_OWNER_ACCOUNTS)]
   if (!isMulti(ctx.settings)) return [send(ctx, 'Счета — в режиме «Несколько счетов» (включается в приложении)')]
   const t = normalize(text)
   if (/архив/.test(t)) return [send(ctx, 'Архив счетов — в приложении: там его видно и можно вернуть')]
@@ -348,7 +350,8 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
     await ctx.store.update('accounts', acc.id, { deleted: true })
     return [answer(q, 'Отменено'), edit(ctx, q, `Отменено: счёт «${acc.name}» удалён`)]
   }
-  // acd: «Да» — checked again, deleted for good
+  // acd: «Да» — checked again, deleted for good (owner only)
+  if (ctx.author !== 'owner') return [answer(q), edit(ctx, q, ONLY_OWNER_ACCOUNTS)]
   const blocker = deleteBlocker(acc, snap, ctx.today)
   if (blocker) return [answer(q), edit(ctx, q, blocker)]
   await ctx.store.update('accounts', acc.id, { deleted: true })

@@ -339,14 +339,14 @@ describe('/clear and «удали <описание>» (spec §4, §5)', () => {
     expect(s.txRows.find((t) => t.id === 'b')!.deleted_at).toBeNull()
   })
 
-  it('several matches → buttons; «последнюю»; none; Masha sees only hers', async () => {
+  it('several matches → buttons; «последнюю»; none; Masha hears Kirill’s are his', async () => {
     const s = new MemStore()
     seed(s)
     const many = await run(s, msg('удали кофе'))
     expect(textOf(many)).toContain('Нашёл 2 записи, какую удалить?')
     expect(textOf(await run(s, msg('удали последнюю трату на кофе')))).toContain('21 октября')
     expect(textOf(await run(s, msg('удали атб 999')))).toBe('Не нашёл такую запись. Последние записи: /last')
-    expect(textOf(await run(s, msg('удали кофе', PARTNER)))).toBe('Не нашёл такую запись. Последние записи: /last')
+    expect(textOf(await run(s, msg('удали кофе', PARTNER)))).toBe('Это запись Кирилла — удалить её может только он')
     expect(textOf(await run(s, msg('удали кафе 10')))).toContain('Удалить? Кафе и рестораны · кофе · $10')
   })
 })

@@ -13,6 +13,7 @@ import { categoryOf, dayMonth, expired, load, minuteOf, records, send, usd } fro
 import type { Ctx, Keyboard, Snapshot } from './ctx.ts'
 import { answer, edit } from './callbacks.ts'
 import type { Query } from './callbacks.ts'
+import { NOT_HER_RECORD } from './texts.ts'
 import { restorePatch } from './types.ts'
 import type { BotReply } from './types.ts'
 
@@ -155,13 +156,18 @@ export async function deleteByDescription(ctx: Ctx, text: string): Promise<BotRe
   const from = addDays(ctx.today, -29)
   let found = snap.txs.filter((t) =>
     (t.kind === 'expense' || t.kind === 'income') &&
-    (ctx.author === 'owner' || t.author === ctx.author) &&
     (d.date ? t.date === d.date : t.date >= from && t.date <= ctx.today) &&
     (!amount || (t.amount === amount.value && (!amount.currency || t.currency === amount.currency))) &&
     words.every((w) => (cat && t.category_id === cat.id && (matchCategory([w], snap.categories) ?? matchDictionary([w], snap.categories))?.id === cat.id) ||
       t.note.toLowerCase().includes(w)))
   found.sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at))
   if (last) found = found.slice(0, 1)
+  if (ctx.author !== 'owner') {
+    // Masha deletes only her own records; Kirill's matches get an explanation (ruling 2026-10-26)
+    const hers = found.filter((t) => t.author === ctx.author)
+    if (hers.length === 0 && found.length > 0) return [send(ctx, NOT_HER_RECORD)]
+    found = hers
+  }
 
   const m = minuteOf(ctx.now)
   if (found.length === 0) return [send(ctx, 'Не нашёл такую запись. Последние записи: /last')]

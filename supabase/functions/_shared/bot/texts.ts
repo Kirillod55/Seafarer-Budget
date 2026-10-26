@@ -5,6 +5,10 @@ import type { Ctx } from './ctx.ts'
 
 export const NEED_APP = 'Сначала открой приложение — оно создаст настройки, и тогда бот заработает.'
 export const IN_APP = 'Это делается в приложении — там видно и можно отменить.'
+/** Deleting is the owner's (ruling 2026-10-26): what Masha hears instead. */
+export const ONLY_OWNER_ACCOUNTS = 'Удалять счета может только Кирилл'
+export const ONLY_OWNER_CATEGORIES = 'Удалять категории может только Кирилл'
+export const NOT_HER_RECORD = 'Это запись Кирилла — удалить её может только он'
 export const SHORT_HELP = 'Не вижу суммы. Например: кофе 80\nВся инструкция — /help'
 
 export function helpText(ctx: Ctx, greeting = false): string {

@@ -13,7 +13,7 @@ import { convert, CONVERT_RE, exchange, EXCHANGE_RE, rate, RATE_RE, reconcile, R
 import { accountDelete, ACCOUNT_DELETE_RE, PREF_RE, prefPhrase, settingsMenu, SUMMARY_RE, summaryToggle } from './prefs.ts'
 import { writeRecords } from './records.ts'
 import { report, REPORT_RE, search, SEARCH_RE } from './reports.ts'
-import { helpText, IN_APP, SHORT_HELP } from './texts.ts'
+import { helpText, IN_APP, ONLY_OWNER_CATEGORIES, SHORT_HELP } from './texts.ts'
 import type { BotReply } from './types.ts'
 
 export type Command = 'start' | 'help' | 'today' | 'week' | 'month' | 'left' | 'undo' | 'balance' | 'goals' | 'limits' |
@@ -79,6 +79,7 @@ export async function route(ctx: Ctx, text: string, confirmed = false): Promise<
   const t = normalize(text).replace(/[?!]+$/, '')
 
   if (CREATE_RE.test(t)) return createCategory(ctx, text)
+  if (/^(удали|убери)\s+категорию(?![\p{L}\d])/u.test(t) && ctx.author !== 'owner') return [send(ctx, ONLY_OWNER_CATEGORIES)]
   if (/^(удали|убери|архивируй)\s+(категорию|цель)(?![\p{L}\d])/u.test(t)) return [send(ctx, IN_APP)]
   if (ACCOUNT_DELETE_RE.test(t)) return accountDelete(ctx, text)
   if (/^верни (удал[её]нное|вс[её])/.test(t)) return restoreLatest(ctx)
