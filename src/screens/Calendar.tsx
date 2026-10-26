@@ -127,10 +127,10 @@ export function Calendar() {
         title={title}
         aside={
           <span className="cal-arrows">
-            <button type="button" className="cal-arrow" aria-label="Предыдущий месяц" onClick={() => pageMonth(-1)}>
+            <button type="button" className="round-btn" aria-label="Предыдущий месяц" onClick={() => pageMonth(-1)}>
               <ChevronLeft aria-hidden="true" strokeWidth={2.4} />
             </button>
-            <button type="button" className="cal-arrow" aria-label="Следующий месяц" onClick={() => pageMonth(1)}>
+            <button type="button" className="round-btn" aria-label="Следующий месяц" onClick={() => pageMonth(1)}>
               <ChevronRight aria-hidden="true" strokeWidth={2.4} />
             </button>
           </span>

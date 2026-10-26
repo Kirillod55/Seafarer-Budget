@@ -4,9 +4,6 @@ import { Shell } from './Shell.tsx'
 import { useToast } from './ui/Toast.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from './test-utils.tsx'
 
-// Recharts has no size in jsdom.
-vi.mock('./components/SpendPie.tsx', () => ({ SpendPie: () => null }))
-
 async function setup() {
   const env = makeEnv()
   await env.repo.initDefaults('single', [{ currency: 'USD', amount: 100 }])
@@ -62,7 +59,7 @@ describe('Shell navigation', () => {
     await waitFor(() => expect(document.querySelector('.home-top .syncind[role="img"]')).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'Отчёт' }))
-    expect(await screen.findByText('Октябрь 2026')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Октябрь 2026' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Цели' }))
     expect(await screen.findByRole('heading', { name: 'Цели' })).toBeTruthy()
   })

@@ -11,10 +11,21 @@ import './nav.css'
 
 export type Tab = 'home' | 'report' | 'goals' | 'more'
 
+/** «Все / Я / Маша» in the report and «Расходы» (spec §9): everyone, the owner, the second person. */
+export type Who = 'all' | 'me' | 'partner'
+
 export type Route = { tab: Tab } & (
   | { screen: 'root' }
   | { screen: 'calendar' }
-  | { screen: 'records'; month: string; category: string | null; from: 'report' | 'cats' }
+  | {
+      screen: 'records'
+      month: string
+      /** a category id ('uncategorized' = expenses without one); null = all */
+      category: string | null
+      from: 'report' | 'cats'
+      /** whose expenses («Все / Я / Маша»): the report passes its own choice; unset = all */
+      who?: Who
+    }
   | { screen: 'limits' | 'accounts' | 'cats' | 'archive' }
 )
 

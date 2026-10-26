@@ -1,162 +1,282 @@
-import { useState } from 'react'
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { monthReport } from '@shared/calc.ts'
-import { localDate, monthOf, prevMonth } from '@shared/dates.ts'
+import { categoryStyle } from '@shared/defaults.ts'
+import { localDate, monthOf } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
-import { SpendPie, type PieSlice } from '../components/SpendPie.tsx'
+import { round2 } from '@shared/fx.ts'
+import { Donut, type DonutPart } from '../components/Donut.tsx'
+import { TxRow, capitalize } from '../components/TxRow.tsx'
 import { useApp } from '../context.tsx'
+import { NavBar } from '../nav/NavBar.tsx'
+import { useNav, type Who } from '../nav/Navigator.tsx'
+import { prefersReducedMotion } from '../ui/motion.ts'
+import { MONTHS_IN, MONTHS_NOM, monthTitle, plural, shiftMonth } from '../ui/dates.ts'
+import { ChevronLeft, ChevronRight } from '../ui/icons.ts'
+import { Segmented } from '../ui/Segmented.tsx'
+import { useDayTick } from './Home.tsx'
+import { UNCATEGORIZED, byWho, categoryOf, partnerLabel, whoOptions } from './Records.tsx'
+import { useRecordSheet } from './RecordSheet.tsx'
+import './report.css'
 
-const MONTHS = [
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
-]
-// «в сентябре» — prepositional case
-const MONTHS_IN = [
-  'январе',
-  'феврале',
-  'марте',
-  'апреле',
-  'мае',
-  'июне',
-  'июле',
-  'августе',
-  'сентябре',
-  'октябре',
-  'ноябре',
-  'декабре',
-]
-const PALETTE = ['#4c8dff', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#eab308', '#6366f1', '#84cc16']
+const IOS = 'cubic-bezier(.32,.72,0,1)'
 
-const monthIndex = (month: string) => Number(month.slice(5, 7)) - 1
-const monthTitle = (month: string) => `${MONTHS[monthIndex(month)]} ${month.slice(0, 4)}`
-
-function nextMonth(month: string): string {
-  const [y, m] = month.split('-').map(Number)
-  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7)
+/** The pill under the month total: «↓ на 17% меньше, чем в сентябре». */
+function comparison(total: number, prev: number, prevMonthKey: string): { text: string; cls: string } {
+  const inPrev = MONTHS_IN[Number(prevMonthKey.slice(5, 7)) - 1]
+  if (prev === 0) return { text: `В ${inPrev} трат не было`, cls: '' }
+  const d = Math.round(((total - prev) / prev) * 100)
+  if (d === 0) return { text: `Как в ${inPrev}`, cls: '' }
+  return d > 0
+    ? { text: `↑ на ${d}% больше, чем в ${inPrev}`, cls: ' over' }
+    : { text: `↓ на ${-d}% меньше, чем в ${inPrev}`, cls: ' ok' }
 }
 
-function comparison(total: number, prev: number, prevMonthKey: string): string {
-  const inPrev = MONTHS_IN[monthIndex(prevMonthKey)]
-  if (prev === 0) return `В ${inPrev} трат не было`
-  const pct = Math.round((Math.abs(total - prev) / prev) * 100)
-  if (pct === 0) return `Столько же, сколько в ${inPrev}`
-  return `на ${pct}% ${total > prev ? 'больше' : 'меньше'}, чем в ${inPrev}`
-}
+const Go = () => (
+  <span className="go" aria-hidden="true">
+    <ChevronRight strokeWidth={2.2} />
+  </span>
+)
 
-const shortDate = (date: string) => `${date.slice(8)}.${date.slice(5, 7)}`
-
+/*
+ * «Отчёт» (spec §6 «Отчёт — переделан», §9 «Отчёт»; prototype report()): ‹ Сентябрь / Ноябрь › page the month
+ * (the content slides that way); the «Расходы по категориям» card — the ring, «Все / Я / Маша» under it, category
+ * rows (dot, name, sum, %, a bar of the share; in «Все» also «Я $141 · Маша $54»); a sector or a row opens
+ * «Расходы» of that category. Tiles 2 × 2 (the ones with «›» are buttons): the month total with the comparison
+ * (opens «Расходы»), the daily average, the largest expense (opens it in the record sheet), «Я / Маша» — or
+ * «Записей» for one person. Then «Самые крупные траты» as rows. Archived records count everywhere in the sums but
+ * are not listed.
+ */
 export function Report() {
   const { db, now } = useApp()
+  const nav = useNav()
+  const { openRecord } = useRecordSheet()
   const data = useLiveQuery(async () => {
-    const [settings, txs, categories] = await Promise.all([
+    const [settings, txs, categories, accounts] = await Promise.all([
       db.settings.filter(alive).first(),
       db.transactions.filter(alive).toArray(),
       db.categories.toArray(),
+      db.accounts.toArray(),
     ])
-    return { settings, txs, categories }
+    return { settings, txs, categories, accounts }
   }, [db])
+  useDayTick(now, data?.settings?.timezone)
+
+  // null = follow the current month
   const [chosen, setChosen] = useState<string | null>(null)
+  const [who, setWho] = useState<Who>('all')
+  const [active, setActive] = useState<number | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const topId = useId()
+  const slide = useRef(0)
+
+  const today = localDate(now(), data?.settings?.timezone ?? 'UTC')
+  const current = monthOf(today)
+  const month = chosen ?? current
+
+  // ‹ ›: the cards slide in from the side the month was paged to
+  useLayoutEffect(() => {
+    const d = slide.current
+    const el = gridRef.current
+    slide.current = 0
+    if (!d || !el || prefersReducedMotion() || typeof el.animate !== 'function') return
+    el.animate([{ opacity: 0, transform: `translateX(${d * 28}px)` }, { opacity: 1, transform: 'none' }], {
+      duration: 420,
+      easing: IOS,
+    })
+  }, [month])
 
   if (!data) return <p className="muted pad">Загрузка…</p>
-  const { settings, txs, categories } = data
+  const { settings, txs, categories, accounts } = data
   if (!settings) return <p className="muted pad">Сначала завершите настройку</p>
 
-  const current = monthOf(localDate(now(), settings.timezone))
-  const month = chosen ?? current
-  const prev = prevMonth(month)
-  const report = monthReport(txs, month)
+  const page = (k: number) => {
+    slide.current = k
+    setActive(null)
+    setChosen(shiftMonth(month, k))
+  }
+  const pickWho = (w: Who) => {
+    setActive(null)
+    setWho(w)
+  }
+  const openRecords = (category: string | null) =>
+    nav.push({ tab: nav.route.tab, screen: 'records', month, category, from: 'report', who })
+
+  const partner = partnerLabel(settings.partner_name)
+  const [y, m] = month.split('-').map(Number)
+  const prev = shiftMonth(month, -1)
+  const report = monthReport(byWho(txs, who), month)
+  const total = report.totalUsd
+  const cmp = comparison(total, report.prevTotalUsd, prev)
+
+  // her share of each category and of the month (for «Все»)
+  const her = monthReport(byWho(txs, 'partner'), month)
+  const herBy = new Map(her.byCategory.map((c) => [c.categoryId, c.usd]))
+  const herTotal = her.totalUsd
+  const meTotal = round2(total - herTotal)
+
   const byId = new Map(categories.map((c) => [c.id, c]))
-  const rows = report.byCategory.map((c, i) => {
-    const cat = byId.get(c.categoryId)
-    return {
-      ...c,
-      name: cat?.name ?? 'Без категории',
-      icon: cat?.icon ?? '•',
-      color: PALETTE[i % PALETTE.length],
-    }
+  const rows = report.byCategory.map((c) => {
+    const category = categoryOf(c.categoryId, byId)
+    return { ...c, category, color: categoryStyle(category).color }
   })
-  const slices: PieSlice[] = rows.map((r) => ({ name: r.name, value: r.usd, color: r.color }))
+  const parts: DonutPart[] = rows.map((r) => ({ key: r.categoryId, label: r.category.name, value: r.usd, color: r.color }))
+  const pick = (i: number) => openRecords(rows[i]?.categoryId ?? null)
+
+  const monthTxs = byWho(txs, who).filter((t) => t.kind === 'expense' && monthOf(t.date) === month)
+  const daysIn = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const daysGone = month === current ? Number(today.slice(8)) : month < current ? daysIn : 0
+  const largest = report.top[0]
+  const largestCat = largest ? categoryOf(largest.category_id ?? UNCATEGORIZED, byId) : null
+  const topListed = monthTxs
+    .filter((t) => !t.archived)
+    .sort((a, b) => b.amount_usd - a.amount_usd)
+    .slice(0, 5)
+  const accById = new Map(accounts.map((a) => [a.id, a]))
+  const totalLabel = who === 'all' ? 'Расходы за месяц' : who === 'me' ? 'Мои расходы' : `Расходы: ${partner}`
+
+  const seg = <Segmented label="Чьи траты" options={whoOptions(partner)} value={who} onChange={pickWho} />
 
   return (
-    <div className="stack">
-      <div className="month-nav">
-        <button type="button" className="btn" aria-label="Предыдущий месяц" onClick={() => setChosen(prev)}>
-          ‹
-        </button>
-        <h2 className="month-title">{monthTitle(month)}</h2>
-        <button
-          type="button"
-          className="btn"
-          aria-label="Следующий месяц"
-          disabled={month >= current}
-          onClick={() => setChosen(nextMonth(month))}
-        >
-          ›
-        </button>
+    <div className="report">
+      <NavBar
+        title={monthTitle(month)}
+        leading={
+          <button type="button" className="navback" aria-label={MONTHS_NOM[(m + 10) % 12]} onClick={() => page(-1)}>
+            <ChevronLeft aria-hidden="true" strokeWidth={2.4} />
+            {MONTHS_NOM[(m + 10) % 12]}
+          </button>
+        }
+        trailing={
+          <button type="button" className="navbtn navfwd" aria-label={MONTHS_NOM[m % 12]} onClick={() => page(1)}>
+            {MONTHS_NOM[m % 12]}
+            <ChevronRight aria-hidden="true" strokeWidth={2.4} />
+          </button>
+        }
+      />
+
+      <div ref={gridRef} className="rgrid">
+        <section className="card rchart" aria-label="Расходы по категориям">
+          <span className="kick">Расходы по категориям</span>
+          {total > 0 ? (
+            <div className="donut" onMouseLeave={() => setActive(null)}>
+              <div className="dleft">
+                <Donut key={`${month}-${who}`} parts={parts} total={total} active={active} onActive={setActive} onPick={pick} />
+                {seg}
+              </div>
+              <ul className="legend2" aria-label="Категории">
+                {rows.map((r, i) => {
+                  const pct = Math.round(r.share * 100)
+                  const hers = herBy.get(r.categoryId) ?? 0
+                  return (
+                    <li key={r.categoryId}>
+                      <button
+                        type="button"
+                        className={`lrow${i === active ? ' on' : ''}`}
+                        style={{ '--c': r.color } as CSSProperties}
+                        aria-label={`${r.category.name}: открыть траты`}
+                        onMouseEnter={() => setActive(i)}
+                        onFocus={() => setActive(i)}
+                        onBlur={() => setActive(null)}
+                        onClick={() => pick(i)}
+                      >
+                        <span className="ldot" />
+                        <span className="lname">{r.category.name}</span>
+                        <span className="lval num">
+                          <span className="lsum">{money(r.usd, 'USD', { whole: true })}</span>
+                          <span className="label">{`${pct}%`}</span>
+                        </span>
+                        <span className="lbar">
+                          <i style={{ width: `${r.share * 100}%` }} />
+                        </span>
+                        {who === 'all' && hers > 0 && (
+                          <span className="lsplit label num">
+                            {`Я ${money(r.usd - hers, 'USD', { whole: true })} · `}
+                            <span className="whon">{`${partner} ${money(hers, 'USD', { whole: true })}`}</span>
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : (
+            <>
+              <div className="dleft">{seg}</div>
+              <p className="muted rempty">Трат в этом месяце нет</p>
+            </>
+          )}
+        </section>
+
+        <div className="rstats">
+          <button type="button" className="rtile rlink" aria-label={`${totalLabel}: все записи месяца`} onClick={() => openRecords(null)}>
+            <Go />
+            <span className="kick">{totalLabel}</span>
+            <b className="num">{money(total, 'USD')}</b>
+            <span className={`pill${cmp.cls}`}>{cmp.text}</span>
+          </button>
+          <div className="rtile">
+            <span className="kick">В среднем за день</span>
+            <b className="num">{daysGone ? money(total / daysGone, 'USD') : '—'}</b>
+            <span className="label">{daysGone ? `за ${plural(daysGone, 'день', 'дня', 'дней')}` : 'Месяц ещё не начался'}</span>
+          </div>
+          {largest && largestCat ? (
+            <button type="button" className="rtile rlink" aria-label="Открыть самую крупную трату" onClick={() => openRecord(largest.id)}>
+              <Go />
+              <span className="kick">Самая крупная трата</span>
+              <b className="num">{money(largest.amount_usd, 'USD')}</b>
+              <span className="label">{largestCat.name + (largest.note.trim() ? ` · ${capitalize(largest.note.trim())}` : '')}</span>
+            </button>
+          ) : (
+            <div className="rtile">
+              <span className="kick">Самая крупная трата</span>
+              <b className="num">—</b>
+              <span className="label">Трат нет</span>
+            </div>
+          )}
+          {who === 'all' ? (
+            <div className="rtile">
+              <span className="kick">{`Я / ${partner}`}</span>
+              <b className="num">{total ? `${Math.round((meTotal / total) * 100)}% / ${Math.round((herTotal / total) * 100)}%` : '0% / 0%'}</b>
+              {total > 0 && (
+                <span className="split" aria-hidden="true">
+                  <i className="me" style={{ width: `${(meTotal / total) * 100}%` }} />
+                  <i className="her" style={{ width: `${(herTotal / total) * 100}%` }} />
+                </span>
+              )}
+              <span className="label num">{`Я ${money(meTotal, 'USD', { whole: true })} · ${partner} ${money(herTotal, 'USD', { whole: true })}`}</span>
+            </div>
+          ) : (
+            <button type="button" className="rtile rlink" aria-label="Все записи расходов за месяц" onClick={() => openRecords(null)}>
+              <Go />
+              <span className="kick">Записей</span>
+              <b className="num">{monthTxs.length}</b>
+              <span className="label">{`в ${plural(rows.length, 'категории', 'категориях', 'категориях')}`}</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      <section className="card">
-        <p className="label">Расходы за месяц</p>
-        <p className="big">{money(report.totalUsd, 'USD')}</p>
-        <p className="muted">{comparison(report.totalUsd, report.prevTotalUsd, prev)}</p>
-      </section>
-
-      {rows.length === 0 ? (
-        <p className="muted empty">Трат в этом месяце нет</p>
-      ) : (
-        <>
-          <section className="card stack">
-            <SpendPie data={slices} />
-            <ul className="cat-list" aria-label="Категории">
-              {rows.map((r) => (
-                <li key={r.categoryId} className="cat-row">
-                  <span className="cat-dot" style={{ background: r.color }} aria-hidden="true" />
-                  <span className="tx-icon" aria-hidden="true">
-                    {r.icon}
-                  </span>
-                  <span className="cat-name">{r.name}</span>
-                  <span className="cat-usd">{money(r.usd, 'USD')}</span>
-                  <span className="cat-share muted">{`${Math.round(r.share * 100)}%`}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section>
-            <h2>Самые крупные траты</h2>
-            <ul className="tx-list" aria-label="Топ расходов">
-              {report.top.map((t) => {
-                const cat = t.category_id ? byId.get(t.category_id) : undefined
-                return (
-                  <li key={t.id} className="tx">
-                    <span className="tx-icon" aria-hidden="true">
-                      {cat?.icon ?? '•'}
-                    </span>
-                    <span className="tx-main">
-                      <span className="tx-title">{cat?.name ?? 'Без категории'}</span>
-                      <span className="tx-sub muted">{`${shortDate(t.date)}${t.note ? ` · ${t.note}` : ''}`}</span>
-                    </span>
-                    <span className="tx-amounts">
-                      <span className="tx-amount">{money(t.amount, t.currency)}</span>
-                      {t.currency !== 'USD' && <span className="tx-sub muted">{money(t.amount_usd, 'USD')}</span>}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        </>
+      {topListed.length > 0 && (
+        <section className="rtop" aria-labelledby={topId}>
+          <h2 id={topId} className="section">
+            Самые крупные траты
+          </h2>
+          <div className="group">
+            {topListed.map((t) => (
+              <TxRow
+                key={t.id}
+                tx={t}
+                category={t.category_id ? byId.get(t.category_id) : undefined}
+                account={accById.get(t.account_id)}
+                partnerName={settings.partner_name}
+                onOpen={openRecord}
+              />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )

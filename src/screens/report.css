@@ -1,0 +1,438 @@
+/*
+ * «Отчёт» and «Расходы» (prototype v60 report(), donut(), records(): .rgrid, .rchart, .donut, .dwrap, .arc,
+ * .dcenter, .legend2, .lrow, .rstats, .rtile, .rlink, .mswitch; spec §6 «Отчёт — переделан»).
+ * Phone layout: one column. Stage 3 puts the ring card and the tiles side by side via html classes.
+ */
+
+.report,
+.records {
+  display: flex;
+  flex-direction: column;
+}
+
+.report .label,
+.records .label {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.kick {
+  color: var(--muted);
+  font-size: 0.706rem; /* 12 */
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* «Ноябрь ›»: the chevron after the text */
+.navfwd {
+  padding: 0 7px 0 13px;
+}
+
+.navfwd svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* the month in the bar's pills hides once the bar turns solid and shows the small title */
+.report .navbar.solid .navback,
+.report .navbar.solid .navfwd {
+  padding: 0 7px;
+  font-size: 0;
+  gap: 0;
+}
+
+.report > h1.large,
+.records > h1.large {
+  margin: 6px 0 14px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- the ring card ---------- */
+
+.rgrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rchart {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.donut {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+
+.dleft {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.dleft > .seg {
+  width: 100%;
+  max-width: 360px;
+}
+
+.dwrap {
+  position: relative;
+  width: min(290px, 76vw);
+  aspect-ratio: 1;
+}
+
+.donutsvg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* the sectors draw one after another; pointing at one makes it thicker and dims the rest */
+.arc {
+  cursor: pointer;
+  transition:
+    opacity 0.25s var(--ios),
+    stroke-width 0.3s var(--spring);
+  animation: arcIn 0.55s var(--ios) backwards;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@keyframes arcIn {
+  from {
+    stroke-dasharray: 0 600;
+  }
+}
+
+.dwrap.hl .arc:not(.on) {
+  opacity: 0.38;
+}
+
+.dwrap .arc.on {
+  stroke-width: 26;
+}
+
+.dcenter {
+  position: absolute;
+  inset: 20%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.dc-pct {
+  font-size: clamp(32px, 10vw, 44px);
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.05;
+  transition: color 0.25s var(--ios);
+}
+
+.dc-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.882rem; /* 15 */
+  font-weight: 500;
+}
+
+.rempty {
+  margin: 0;
+  text-align: center;
+}
+
+/* ---------- category rows ---------- */
+
+.legend2 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lrow {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 7px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.2s var(--ios),
+    transform 0.2s var(--ios);
+}
+
+.lrow.on {
+  background: color-mix(in srgb, var(--c) 10%, transparent);
+}
+
+@media (hover: hover) {
+  .lrow:hover {
+    background: color-mix(in srgb, var(--c) 10%, transparent);
+  }
+}
+
+.lrow:active {
+  transform: scale(0.98);
+}
+
+.lrow:focus-visible {
+  outline: 2px solid var(--c);
+  outline-offset: -2px;
+}
+
+.ldot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--c);
+}
+
+.lname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.882rem; /* 15 */
+  font-weight: 600;
+}
+
+.lval {
+  font-size: 0.882rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lval .label {
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+.lbar {
+  grid-column: 2 / 4;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--track);
+}
+
+.lbar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--c);
+  transition: width 0.6s var(--ios);
+}
+
+.report .lsplit {
+  grid-column: 2 / 4;
+  margin-top: -2px;
+  font-size: 0.735rem; /* 12.5 */
+}
+
+/* ---------- tiles 2 × 2 ---------- */
+
+.rstats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rtile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  color: var(--text);
+}
+
+.rtile b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.294rem; /* 22 */
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.report .rtile .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlink {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.15s,
+    transform 0.2s var(--ios);
+}
+
+@media (hover: hover) {
+  .rlink:hover {
+    background: color-mix(in srgb, var(--text) 4%, var(--card));
+  }
+}
+
+.rlink:active {
+  transform: scale(0.97);
+}
+
+.rlink:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.rlink .go {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  color: var(--muted);
+}
+
+.rlink .go svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rlink .kick {
+  padding-right: 20px;
+}
+
+.pill {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--track);
+  font-size: 0.706rem; /* 12 */
+  font-weight: 500;
+}
+
+.pill.ok {
+  color: var(--ok);
+}
+
+.pill.over {
+  color: var(--warn);
+}
+
+/* «Я / Маша»: lime for me, --partner for her */
+.split {
+  display: flex;
+  height: 8px;
+  margin-top: 2px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--track);
+}
+
+.split i {
+  display: block;
+  height: 100%;
+  transition: width 0.6s var(--ios);
+}
+
+.split i.me {
+  background: var(--accent);
+}
+
+.split i.her {
+  background: var(--partner);
+}
+
+/* ---------- «Самые крупные траты» ---------- */
+
+.rtop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+/* ---------- «Расходы» ---------- */
+
+.rtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mswitch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mswitch b {
+  font-size: 1rem; /* 17 */
+  font-weight: 600;
+}
+
+.records > .seg {
+  margin-bottom: 12px;
+}
+
+.rec-line {
+  margin: 0 4px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arc {
+    animation: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .rtile,
+  .lrow:focus-visible {
+    border-color: var(--text);
+  }
+
+  .report .label,
+  .records .label,
+  .kick {
+    color: var(--text);
+  }
+}

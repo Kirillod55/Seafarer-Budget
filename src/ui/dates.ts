@@ -44,3 +44,39 @@ export function weekdayDayMonth(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   return `${WEEKDAYS_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ${dayMonth(date)}`
 }
+
+/** Prepositional month names: «в сентябре». */
+export const MONTHS_IN = [
+  'январе',
+  'феврале',
+  'марте',
+  'апреле',
+  'мае',
+  'июне',
+  'июле',
+  'августе',
+  'сентябре',
+  'октябре',
+  'ноябре',
+  'декабре',
+]
+
+/** 'YYYY-MM' moved by k months: shiftMonth('2026-01', -1) = '2025-12'. */
+export function shiftMonth(month: string, k: number): string {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 7)
+}
+
+/** «Октябрь 2026» */
+export function monthTitle(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return `${MONTHS_NOM[m - 1]} ${y}`
+}
+
+/** «1 запись», «2 записи», «5 записей» — and any other noun: plural(n, 'день', 'дня', 'дней'). */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  const word = m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many
+  return `${n} ${word}`
+}

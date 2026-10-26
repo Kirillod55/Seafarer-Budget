@@ -1,4 +1,4 @@
-import { Suspense, lazy, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import { NavBar } from './nav/NavBar.tsx'
 import { Navigator, useNav, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
@@ -7,12 +7,11 @@ import { Goals } from './screens/Goals.tsx'
 import { Home } from './screens/Home.tsx'
 import { Limits } from './screens/Limits.tsx'
 import { RecordSheetHost, useRecordSheet } from './screens/RecordSheet.tsx'
+import { Records } from './screens/Records.tsx'
+import { Report } from './screens/Report.tsx'
 import { Settings } from './screens/Settings.tsx'
 import { Archive, ChevronRight, CreditCard, Gauge, Tag, type LucideIcon } from './ui/icons.ts'
 import { ToastHost } from './ui/Toast.tsx'
-
-// The report pulls in the chart library, so it loads on demand (it is precached by the service worker).
-const Report = lazy(() => import('./screens/Report.tsx').then((m) => ({ default: m.Report })))
 
 /*
  * The signed-in app: the four-tab navigator with the screens in it. Stage 2 replaces the 1.0 screens one by one;
@@ -36,14 +35,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
     switch (route.screen) {
       case 'root':
         if (route.tab === 'home') return <Home />
-        if (route.tab === 'report')
-          return (
-            <Suspense fallback={<p className="splash muted">Загрузка…</p>}>
-              <div className="legacy-top">
-                <Report />
-              </div>
-            </Suspense>
-          )
+        if (route.tab === 'report') return <Report />
         if (route.tab === 'goals')
           return (
             <div className="legacy-top">
@@ -76,7 +68,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
       case 'calendar':
         return <Calendar />
       case 'records':
-        return <Soon back={route.from === 'cats' ? 'Категории' : 'Отчёт'} title="Расходы" />
+        return <Records />
     }
   }
 

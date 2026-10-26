@@ -283,67 +283,6 @@ label {
   border-color: var(--neg);
 }
 
-/* ---------- report ---------- */
-
-.month-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.month-nav .btn {
-  min-width: var(--tap);
-  font-size: 1.3rem;
-}
-
-.month-title {
-  margin: 0;
-  text-align: center;
-}
-
-.pie {
-  height: 220px;
-}
-
-.cat-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.cat-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 40px;
-}
-
-.cat-dot {
-  flex: none;
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
-}
-
-.cat-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cat-usd {
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.cat-share {
-  width: 3rem;
-  text-align: right;
-}
-
 /* ---------- goals, limits, accounts (the progress bar itself: ui/ui.css) ---------- */
 
 .limit-warn {
