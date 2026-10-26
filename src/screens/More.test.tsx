@@ -300,12 +300,17 @@ describe('More: «Второй человек в боте»', () => {
     expect(await screen.findByText('Она')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Ещё' }))
-    const name = await screen.findByLabelText('Имя')
+    // the screen settles first (its settings arrive, the opening animation ends), then the field is typed into: under
+    // a loaded CI runner an early query could hold a node that is replaced a moment later
+    await screen.findByLabelText('Имя')
+    await new Promise((r) => setTimeout(r, 50))
+    const name = screen.getByLabelText('Имя') as HTMLInputElement
+    name.focus()
     fireEvent.change(name, { target: { value: 'маша' } })
     fireEvent.blur(name)
     await waitFor(async () => expect((await settingsRow()).partner_name).toBe('Маша'))
     expect((await changed())._changed).toEqual(['partner_name'])
-    expect((name as HTMLInputElement).value).toBe('Маша')
+    expect((screen.getByLabelText('Имя') as HTMLInputElement).value).toBe('Маша')
 
     fireEvent.click(screen.getByRole('button', { name: 'Главная' }))
     expect(await screen.findByText('Маша')).toBeTruthy()
