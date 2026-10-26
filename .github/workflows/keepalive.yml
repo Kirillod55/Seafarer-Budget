@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Ping the keepalive function (3 tries)
         id: ping
-        if: inputs.test_alarm != true
+        if: github.event.inputs.test_alarm != 'true'
         env:
           URL: ${{ secrets.KEEPALIVE_URL }}
           SECRET: ${{ secrets.KEEPALIVE_SECRET }}
@@ -42,12 +42,12 @@ jobs:
 
       - name: Tell Kirill and Masha in Telegram
         # after a failed ping, or by hand: Run workflow → «Только проверить Telegram-уведомление»
-        if: always() && (steps.ping.outcome == 'failure' || inputs.test_alarm == true)
+        if: always() && (steps.ping.outcome == 'failure' || github.event.inputs.test_alarm == 'true')
         env:
           TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OWNER: ${{ secrets.OWNER_CHAT_ID }}
           PARTNER: ${{ secrets.PARTNER_CHAT_ID }}
-          TEST: ${{ inputs.test_alarm == true }}
+          TEST: ${{ github.event.inputs.test_alarm == 'true' }}
         run: |
           if [ "$TEST" = "true" ]; then
             TEXT='✅ Проверка: так придёт сообщение, если база перестанет отвечать.'
