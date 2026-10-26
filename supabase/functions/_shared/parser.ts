@@ -171,30 +171,33 @@ function weekdayDate(dow: number, today: string): string {
  * another number in the text can be the amount). Returns the tokens without it.
  */
 export function takeDate(tokens: string[], today: string): { tokens: string[]; date: string | null } {
-  const year = Number(today.slice(0, 4))
-  const hasDigit = (skip: number) => tokens.some((t, k) => k !== skip && /\d/.test(t))
   for (let i = 0; i < tokens.length; i++) {
-    const w = stripPunct(tokens[i])
-    let date: string | null = null
-    let from = i
-    let to = i + 1
-    if (w in RELATIVE) date = addDays(today, RELATIVE[w])
-    else if (w in WEEKDAYS) {
-      date = weekdayDate(WEEKDAYS[w], today)
-      if (i > 0 && ['в', 'во', 'у'].includes(tokens[i - 1])) from = i - 1
-    } else if (/^\d{1,2}$/.test(w) && stripPunct(tokens[i + 1] ?? '') in MONTHS_GEN) {
-      date = validDate(year, MONTHS_GEN[stripPunct(tokens[i + 1])], Number(w))
-      to = i + 2
-    } else {
-      const m = DMY_RE.exec(w)
-      if (m && hasDigit(i)) {
-        const y = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : year
-        date = validDate(y, Number(m[2]), Number(m[1]))
-      }
-    }
-    if (date) return { tokens: [...tokens.slice(0, from), ...tokens.slice(to)], date }
+    const d = dateAt(tokens, i, today)
+    if (d) return { tokens: [...tokens.slice(0, d.from), ...tokens.slice(d.to)], date: d.date }
   }
   return { tokens, date: null }
+}
+
+/** A date expression at token i: the date and the token range it covers (a preceding «в» included). */
+export function dateAt(tokens: string[], i: number, today: string): { date: string; from: number; to: number } | null {
+  const year = Number(today.slice(0, 4))
+  const w = stripPunct(tokens[i])
+  if (w in RELATIVE) return { date: addDays(today, RELATIVE[w]), from: i, to: i + 1 }
+  if (w in WEEKDAYS) {
+    const from = i > 0 && ['в', 'во', 'у'].includes(tokens[i - 1]) ? i - 1 : i
+    return { date: weekdayDate(WEEKDAYS[w], today), from, to: i + 1 }
+  }
+  if (/^\d{1,2}$/.test(w) && stripPunct(tokens[i + 1] ?? '') in MONTHS_GEN) {
+    const date = validDate(year, MONTHS_GEN[stripPunct(tokens[i + 1])], Number(w))
+    return date ? { date, from: i, to: i + 2 } : null
+  }
+  const m = DMY_RE.exec(w)
+  if (m && tokens.some((t, k) => k !== i && /\d/.test(t))) {
+    const y = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : year
+    const date = validDate(y, Number(m[2]), Number(m[1]))
+    return date ? { date, from: i, to: i + 1 } : null
+  }
+  return null
 }
 
 /** Is this one token (or «в пятницу») just a date? Used for a date line / tail words in multi.ts. */
