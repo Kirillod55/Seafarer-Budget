@@ -60,6 +60,8 @@ export default defineConfig({
     environment: 'jsdom',
     pool: 'vmThreads',
     setupFiles: ['./src/test-setup.ts'],
+    // a full run on all cores starves the jsdom screen tests past their 5 s timeout; 4 workers keep them stable
+    maxWorkers: 4,
     include: ['src/**/*.test.{ts,tsx}', 'supabase/functions/_shared/**/*.test.ts', 'supabase/functions/fx-rates/**/*.test.ts', 'supabase/*.test.ts'],
   },
 })
