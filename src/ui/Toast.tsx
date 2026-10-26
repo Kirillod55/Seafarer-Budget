@@ -10,6 +10,9 @@ export interface ToastAction {
    * Runs when the toast goes without its action: the 6 s ran out or another toast replaced it. For an undo that
    * cannot be taken back once it reaches the server (an account's `deleted = true` is final): the deletion is
    * written only here, once «Отменить» is no longer offered.
+   * Not a guaranteed commit: it does not run when the host unmounts (sign-out) or the app is closed while the toast
+   * is up — the action is then simply not taken, so it must be safe to skip. Check the data again inside it: it runs
+   * seconds after the toast was shown.
    */
   expire?(): void
 }

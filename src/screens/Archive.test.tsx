@@ -6,6 +6,7 @@ import { Navigator, useNav, type Route } from '../nav/Navigator.tsx'
 import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
 import { ToastHost } from '../ui/Toast.tsx'
 import { Archive } from './Archive.tsx'
+import { Goals } from './Goals.tsx'
 import { Home } from './Home.tsx'
 import { More } from './More.tsx'
 import { RecordSheetHost } from './RecordSheet.tsx'
@@ -165,6 +166,73 @@ describe('Archive', () => {
     }
     await waitFor(async () => expect((await env.db.accounts.get(empty.id))!.deleted).toBe(true))
     expect(screen.getByRole('region', { name: 'Счета' }).textContent).toContain('Пусто')
+  })
+
+  it('a record that lands on the account before the toast goes keeps it (shown again, not deleted)', async () => {
+    const acc = await addAccount('Наличные')
+    await openArchive()
+    const row = await rowOf('Наличные')
+    fireEvent.click(within(row).getByRole('button', { name: 'Удалить' }))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      fireEvent.click(within(row).getAllByRole('button', { name: 'Удалить' }).at(-1)!)
+      expect(toastText()).toContain('Счёт удалён')
+      // the bot writes Маша's expense onto it meanwhile
+      await spend('Синхронизировано', { account: acc.id, amount: 7 })
+      act(() => void vi.advanceTimersByTime(6100))
+    } finally {
+      vi.useRealTimers()
+    }
+    const back = await rowOf('Наличные')
+    await waitFor(() => expect(back.textContent).toContain('удалить можно пустой счёт'))
+    expect((await env.db.accounts.get(acc.id))!.deleted).toBe(false)
+  })
+
+  it('«Вернуть» after re-opening the archive: the replaced «Счёт удалён» toast does not delete the account', async () => {
+    const acc = await addAccount('Наличные')
+    await openArchive()
+    const row = await rowOf('Наличные')
+    fireEvent.click(within(row).getByRole('button', { name: 'Удалить' }))
+    fireEvent.click(within(row).getAllByRole('button', { name: 'Удалить' }).at(-1)!)
+    await waitFor(() => expect(toastText()).toContain('Счёт удалён'))
+    // leave and come back while «Отменить» is still offered: the account is listed again
+    fireEvent.click(screen.getByRole('button', { name: 'Назад, Ещё' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'в архив' }))
+    const again = await rowOf('Наличные')
+    fireEvent.click(within(again).getByRole('button', { name: 'Вернуть' }))
+    await waitFor(() => expect(toastText()).toContain('Счёт вернулся'))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(await env.db.accounts.get(acc.id)).toMatchObject({ deleted: false, archived: false })
+  })
+
+  it('an empty main account says why it has no «Удалить»', async () => {
+    await env.repo.put<Account>('accounts', { id: main.id, archived: true })
+    await openArchive()
+    const row = await rowOf('Основной')
+    expect(row.textContent).toContain('Остаток $0 — основной счёт удалить нельзя')
+    expect(within(row).queryByRole('button', { name: 'Удалить' })).toBeNull()
+  })
+
+  it('«Архив целей · N» on «Цели» equals the archive’s «Цели» section', async () => {
+    await env.repo.put<Goal>('goals', { name: 'Машина', target_usd: 100, deadline: null, archived: true })
+    await env.repo.put<Goal>('goals', { name: 'Отпуск', target_usd: 500, deadline: null, archived: true })
+    await env.repo.put<Goal>('goals', { name: 'Дом', target_usd: 900, deadline: null, archived: false })
+    const binned = await env.repo.put<Goal>('goals', { name: 'Старая', target_usd: 50, deadline: null, archived: true })
+    await env.repo.remove('goals', binned.id)
+    renderWithApp(
+      <>
+        <Navigator renderScreen={(r: Route) => (r.screen === 'archive' ? <Archive /> : r.tab === 'goals' ? <Goals /> : <p>home</p>)} />
+        <ToastHost />
+      </>,
+      env,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Цели' }))
+    const link = await screen.findByRole('button', { name: /^Архив целей · \d+$/ })
+    const n = Number(link.textContent!.split(' · ')[1])
+    fireEvent.click(link)
+    const sec = await screen.findByRole('region', { name: 'Цели' })
+    await waitFor(() => expect(sec.querySelectorAll('.aitem')).toHaveLength(n))
+    expect(n).toBe(2)
   })
 
   it('«Архив · N» in «Ещё» equals the number of rows in the archive', async () => {

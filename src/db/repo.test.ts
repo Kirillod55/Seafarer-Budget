@@ -447,6 +447,49 @@ describe('wipeAll', () => {
   })
 })
 
+describe('removeEmptyAccount', () => {
+  const account = (over: Partial<Account> = {}) =>
+    repo.put<Account>('accounts', { name: 'Наличные', aliases: [], is_default: false, archived: true, sort: 1, ...over })
+
+  it('deletes an alive, archived, non-default account with nothing on it (records that cancel out count as empty)', async () => {
+    const a = await account()
+    await repo.addTransaction({ ...baseTx, account_id: a.id, currency: 'USD', amount: 10 })
+    await repo.addTransaction({ ...baseTx, kind: 'income', account_id: a.id, currency: 'USD', amount: 10 })
+    onChange.mockClear()
+    expect(await repo.removeEmptyAccount(a.id)).toBe(true)
+    expect(await db.accounts.get(a.id)).toMatchObject({ deleted: true, dirty: 1 })
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses (writes nothing) when money is on it, it is back from the archive, it is the main account or gone', async () => {
+    const full = await account()
+    await repo.addTransaction({ ...baseTx, kind: 'income', account_id: full.id, currency: 'USD', amount: 5 })
+    const active = await account({ name: 'Карта', archived: false })
+    const main = await account({ name: 'Основной', is_default: true })
+    const gone = await account({ name: 'Старый' })
+    await repo.remove('accounts', gone.id)
+    // an archived (still counted) record on an otherwise empty account keeps it too
+    const hidden = await account({ name: 'Скрытый' })
+    const t = await repo.addTransaction({ ...baseTx, account_id: hidden.id, currency: 'USD', amount: 3 })
+    await repo.setArchived(t.id, true)
+    onChange.mockClear()
+    for (const a of [full, active, main, hidden]) {
+      expect(await repo.removeEmptyAccount(a.id)).toBe(false)
+      expect((await db.accounts.get(a.id))!.deleted).toBe(false)
+    }
+    expect(await repo.removeEmptyAccount(gone.id)).toBe(false)
+    expect(await repo.removeEmptyAccount('nope')).toBe(false)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('a binned record does not count', async () => {
+    const a = await account()
+    const t = await repo.addTransaction({ ...baseTx, account_id: a.id, currency: 'USD', amount: 3 })
+    await repo.remove('transactions', t.id)
+    expect(await repo.removeEmptyAccount(a.id)).toBe(true)
+  })
+})
+
 describe('setArchived', () => {
   it('archives and unarchives a record, marking it dirty', async () => {
     const tx = await repo.addTransaction(baseTx)

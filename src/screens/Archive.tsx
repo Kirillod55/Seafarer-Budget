@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { balanceUsd, balances, goalProgress } from '@shared/calc.ts'
@@ -7,6 +7,7 @@ import { money } from '@shared/format.ts'
 import type { Account, Category, Goal, Transaction } from '@shared/types.ts'
 import { KIND_TITLE, amounts, bareCategory, capitalize } from '../components/TxRow.tsx'
 import { useApp } from '../context.tsx'
+import { EMPTY_BALANCE } from '../db/repo.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { useRoute } from '../nav/Navigator.tsx'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
@@ -20,8 +21,6 @@ import './archive.css'
 
 const FAILED = 'Не получилось — попробуй ещё раз'
 const OTHER: Record<Category['kind'], string> = { expense: 'Прочее', income: 'Прочий доход' }
-/** a balance this close to zero is zero (cents rounding) */
-const EMPTY = 0.005
 
 /** The archive key of a row: its kind and id («t:…», «g:…», «c:…», «a:…»), as in the prototype. */
 type Key = `${'t' | 'g' | 'c' | 'a'}:${string}`
@@ -131,12 +130,19 @@ export function Archive() {
       toast('Счёт удалён', {
         label: 'Отменить',
         run: () => keep(false),
-        // stays hidden after the write (the live query drops it); a failed write shows it again
+        // the repo checks the account again when it writes: still archived, not the main one, nothing on it (a record
+        // may have come in meanwhile, or it was returned after re-opening this screen). Deleted: it stays hidden (the
+        // live query drops it); refused: it shows again; a failed write shows it again and says so.
         expire: () =>
-          void repo.remove('accounts', a.id).catch(() => {
-            keep(false)
-            toast(FAILED)
-          }),
+          void repo.removeEmptyAccount(a.id).then(
+            (done) => {
+              if (!done) keep(false)
+            },
+            () => {
+              keep(false)
+              toast(FAILED)
+            },
+          ),
       })
     },
   }
@@ -146,7 +152,7 @@ export function Archive() {
     key: Key,
     p: { icon: ReactNode; name: string; sub: string; onBack(): void; onDelete?(): void; ask: string },
   ) => (
-    <div key={key} className="aitem">
+    <div key={key} className="aitem" data-flip-key={key}>
       <div className="arow">
         {p.icon}
         <span className="nm">
@@ -232,12 +238,14 @@ export function Archive() {
 
   const accountRows = accounts.map((a) => {
     const bal = balances(data?.txs ?? [], a.id)
-    const empty = Object.values(bal).every((v) => Math.abs(v) < EMPTY)
+    const empty = Object.values(bal).every((v) => Math.abs(v) < EMPTY_BALANCE)
     return row(`a:${a.id}`, {
       icon: tile(CreditCard),
       name: a.name,
       sub: empty
-        ? 'Остаток $0'
+        ? a.is_default
+          ? 'Остаток $0 — основной счёт удалить нельзя'
+          : 'Остаток $0'
         : `Остаток ≈ ${money(balanceUsd(bal, data?.rates ?? [], today), 'USD', { whole: true })} — удалить можно пустой счёт`,
       onBack: () => void unarchive.account(a),
       // the main account is never deleted (spec §9)
@@ -246,19 +254,8 @@ export function Archive() {
     })
   })
 
-  const section = (key: string, title: string, rows: ReactNode[]) => (
-    <section key={key} className="arch-sec" data-flip-key={`sec-${key}`} aria-label={title}>
-      <h2 className="section">{title}</h2>
-      <div className="group">
-        {rows.length ? (
-          rows
-        ) : (
-          <div className="arow aempty">
-            <span className="label">Пусто</span>
-          </div>
-        )}
-      </div>
-    </section>
+  const section = (key: string, title: string, rows: ReactElement[]) => (
+    <Section key={key} id={key} title={title} rows={rows} confirm={confirm} />
   )
 
   return (
@@ -279,5 +276,30 @@ export function Archive() {
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * One section: its rows are blocks of their own (data-flip-key = the row key), so a row that is returned or deleted
+ * melts where it stood while the rows under it slide up, and the confirm line opens smoothly; the section itself is a
+ * block of the screen (its height follows).
+ */
+function Section({ id, title, rows, confirm }: { id: string; title: string; rows: ReactElement[]; confirm: Key | null }) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const keys = rows.map((r) => String(r.key)).join(',')
+  useFlip(cardRef, [keys, confirm])
+  return (
+    <section className="arch-sec" data-flip-key={`sec-${id}`} aria-label={title}>
+      <h2 className="section">{title}</h2>
+      <div ref={cardRef} className="group">
+        {rows.length ? (
+          rows
+        ) : (
+          <div className="arow aempty" data-flip-key="empty">
+            <span className="label">Пусто</span>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }

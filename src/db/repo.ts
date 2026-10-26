@@ -1,4 +1,5 @@
 import { alive } from '@shared/alive.ts'
+import { balances } from '@shared/calc.ts'
 import { resolveAccount, type ImportRow } from '@shared/csv.ts'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '@shared/defaults.ts'
 import { localDate } from '@shared/dates.ts'
@@ -56,6 +57,12 @@ export interface Repo {
    * bin or deleted for good, or «Прочее» / «Прочий доход» themselves (they cannot be removed).
    */
   removeCategory(id: string): Promise<string | null>
+  /**
+   * «Удалить» an archived account in «Архив» (spec §4): `deleted = true`, final (accounts have no undo bin). Checked
+   * when it is written, not when it was asked for: only an alive, archived, non-default account whose balance is zero
+   * in every currency (live records, archived ones included; binned ones not). false = refused, nothing written.
+   */
+  removeEmptyAccount(id: string): Promise<boolean>
   /** Hide a record from the lists (it still counts in the balance and reports). */
   setArchived(id: string, archived: boolean): Promise<void>
   /** «Удалить записи…»: live records of the kind in the period go to the bin as one batch. */
@@ -84,6 +91,8 @@ export interface Repo {
 }
 
 const MAIN_ACCOUNT = 'Основной'
+/** below this (cents rounding) a currency balance is zero */
+export const EMPTY_BALANCE = 0.005
 const OPENING_NOTE = 'Начальный остаток'
 const STANDARD_CATEGORIES = new Set(DEFAULT_CATEGORIES.map((c) => c.name))
 /** Where an imported record without a known category goes. */
@@ -190,6 +199,21 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     await t.put({ ...existing, deleted_at: deps.now().toISOString(), deleted_batch: batch, dirty: 1 })
     deps.onChange()
     return batch
+  }
+
+  async function removeEmptyAccount(id: string): Promise<boolean> {
+    let done = false
+    await db.transaction('rw', db.accounts, db.transactions, async () => {
+      const account = await db.accounts.get(id)
+      if (!account || !alive(account) || !account.archived || account.is_default) return
+      const txs = await db.transactions.filter((t) => alive(t) && (t.account_id === id || t.to_account_id === id)).toArray()
+      // cents: a balance this close to zero is zero
+      if (Object.values(balances(txs, id)).some((v) => Math.abs(v) >= EMPTY_BALANCE)) return
+      await db.accounts.put({ ...account, deleted: true, dirty: 1 })
+      done = true
+    })
+    if (done) deps.onChange()
+    return done
   }
 
   async function setArchived(id: string, archived: boolean): Promise<void> {
@@ -514,6 +538,7 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     put,
     remove,
     removeCategory,
+    removeEmptyAccount,
     setArchived,
     wipe,
     wipeAll,
