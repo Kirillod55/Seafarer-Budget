@@ -14,9 +14,10 @@ import { prefersReducedMotion } from '../../ui/motion.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
 import { useToast } from '../../ui/Toast.tsx'
 import { dayMonth, plural } from '../../ui/dates.ts'
-import { Check } from '../../ui/icons.ts'
+import { useDesk } from '../../desk/layout.ts'
+import { Check, Trash2 } from '../../ui/icons.ts'
 import { Wizard } from '../Wizard.tsx'
-import { FAILED, MoreCard } from './common.tsx'
+import { FAILED, MoreCard, SRow } from './common.tsx'
 
 type Mode = 'rec' | 'all'
 
@@ -108,6 +109,7 @@ const byDate = (a: Transaction, b: Transaction) => a.date.localeCompare(b.date) 
 export function WipeSection({ settings, today }: { settings: Settings; today: string }) {
   const { db, repo, now } = useApp()
   const toast = useToast()
+  const desk = useDesk()
   const [mode, setMode] = useState<Mode | null>(null)
   const [scope, setScope] = useState<WipeScope>('month')
   const [kind, setKind] = useState<WipeKind>('expense')
@@ -161,7 +163,7 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
   }, [restoreAt]) // `now` is the app clock (stable); the delay is read when the row appears
   useHeightGlide(sumRef, `${mode}|${scope}|${kind}|${data?.txs.length ?? 0}`)
 
-  if (!data) return <MoreCard title="Удаление данных" className="wipecard">{null}</MoreCard>
+  if (!data) return desk ? null : <MoreCard title="Удаление данных" className="wipecard">{null}</MoreCard>
 
   const chosen = selectForWipe(data.txs, scope, kind, today)
   const sumUsd = (k: Transaction['kind']) => chosen.filter((t) => t.kind === k).reduce((s, t) => s + t.amount_usd, 0)
@@ -237,6 +239,114 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
     </div>
   )
 
+  const panel = mode && (
+    <div className="wipe" role="group" aria-label={mode === 'all' ? 'Удалить все данные' : 'Удалить записи'}>
+      {mode === 'all' ? (
+        <p className="wlead">
+          Удалятся <b>все записи</b>
+          {` (${data.txs.length}), цели (${data.goals}), лимиты (${data.limits}) и свои категории (${data.ownCategories}). Останутся настройки: дата посадки, запас, валюты, тема, бот и ${partner}. Потом мастер спросит остаток заново.`}
+        </p>
+      ) : (
+        <>
+          <div className="fld">
+            <span className="flabel">Период</span>
+            <Segmented<WipeScope>
+              label="Период"
+              options={SCOPES}
+              value={scope}
+              onChange={(v) => {
+                disarm()
+                setScope(v)
+              }}
+            />
+            <span className="label wrange">{rangeText(scope, today)}</span>
+          </div>
+          <div className="fld">
+            <span className="flabel">Что</span>
+            <Segmented<WipeKind>
+              label="Что удалить"
+              options={KINDS}
+              value={kind}
+              onChange={(v) => {
+                disarm()
+                setKind(v)
+              }}
+            />
+          </div>
+          <div ref={sumRef} className={`wsum num${chosen.length ? '' : ' empty'}`} aria-live="polite">
+            {chosen.length ? (
+              <>
+                Удалю <b>{records(chosen.length)}</b>
+                {spent ? ` · траты ${money(spent, 'USD')}` : ''}
+                {earned ? ` · доходы ${money(earned, 'USD')}` : ''}
+              </>
+            ) : (
+              'За этот период таких записей нет'
+            )}
+          </div>
+        </>
+      )}
+      <label className="wcheck">
+        <input type="checkbox" checked={csv} onChange={(e) => setCsv(e.target.checked)} />
+        <span className="wtick" aria-hidden="true">
+          <Check strokeWidth={2.6} />
+        </span>
+        Сначала скачать копию (CSV)
+      </label>
+      {mode === 'all' && <p className="label">В файле только записи: цели, лимиты и категории в него не попадут.</p>}
+      <p className="label">
+        Баланс изменится: удалённые траты больше не вычитаются, доходы не прибавляются. 24 часа удалённое можно вернуть.
+      </p>
+      <div className="wact">
+        <button
+          type="button"
+          className="btn-gray"
+          onClick={() => {
+            disarm()
+            setMode(null)
+          }}
+        >
+          Отмена
+        </button>
+        <button type="button" className={`wdanger${armed ? ' armed' : ''}`} disabled={!count || busy} onClick={() => void go()}>
+          {armed ? 'Нажми ещё раз — удалить' : goLabel}
+        </button>
+      </div>
+    </div>
+  )
+
+  // PC «Параметры → Данные» (prototype moreDesk): a row per action, its panel opens in a row under it
+  if (desk) {
+    const row = (m: Mode, title: string, desc: string) => (
+      <>
+        <SRow icon={Trash2} color="#FF3B30" title={title} desc={desc}>
+          <button type="button" className="fbtn danger" aria-expanded={mode === m} onClick={() => open(m)}>
+            Удалить…
+          </button>
+        </SRow>
+        <Morph k={mode === m ? m : 'closed'} className="wbox">
+          {mode === m && <div className="srow wiperow">{panel}</div>}
+        </Morph>
+      </>
+    )
+    return (
+      <>
+        {row('rec', 'Удалить записи', 'За сутки, неделю, месяц или всю историю. 24 часа можно вернуть')}
+        {row('all', 'Удалить все данные', 'Записи, цели, лимиты и свои категории — начать заново')}
+        <Morph k={restoreAt !== null ? last!.batch : 'none'} className="wbox">
+          {restoreRow && <div className="srow">{restoreRow}</div>}
+        </Morph>
+        {last?.pendingOpening &&
+          createPortal(
+            <div className="wzlayer">
+              <Wizard startAt="balance" onDone={() => void openingDone(last.batch)} />
+            </div>,
+            document.body,
+          )}
+      </>
+    )
+  }
+
   return (
     <MoreCard title="Удаление данных" className="wipecard">
       <Morph k={`${mode ?? 'intro'}:${restoreAt !== null ? last!.batch : ''}`} className="wbox">
@@ -251,79 +361,7 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
             </button>
           </>
         ) : (
-          <div className="wipe" role="group" aria-label={mode === 'all' ? 'Удалить все данные' : 'Удалить записи'}>
-            {mode === 'all' ? (
-              <p className="wlead">
-                Удалятся <b>все записи</b>
-                {` (${data.txs.length}), цели (${data.goals}), лимиты (${data.limits}) и свои категории (${data.ownCategories}). Останутся настройки: дата посадки, запас, валюты, тема, бот и ${partner}. Потом мастер спросит остаток заново.`}
-              </p>
-            ) : (
-              <>
-                <div className="fld">
-                  <span className="flabel">Период</span>
-                  <Segmented<WipeScope>
-                    label="Период"
-                    options={SCOPES}
-                    value={scope}
-                    onChange={(v) => {
-                      disarm()
-                      setScope(v)
-                    }}
-                  />
-                  <span className="label wrange">{rangeText(scope, today)}</span>
-                </div>
-                <div className="fld">
-                  <span className="flabel">Что</span>
-                  <Segmented<WipeKind>
-                    label="Что удалить"
-                    options={KINDS}
-                    value={kind}
-                    onChange={(v) => {
-                      disarm()
-                      setKind(v)
-                    }}
-                  />
-                </div>
-                <div ref={sumRef} className={`wsum num${chosen.length ? '' : ' empty'}`} aria-live="polite">
-                  {chosen.length ? (
-                    <>
-                      Удалю <b>{records(chosen.length)}</b>
-                      {spent ? ` · траты ${money(spent, 'USD')}` : ''}
-                      {earned ? ` · доходы ${money(earned, 'USD')}` : ''}
-                    </>
-                  ) : (
-                    'За этот период таких записей нет'
-                  )}
-                </div>
-              </>
-            )}
-            <label className="wcheck">
-              <input type="checkbox" checked={csv} onChange={(e) => setCsv(e.target.checked)} />
-              <span className="wtick" aria-hidden="true">
-                <Check strokeWidth={2.6} />
-              </span>
-              Сначала скачать копию (CSV)
-            </label>
-            {mode === 'all' && <p className="label">В файле только записи: цели, лимиты и категории в него не попадут.</p>}
-            <p className="label">
-              Баланс изменится: удалённые траты больше не вычитаются, доходы не прибавляются. 24 часа удалённое можно вернуть.
-            </p>
-            <div className="wact">
-              <button
-                type="button"
-                className="btn-gray"
-                onClick={() => {
-                  disarm()
-                  setMode(null)
-                }}
-              >
-                Отмена
-              </button>
-              <button type="button" className={`wdanger${armed ? ' armed' : ''}`} disabled={!count || busy} onClick={() => void go()}>
-                {armed ? 'Нажми ещё раз — удалить' : goLabel}
-              </button>
-            </div>
-          </div>
+          panel
         )}
         {restoreRow}
       </Morph>

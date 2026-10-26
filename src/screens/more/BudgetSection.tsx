@@ -5,7 +5,9 @@ import { round2 } from '@shared/fx.ts'
 import type { Account, FxRate, Goal, GoalMove, Settings, Transaction } from '@shared/types.ts'
 import { parseAmount } from '../../lib/amount.ts'
 import { plural } from '../../ui/dates.ts'
-import { MoreCard, useSaveSettings } from './common.tsx'
+import { useDesk } from '../../desk/layout.ts'
+import { Calendar, Wallet } from '../../ui/icons.ts'
+import { MoreCard, SRow, useSaveSettings } from './common.tsx'
 import { onEnter } from '../../ui/keys.ts'
 
 const fmtReserve = (n: number | null | undefined) => String(n ?? 0)
@@ -34,6 +36,7 @@ export function BudgetSection({
   today: string
 }) {
   const save = useSaveSettings(settings)
+  const desk = useDesk()
   const [date, setDate] = useState(settings.next_contract_date ?? '')
   const [reserve, setReserve] = useState(fmtReserve(settings.reserve_usd))
   const [error, setError] = useState('')
@@ -94,40 +97,82 @@ export function BudgetSection({
     today,
   })
 
+  const dateInput = (
+    <input
+      id="m-board"
+      className="inp"
+      type="date"
+      value={date}
+      onChange={(e) => pickDate(e.target.value)}
+      onBlur={leaveDate}
+    />
+  )
+  const reserveInput = (
+    <input
+      ref={reserveRef}
+      id="m-reserve"
+      className="inp num"
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      placeholder="0"
+      aria-invalid={!!error}
+      aria-describedby="m-calc"
+      value={reserve}
+      onChange={(e) => {
+        setReserve(e.target.value)
+        if (error) setError('')
+      }}
+      onBlur={commitReserve}
+      onKeyDown={onEnter(commitReserve)}
+    />
+  )
+  const calcLine = (
+    <p className="calc" id="m-calc" aria-live="polite">
+      {b.state === 'no_date' ? (
+        'Без даты бюджет на день не считается'
+      ) : b.state === 'sea' ? (
+        'Дата посадки уже прошла'
+      ) : (
+        <>
+          {'= '}
+          <b className="num">{money(b.perDay, 'USD')}</b>
+          {` в день на ${plural(b.days, 'день', 'дня', 'дней')}, к посадке останется ${money(reserveUsd, 'USD', { whole: true })}`}
+        </>
+      )}
+    </p>
+  )
+
+  // PC «Параметры» (prototype moreDesk): rows, the calculation highlighted under them
+  if (desk)
+    return (
+      <>
+        <SRow icon={Calendar} color="#0A84FF" title="Дата посадки" desc="С этого дня считается бюджет на день" htmlFor="m-board">
+          {dateInput}
+        </SRow>
+        <SRow
+          icon={Wallet}
+          color="#30B455"
+          title="Запас к посадке"
+          desc={error ? <span className="merr" role="alert">{error}</span> : 'Деньги, которые не входят в бюджет на день'}
+          htmlFor="m-reserve"
+        >
+          {reserveInput}
+        </SRow>
+        <div className="srow calcrow">{calcLine}</div>
+      </>
+    )
+
   return (
     <MoreCard title="Бюджет до посадки">
       <div className="grid2">
         <div className="fld">
           <label htmlFor="m-board">Дата посадки</label>
-          <input
-            id="m-board"
-            className="inp"
-            type="date"
-            value={date}
-            onChange={(e) => pickDate(e.target.value)}
-            onBlur={leaveDate}
-          />
+          {dateInput}
         </div>
         <div className="fld">
           <label htmlFor="m-reserve">Запас, $</label>
-          <input
-            ref={reserveRef}
-            id="m-reserve"
-            className="inp num"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="0"
-            aria-invalid={!!error}
-            aria-describedby="m-calc"
-            value={reserve}
-            onChange={(e) => {
-              setReserve(e.target.value)
-              if (error) setError('')
-            }}
-            onBlur={commitReserve}
-            onKeyDown={onEnter(commitReserve)}
-          />
+          {reserveInput}
         </div>
       </div>
       {error && (
@@ -135,19 +180,7 @@ export function BudgetSection({
           {error}
         </p>
       )}
-      <p className="calc" id="m-calc" aria-live="polite">
-        {b.state === 'no_date' ? (
-          'Без даты бюджет на день не считается'
-        ) : b.state === 'sea' ? (
-          'Дата посадки уже прошла'
-        ) : (
-          <>
-            {'= '}
-            <b className="num">{money(b.perDay, 'USD')}</b>
-            {` в день на ${plural(b.days, 'день', 'дня', 'дней')}, к посадке останется ${money(reserveUsd, 'USD', { whole: true })}`}
-          </>
-        )}
-      </p>
+      {calcLine}
     </MoreCard>
   )
 }

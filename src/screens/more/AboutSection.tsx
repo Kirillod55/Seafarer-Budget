@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { appUpdater } from '../../desk/updater.ts'
 import { useToast } from '../../ui/Toast.tsx'
-import { MoreCard } from './common.tsx'
+import { Info } from '../../ui/icons.ts'
+import { SRow } from './common.tsx'
 
 /** PC «Настройки → О программе» (spec §11 «Автообновление»): the version and, in the Windows app, «Проверить обновления». */
 export function AboutSection() {
@@ -20,18 +21,17 @@ export function AboutSection() {
     }
   }
   return (
-    <MoreCard title="О программе">
-      <div className="srow">
-        <span className="stext">
-          <b>{`Seafarer Budget ${__APP_VERSION__}`}</b>
-          <span className="label">{updater ? 'Обновляется сама из выпусков GitHub' : 'Версия в браузере обновляется при открытии'}</span>
-        </span>
-        {updater && (
-          <button type="button" className="fbtn" disabled={busy} onClick={() => void check()}>
-            {busy ? 'Проверяю…' : 'Проверить обновления'}
-          </button>
-        )}
-      </div>
-    </MoreCard>
+    <SRow
+      icon={Info}
+      color="#0A84FF"
+      title={`Seafarer Budget ${__APP_VERSION__}`}
+      desc={updater ? 'Обновляется сама из выпусков GitHub' : 'Версия в браузере обновляется при открытии'}
+    >
+      {updater && (
+        <button type="button" className="fbtn" disabled={busy} onClick={() => void check()}>
+          {busy ? 'Проверяю…' : 'Проверить обновления'}
+        </button>
+      )}
+    </SRow>
   )
 }

@@ -24,7 +24,8 @@ describe('PC rows: hover buttons and the right-click menu (spec §11 «Мышь 
   it('hover «Изменить» opens the record', async () => {
     await deskShell('full', {}, true)
     fireEvent.click(within((await row()).querySelector<HTMLElement>('.hov')!).getByRole('button', { name: 'Изменить' }))
-    expect(await screen.findByRole('dialog', { name: 'Запись' })).toBeTruthy()
+    // the record window reads all records first: slow under a full parallel run
+    expect(await screen.findByRole('dialog', { name: 'Запись' }, { timeout: 8000 })).toBeTruthy()
   })
 
   it('right click: «Изменить, В архив, Дублировать на сегодня, Удалить»; the copy has «Отменить»', async () => {

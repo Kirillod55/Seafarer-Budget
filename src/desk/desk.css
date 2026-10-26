@@ -1728,3 +1728,70 @@ html.desk .mcard > h3 {
     padding: 40px 32px 24px;
   }
 }
+
+/* ---------- «Параметры» rows (prototype moreDesk .sgroup / .srow) ---------- */
+
+.sgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sgroup h2 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.srow .stext label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.srow .stext .label {
+  font-size: 12.5px;
+}
+
+.srow .sctl {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 62%;
+}
+
+.srow .sctl input {
+  width: 190px;
+}
+
+.srow .sctl .seg {
+  min-width: 300px;
+}
+
+.srow .sctl .picker {
+  width: 190px;
+}
+
+.srow .sctl .mchips {
+  justify-content: flex-end;
+}
+
+.srow.calcrow {
+  min-height: 0;
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+
+.srow.calcrow .calc {
+  margin: 0;
+}
+
+.srow.wiperow,
+.srow.simport {
+  display: block;
+}
+
+.srow .merr {
+  color: var(--danger);
+}

@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Settings } from '@shared/types.ts'
 import { partnerLabel } from '../../lib/records.ts'
 import { plural } from '../../ui/dates.ts'
-import { UserRound } from '../../ui/icons.ts'
+import { useDesk } from '../../desk/layout.ts'
+import { Bell, UserRound } from '../../ui/icons.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
-import { MoreCard, useSaveSettings } from './common.tsx'
+import { MoreCard, SRow, useSaveSettings } from './common.tsx'
 import { onEnter } from '../../ui/keys.ts'
 
 const NAME_MAX = 20
@@ -36,26 +37,48 @@ export function PartnerSection({ settings }: { settings: Settings }) {
   }
 
   const shown = partnerLabel(settings.partner_name)
+  const desk = useDesk()
   const linked = !!settings.partner_seen_at
+
+  const nameInput = (
+    <input
+      ref={ref}
+      id="m-pname"
+      aria-label={desk ? 'Имя' : undefined}
+      className="inp"
+      type="text"
+      maxLength={NAME_MAX}
+      placeholder="Например, Маша"
+      autoComplete="off"
+      autoCapitalize="words"
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={onEnter(() => void commit())}
+    />
+  )
+
+  if (desk)
+    return (
+      <SRow
+        icon={UserRound}
+        color="#8E8E93"
+        title={`Второй человек — ${shown}`}
+        desc={
+          <>
+            <span className={`mpill ${linked ? 'ok' : 'warn'}`}>{linked ? 'Подключена' : 'Ждём /start'}</span> Её траты приходят тебе сообщением
+          </>
+        }
+      >
+        {nameInput}
+      </SRow>
+    )
 
   return (
     <MoreCard title="Второй человек в боте">
       <div className="fld">
         <label htmlFor="m-pname">Имя</label>
-        <input
-          ref={ref}
-          id="m-pname"
-          className="inp"
-          type="text"
-          maxLength={NAME_MAX}
-          placeholder="Например, Маша"
-          autoComplete="off"
-          autoCapitalize="words"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => void commit()}
-          onKeyDown={onEnter(() => void commit())}
-        />
+        {nameInput}
       </div>
       <div className="mrow">
         <span className="mrow-t">
@@ -85,15 +108,24 @@ const REMIND: { value: string; label: string }[] = [
 export function BotSection({ settings }: { settings: Settings }) {
   const save = useSaveSettings(settings)
   const days = settings.remind_after_days ?? 2
+  const seg = (
+    <Segmented
+      label="Напоминание"
+      options={REMIND}
+      value={String(days)}
+      onChange={(v) => void save({ remind_after_days: Number(v) as Settings['remind_after_days'] })}
+    />
+  )
+  if (useDesk())
+    return (
+      <SRow icon={Bell} color="#FF3B30" title="Напоминать, если нет записей" desc="Сервер каждый день сам проверяет базу; напоминание — вам обоим">
+        {seg}
+      </SRow>
+    )
   return (
     <MoreCard title="Telegram-бот">
       <span className="flabel">Напоминать, если нет записей, дней</span>
-      <Segmented
-        label="Напоминание"
-        options={REMIND}
-        value={String(days)}
-        onChange={(v) => void save({ remind_after_days: Number(v) as Settings['remind_after_days'] })}
-      />
+      {seg}
       <p className="label">
         {`Каждый день сервер сам проверяет базу, чтобы она не уснула. ${
           days ? `Если записей не было ${plural(days, 'день', 'дня', 'дней')}, бот напомнит в Telegram вам обоим.` : 'Напоминания выключены.'
