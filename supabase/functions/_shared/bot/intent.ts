@@ -2,6 +2,7 @@
 // category creation, deleting; anything else is a record. A message with an amount is always a record
 // unless a phrase pattern claims it first.
 import { normalize } from '../parser.ts'
+import { AI_FAILED, aiAnswer, rulesUnsure } from './ai.ts'
 import { createCategory, CREATE_RE } from './categories.ts'
 import { clearPhrase, deleteByDescription, restoreLatest, startClear } from './clear.ts'
 import * as cmd from './commands.ts'
@@ -107,7 +108,14 @@ export async function route(ctx: Ctx, text: string, confirmed = false): Promise<
     const r = await report(ctx, text)
     if (r) return r
   }
-  return writeRecords(ctx, text)
+  if (ctx.ai && (await rulesUnsure(ctx, text))) {
+    const r = await aiAnswer(ctx, text)
+    if (r) return r
+  }
+  const w = await writeRecords(ctx, text)
+  if (w) return w
+  if (ctx.ai) return (await aiAnswer(ctx, text)) ?? [send(ctx, AI_FAILED)]
+  return null
 }
 
 /** A text nothing understood: the short hint (looks like a record) or the help. */

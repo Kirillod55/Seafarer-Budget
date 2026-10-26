@@ -8,7 +8,10 @@ import { categoryCallback } from './bot/categories.ts'
 import { clearCallback } from './bot/clear.ts'
 import { send } from './bot/ctx.ts'
 import type { Ctx, Keyboard } from './bot/ctx.ts'
-import { fallback, route } from './bot/intent.ts'
+import { AI_FAILED, aiAnswer, voice } from './bot/ai.ts'
+import { fallback, route, runCommand } from './bot/intent.ts'
+import type { Command } from './bot/intent.ts'
+import type { GroqPort } from './groq.ts'
 import { prefCallback } from './bot/prefs.ts'
 import { replyEdit } from './bot/replyEdit.ts'
 import { NEED_APP } from './bot/texts.ts'
@@ -21,8 +24,10 @@ export { restorePatch } from './bot/types.ts'
 export type Chats = number | Record<number, Author>
 
 export interface BotOptions {
-  /** GROQ_API_KEY is set: voice and the AI parser are on (stage 5) */
-  groq?: boolean
+  /** Groq (GROQ_API_KEY set): voice and the AI parser are on (stage 5) */
+  groq?: GroqPort | null
+  /** downloads a Telegram file (getFile + file URL) for voice messages */
+  voiceFile?: (fileId: string) => Promise<Uint8Array>
 }
 
 function chatMap(chats: Chats): { authorOf: (id: unknown) => Author | null; owner: number; partner: number | null } {
@@ -47,8 +52,9 @@ export async function handleUpdate(
   const author = map.authorOf(chatId)
   if (!author) return []
   const text: unknown = update?.message?.text
+  const media = update?.message?.voice ?? update?.message?.audio
   const isCallback = Boolean(update?.callback_query)
-  if (!isCallback && typeof text !== 'string') return []
+  if (!isCallback && typeof text !== 'string' && !media) return []
 
   if (typeof update.update_id === 'number' && (await store.seenUpdate(update.update_id))) return []
 
@@ -67,9 +73,10 @@ export async function handleUpdate(
 
   const ctx: Ctx = {
     chatId: chatId as number, author, ownerChatId: map.owner, partnerChatId: map.partner, settings, store, now,
-    today: localDate(now, settings.timezone), uuid, groq: Boolean(opts.groq), messageId: update?.message?.message_id,
+    today: localDate(now, settings.timezone), uuid, groq: Boolean(opts.groq), ai: opts.groq ?? null, messageId: update?.message?.message_id,
   }
   if (isCallback) return handleCallback(ctx, update.callback_query)
+  if (typeof text !== 'string') return voice(ctx, media, opts.voiceFile, (heard) => handleText(ctx, heard))
   return handleText(ctx, text as string, update.message)
 }
 
@@ -101,6 +108,13 @@ async function handleCallback(ctx: Ctx, q: Query): Promise<BotReply[]> {
     const r = await h(ctx, q, data)
     if (r) return r
   }
+  if (data === 'ai:ok') {
+    const source = sourceText(q)
+    const r = source ? await aiAnswer({ ...ctx, messageId: undefined }, source, true) : null
+    if (!r) return [answer(q), edit(ctx, q, AI_FAILED)]
+    return [answer(q, 'Записал'), edit(ctx, q, `📝 «${source}» — записал`), ...r]
+  }
+  if (data.startsWith('cmd:')) return [answer(q), ...(await runCommand(ctx, data.slice(4) as Command))]
   if (data.startsWith('se:')) return [answer(q, 'Ответь на сообщение с номером: «2 90», «2 вчера», «2 наличные»')]
   return [answer(q)]
 }

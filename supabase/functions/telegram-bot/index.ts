@@ -5,6 +5,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { handleUpdate } from '../_shared/bot.ts'
 import type { BotReply } from '../_shared/bot.ts'
 import type { Author } from '../_shared/types.ts'
+import { WHISPER_MODEL } from '../_shared/groq.ts'
+import type { GroqPort } from '../_shared/groq.ts'
 import { redact } from '../_shared/redact.ts'
 import { createStore } from './store.ts'
 
@@ -39,6 +41,45 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 })
 const store = createStore(admin, OWNER_USER_ID)
 
+const GROQ_TIMEOUT_MS = 6_000
+const GROQ_URL = 'https://api.groq.com/openai/v1'
+
+/** Groq through fetch: 6 s timeout, the key only in the header (never logged). */
+const groq: GroqPort | null = GROQ_API_KEY
+  ? {
+    async chat(model, body) {
+      const res = await fetch(`${GROQ_URL}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, ...body }),
+        signal: AbortSignal.timeout(GROQ_TIMEOUT_MS),
+      })
+      return { status: res.status, body: res.ok ? await res.json() : undefined }
+    },
+    async transcribe(audio, filename, prompt) {
+      const form = new FormData()
+      form.append('file', new Blob([audio]), filename)
+      form.append('model', WHISPER_MODEL)
+      form.append('prompt', prompt)
+      form.append('response_format', 'json')
+      const res = await fetch(`${GROQ_URL}/audio/transcriptions`, {
+        method: 'POST', headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, body: form, signal: AbortSignal.timeout(20_000),
+      })
+      if (!res.ok) throw new Error(`groq transcription ${res.status}`)
+      return String((await res.json())?.text ?? '')
+    },
+  }
+  : null
+
+/** getFile + download of a voice message (Telegram keeps the token in the URL: never log it). */
+async function voiceFile(fileId: string): Promise<Uint8Array> {
+  const meta = await fetch(`https://api.telegram.org/bot${TOKEN}/getFile?file_id=${encodeURIComponent(fileId)}`)
+  const path = (await meta.json())?.result?.file_path
+  if (!path) throw new Error('getFile: no file_path')
+  const file = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${path}`)
+  if (!file.ok) throw new Error(`file download ${file.status}`)
+  return new Uint8Array(await file.arrayBuffer())
+}
 async function telegram(r: BotReply): Promise<void> {
   const url = `https://api.telegram.org/bot${TOKEN}/${r.method}`
   let res: Response
@@ -78,7 +119,7 @@ Deno.serve(async (req: Request) => {
     if (!known) console.log(`update from chat ${chatId} (not a known chat)`) // how Kirill finds Masha's chat id
 
     try {
-      const replies = await handleUpdate(update, CHATS, store, new Date(), () => crypto.randomUUID(), { groq: Boolean(GROQ_API_KEY) })
+      const replies = await handleUpdate(update, CHATS, store, new Date(), () => crypto.randomUUID(), { groq, voiceFile })
       await deliver(replies)
     } catch (e) {
       console.error('handleUpdate failed:', safe(e))
