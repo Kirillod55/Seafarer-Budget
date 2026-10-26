@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { handleUpdate } from './bot.ts'
+import { handleUpdate, restorePatch } from './bot.ts'
 import type { BotReply, BotStore } from './bot.ts'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from './defaults.ts'
 import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, Transaction } from './types.ts'
@@ -50,6 +50,9 @@ class MemStore implements BotStore {
   async updateCategory(id: string, patch: Partial<Category>) {
     this.categoryRows = this.categoryRows.map((c) => (c.id === id ? { ...c, ...patch } : c))
   }
+  async insert() {}
+  async update() {}
+  async binnedTransactions() { return [] }
 }
 
 function seedTx(over: Partial<Transaction>): Transaction {
@@ -397,5 +400,28 @@ describe('handleUpdate', () => {
     const s = new MemStore()
     const u = { update_id: 1, message: { message_id: 1, chat: { id: OWNER }, photo: [] } }
     expect(await run(s, u)).toEqual([])
+  })
+})
+
+describe('stage 4 task 1: alive filters', () => {
+  it('undo never picks a row from the undo bin', async () => {
+    const s = new MemStore()
+    s.txRows = [
+      seedTx({ id: 'old', source: 'bot', created_at: '2026-10-21T09:00:00.000Z' }),
+      seedTx({ id: 'binned', source: 'bot', created_at: '2026-10-21T09:30:00.000Z', deleted_at: '2026-10-21T09:40:00.000Z', deleted_batch: 'b1' }),
+    ]
+    await run(s, msg('/undo'))
+    expect(s.txRows.find((t) => t.id === 'binned')!.deleted).toBe(false)
+    expect(s.txRows.find((t) => t.id === 'old')!.deleted).toBe(true)
+  })
+
+  it('restorePatch sends base_rev = rev so set_rev() lets the row out of the bin', () => {
+    expect(restorePatch({ rev: 41 })).toEqual({ deleted_at: null, deleted_batch: null, base_rev: 41 })
+  })
+
+  it('/today leaves binned rows out', async () => {
+    const s = new MemStore()
+    s.txRows = [seedTx({ amount: 5, amount_usd: 5, currency: 'USD', deleted_at: '2026-10-21T09:40:00.000Z', deleted_batch: 'b1' })]
+    expect(textOf(await run(s, msg('/today')))).toContain('Сегодня трат нет')
   })
 })

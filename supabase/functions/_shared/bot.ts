@@ -11,6 +11,7 @@ import {
   monthReport,
   reservedUsd,
 } from './calc.ts'
+import { alive, liveRows } from './alive.ts'
 import { localDate, monthOf } from './dates.ts'
 import { round2, usdRate } from './fx.ts'
 import { money } from './format.ts'
@@ -35,6 +36,22 @@ export interface BotStore {
   updateTx(id: string, patch: Partial<Transaction>): Promise<void>
   insertGoalMove(m: GoalMove): Promise<void>
   updateCategory(id: string, patch: Partial<Category>): Promise<void>
+  /** Insert a row of the owner (the store sets `user_id`; `rev` is stamped by the database). */
+  insert(table: WriteTable, row: object): Promise<void>
+  /**
+   * Patch a row of the owner. Restoring from the bin must send `base_rev` = the row's `rev`
+   * (set_rev() keeps the deletion otherwise); use `restorePatch`.
+   */
+  update(table: WriteTable, id: string, patch: object): Promise<void>
+  /** Transactions in the 24 h undo bin (`deleted_at` set, not deleted for good). */
+  binnedTransactions(): Promise<Transaction[]>
+}
+
+export type WriteTable = 'settings' | 'accounts' | 'categories' | 'transactions' | 'goals' | 'goal_moves' | 'limits'
+
+/** The patch that takes a row out of the undo bin: the server accepts it only with base_rev >= deleted_rev. */
+export function restorePatch(row: { rev?: number }): { deleted_at: null; deleted_batch: null; base_rev: number | null } {
+  return { deleted_at: null, deleted_batch: null, base_rev: row.rev ?? null }
 }
 
 export interface BotReply {
@@ -62,6 +79,7 @@ const NEED_APP = 'Сначала открой приложение — оно с
 // small helpers
 // ---------------------------------------------------------------------------
 const usd = (n: number) => money(n, 'USD')
+const liveTxs = async (store: BotStore) => liveRows(await store.transactions())
 
 function send(chatId: number, text: string, inlineKeyboard?: { text: string; callback_data: string }[][]): BotReply {
   const payload: Record<string, unknown> = { chat_id: chatId, text }
@@ -107,7 +125,7 @@ function learnableWord(note: string): string | null {
 }
 
 function activeExpenseCategories(categories: Category[]): Category[] {
-  return categories.filter((c) => !c.deleted && !c.archived && c.kind === 'expense').sort((a, b) => a.sort - b.sort)
+  return categories.filter((c) => alive(c) && !c.archived && c.kind === 'expense').sort((a, b) => a.sort - b.sort)
 }
 
 function rateFor(rates: FxRate[], currency: string, date: string) {
@@ -239,7 +257,7 @@ async function saveTx(
     const limits = await store.limits()
     const limit = limits.find((l) => !l.deleted && l.category_id === categoryId)
     if (limit) {
-      const before = await store.transactions()
+      const before = await liveTxs(store)
       const month = monthOf(tx.date)
       const b = limitStatus(limit, before, month)
       const a = limitStatus(limit, [...before, tx], month)
@@ -328,7 +346,7 @@ async function runCommand(
       return [send(chatId, HELP_TEXT)]
 
     case 'today': {
-      const rows = (await store.transactions()).filter((t) => t.kind === 'expense' && t.date === today)
+      const rows = (await liveTxs(store)).filter((t) => t.kind === 'expense' && t.date === today)
       if (rows.length === 0) return [send(chatId, 'Сегодня трат нет')]
       const total = round2(rows.reduce((s, t) => s + t.amount_usd, 0))
       const lines = rows.map((t) => `• ${describeTx(t, categories)}`)
@@ -336,7 +354,7 @@ async function runCommand(
     }
 
     case 'month': {
-      const txs = await store.transactions()
+      const txs = await liveTxs(store)
       const month = monthOf(today)
       const rep = monthReport(txs, month)
       if (rep.byCategory.length === 0) return [send(chatId, `За ${month} трат пока нет`)]
@@ -351,7 +369,7 @@ async function runCommand(
 
     case 'left': {
       const [txs, moves, goals, rates, accounts] = await Promise.all([
-        store.transactions(),
+        liveTxs(store),
         store.goalMoves(),
         store.goals(),
         store.rates(),
@@ -378,7 +396,7 @@ async function runCommand(
     }
 
     case 'undo': {
-      const last = (await store.transactions())
+      const last = (await liveTxs(store))
         .filter((t) => !t.deleted && t.source === 'bot')
         .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))[0]
       if (!last) return [send(chatId, 'Нечего отменять')]
@@ -415,7 +433,7 @@ async function handleCallback(
   const [kind, txId, sortRaw] = data.split(':')
   if ((kind !== 'c' && kind !== 'u') || !txId) return [answer()]
 
-  const [txs, categories] = await Promise.all([store.transactions(), store.categories()])
+  const [txs, categories] = await Promise.all([liveTxs(store), store.categories()])
   const tx = txs.find((t) => t.id === txId)
   if (!tx) return [answer('Запись не найдена или уже удалена')]
 

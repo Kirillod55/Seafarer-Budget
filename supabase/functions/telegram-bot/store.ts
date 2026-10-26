@@ -5,6 +5,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BotStore } from '../_shared/bot.ts'
 import { localDate } from '../_shared/dates.ts'
 import { nbuUrl, parseNbu } from '../_shared/fx.ts'
+import { SOFT_TABLES } from '../_shared/types.ts'
 import type { Category, FxRate, GoalMove, Settings, Transaction } from '../_shared/types.ts'
 
 const PAGE = 1000
@@ -37,15 +38,17 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
     })
   const now = opts.now ?? (() => new Date())
 
-  /** All live rows of an owner's table, paged past the 1000-row API limit. */
-  async function all<T>(table: string): Promise<T[]> {
+  /**
+   * All live rows of an owner's table, paged past the 1000-row API limit. Live = not deleted for good
+   * and, on the soft tables, not in the 24 h undo bin (`deleted_at is null`); `bin` reads the bin instead.
+   */
+  async function all<T>(table: string, bin = false): Promise<T[]> {
     const out: T[] = []
+    const soft = (SOFT_TABLES as readonly string[]).includes(table)
     for (let from = 0; ; from += PAGE) {
-      const { data, error } = await db
-        .from(table)
-        .select('*')
-        .eq('user_id', ownerUserId)
-        .eq('deleted', false)
+      let q = db.from(table).select('*').eq('user_id', ownerUserId).eq('deleted', false)
+      if (soft) q = bin ? q.not('deleted_at', 'is', null) : q.is('deleted_at', null)
+      const { data, error } = await q
         .order('rev', { ascending: true })
         .range(from, from + PAGE - 1)
       if (error) fail(`read ${table}`, error)
@@ -125,5 +128,12 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
       if (error) fail('insert goal_move', error)
     },
     updateCategory: (id, patch: Partial<Category>) => update('categories', id, patch),
+
+    async insert(table, row) {
+      const { error } = await db.from(table).insert({ ...clean(row), user_id: ownerUserId })
+      if (error) fail(`insert ${table}`, error)
+    },
+    update: (table, id, patch) => update(table, id, patch),
+    binnedTransactions: () => all<Transaction>('transactions', true),
   }
 }
