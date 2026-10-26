@@ -32,6 +32,8 @@ export interface BotStore {
   saveDraft(updateId: number, draft: object): Promise<void>
   /** Take the draft once: the draft, 'used' when already taken, null when there is none (or it was cleaned up). */
   takeDraft(updateId: number): Promise<unknown>
+  /** The same patch on many rows of the owner, set-based (the store chunks it), e.g. /clear «всё время». */
+  updateMany(table: WriteTable, ids: string[], patch: object): Promise<void>
   /** Rows of a soft table other than transactions in the 24 h undo bin (for «Вернуть»). */
   binned(table: 'categories' | 'goals' | 'limits'): Promise<BinnedRow[]>
   /** Transactions in the 24 h undo bin (`deleted_at` set, not deleted for good). */

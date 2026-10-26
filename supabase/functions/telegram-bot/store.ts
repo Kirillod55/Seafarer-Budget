@@ -154,5 +154,12 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
     update: (table, id, patch) => update(table, id, patch),
     binnedTransactions: () => all<Transaction>('transactions', true),
     binned: (table) => all(table, true),
+
+    async updateMany(table, ids, patch) {
+      for (let i = 0; i < ids.length; i += 200) {
+        const { error } = await db.from(table).update(clean(patch as Record<string, unknown>)).in('id', ids.slice(i, i + 200)).eq('user_id', ownerUserId)
+        if (error) fail(`update ${table}`, error)
+      }
+    },
   }
 }

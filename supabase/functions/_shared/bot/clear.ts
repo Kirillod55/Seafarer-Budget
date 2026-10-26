@@ -84,7 +84,8 @@ async function summary(ctx: Ctx, scope: WipeScope, kind: ClearKind): Promise<Bot
 async function bin(ctx: Ctx, rows: Transaction[]): Promise<string> {
   const batch = ctx.uuid()
   const at = ctx.now.toISOString()
-  for (const t of rows) await ctx.store.update('transactions', t.id, { deleted_at: at, deleted_batch: batch })
+  // one set-based write (chunked by the store): «всё время» must not run into the Edge timeout row by row
+  await ctx.store.updateMany('transactions', rows.map((t) => t.id), { deleted_at: at, deleted_batch: batch })
   return batch
 }
 

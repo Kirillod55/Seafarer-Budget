@@ -60,6 +60,13 @@ export class MemStore implements BotStore {
   async goalMoves() { return this.moveRows.filter((m) => !m.deleted) }
   async limits() { return this.limitRows.filter(alive) }
   async transactions() { return this.txRows.filter(alive) }
+  manyWrites: { table: WriteTable; count: number }[] = []
+  async updateMany(table: WriteTable, ids: string[], patch: object) {
+    this.manyWrites.push({ table, count: ids.length })
+    const set = new Set(ids)
+    const t = this.table(table)
+    t.set(t.get().map((r) => (set.has(r.id) ? { ...r, ...(patch as Record<string, unknown>), rev: ++this.rev } : r)))
+  }
   async binned(table: 'categories' | 'goals' | 'limits') {
     return (this.table(table).get() as Row[]).filter((r) => !r.deleted && (r.deleted_at ?? null) !== null) as never[]
   }

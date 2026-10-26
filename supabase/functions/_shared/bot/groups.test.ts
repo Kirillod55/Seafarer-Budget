@@ -317,6 +317,17 @@ describe('/clear and «удали <описание>» (spec §4, §5)', () => {
     expect(s.txRows.every((t) => t.deleted_at === null)).toBe(true)
   })
 
+  it('«всё время» bins hundreds of records with one set-based write, not one request per row', async () => {
+    const s = new MemStore()
+    s.txRows = Array.from({ length: 450 }, (_, i) => seedTx({ id: `r${i}`, amount: 1, amount_usd: 1, date: '2026-09-01', rev: i + 1 }))
+    const sum = await run(s, msg('удали всё за всё время'))
+    const del = await run(s, cb(buttons(sum).find((b) => b.text.startsWith('Удалить'))!.callback_data))
+    expect(textOf(del)).toContain('Удалено 450 записей')
+    expect(s.txRows.every((t) => t.deleted_at && t.deleted_batch === s.txRows[0].deleted_batch)).toBe(true)
+    expect(s.writes).toHaveLength(0)
+    expect(s.manyWrites).toEqual([{ table: 'transactions', count: 450 }])
+  })
+
   it('words skip the steps; buttons expire after 10 minutes; Masha cannot clear', async () => {
     const s = new MemStore()
     seed(s)
