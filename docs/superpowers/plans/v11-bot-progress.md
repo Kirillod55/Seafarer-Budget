@@ -2,3 +2,4 @@
 
 One line per finished task: stage.task — what — commit.
 
+- 4.1 alive filters, /undo skips bin, restorePatch — eca1a20

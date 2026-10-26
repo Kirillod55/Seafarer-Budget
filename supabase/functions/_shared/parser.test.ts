@@ -39,6 +39,10 @@ describe('parseMessage: transactions', () => {
       date: '2026-10-21',
       note: 'кофе',
       firstWord: 'кофе',
+      dateGiven: false,
+      currencyGuess: null,
+      accountAmbiguous: false,
+      quantity: null,
     })
   })
 
@@ -59,11 +63,12 @@ describe('parseMessage: transactions', () => {
     expect(tx('90 mdl кафе')).toMatchObject({ amount: 90, categoryId: 'Кафе и рестораны', note: 'кафе' })
   })
 
-  it('single-letter l only when glued to the number', () => {
+  it('single-letter l only right next to the number (spec §5: `50L`, `50 L`)', () => {
     expect(tx('кафе 90l').currency).toBe('MDL')
-    const p = tx('кафе 90 l')
+    expect(tx('кафе 90 l').currency).toBe('MDL')
+    const p = tx('l кафе 90')
     expect(p.currency).toBe('UAH')
-    expect(p.note).toBe('кафе l')
+    expect(p.note).toBe('l кафе')
   })
 
   it('glued currencies and decimal/thousands', () => {
