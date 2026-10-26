@@ -932,3 +932,37 @@
   -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
   transition: background-color 9999s;
 }
+
+/*
+ * Every text field looks like the sign-in fields (Kirill 2026-10-26: «все варианты ввода — как при первом запуске»):
+ * an input without a class of its own gets the .rec .inp look. :where() keeps this at zero specificity, so a field with
+ * its own class (.inp, the quick-entry line, the picker search) keeps its rules.
+ */
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']), select, textarea) {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: max(17px, 1rem);
+  line-height: 1.2;
+}
+
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']), textarea) {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+:where(input, select, textarea):focus {
+  outline: none;
+  border-color: var(--accent-text);
+}
+
+:where(input, select, textarea)::placeholder {
+  color: var(--muted);
+}

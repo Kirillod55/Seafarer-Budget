@@ -413,20 +413,7 @@ html.desk .card {
   padding: 16px 18px;
 }
 
-html.desk input,
-html.desk select,
-html.desk textarea {
-  min-height: 36px;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-html.desk input:focus,
-html.desk select:focus,
-html.desk textarea:focus {
-  outline: none;
-  box-shadow: inset 0 -2px 0 var(--accent-text);
-}
+/* text fields keep the sign-in look on PC too (ui.css: .rec .inp and the :where() default) — one style everywhere */
 
 html.desk .btn-acc,
 html.desk .btn-gray,
@@ -611,11 +598,7 @@ html.desk .sheetnav h3 {
   text-align: left;
 }
 
-html.desk .sheet input,
-html.desk .sheet select,
-html.desk .sheet textarea {
-  font-size: 14px;
-}
+
 
 @keyframes dlgIn {
   from {
@@ -1806,4 +1789,19 @@ html.desk .mcard > h3 {
 
 .srow .merr {
   color: var(--danger);
+}
+
+/* «Отчёт»: ‹ Сентябрь / Ноябрь › in lime (Kirill's pick 2026-10-26, variant 1 — filled) */
+html.desk .screen[data-view='report'] .dhead .navback,
+html.desk .screen[data-view='report'] .dhead .navfwd {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+html.desk .screen[data-view='report'] .dhead .navback:hover,
+html.desk .screen[data-view='report'] .dhead .navfwd:hover {
+  background: var(--accent);
+  filter: brightness(0.96);
 }
