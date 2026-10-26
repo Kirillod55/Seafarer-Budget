@@ -66,7 +66,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
               current={activeItem(route)}
               onOpen={(item, part) => {
                 open(routeOf(item))
-                if (part) scrollToCard('Второй человек в боте')
+                if (part) scrollToCard('Telegram-бот')
               }}
             />
             <DeskKeys />
@@ -85,7 +85,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
 function scrollToCard(title: string) {
   let tries = 0
   const find = () => {
-    const h = [...document.querySelectorAll('.screen:not(.below) h3')].find((el) => el.textContent === title)
+    const h = [...document.querySelectorAll('.screen:not(.below) h2, .screen:not(.below) h3')].find((el) => el.textContent === title)
     if (h) h.closest('section')?.scrollIntoView?.({ block: 'start' })
     else if (++tries < 40) setTimeout(find, 25)
   }

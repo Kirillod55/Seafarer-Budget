@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
 import type { Settings } from '@shared/types.ts'
 import { curLabel, curOptions } from '../../ui/currencies.ts'
-import { X } from '../../ui/icons.ts'
+import { useDesk } from '../../desk/layout.ts'
+import { Plus, Tag, Wallet, X } from '../../ui/icons.ts'
 import { Picker } from '../../ui/Picker.tsx'
 import { useFlip } from '../../ui/useFlip.ts'
-import { MoreCard, useSaveSettings } from './common.tsx'
+import { MoreCard, SRow, useSaveSettings } from './common.tsx'
 import { onEnter } from '../../ui/keys.ts'
 
 const CODE = /^[A-Z]{3}$/
@@ -20,6 +21,7 @@ export function CurrenciesSection({ settings }: { settings: Settings }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const chipsRef = useRef<HTMLDivElement>(null)
+  const desk = useDesk()
   // a pill added or removed: the others slide to their place, the new one fades in (spec §6 «Плавная перерисовка»)
   useFlip(chipsRef, [settings.currencies.join(','), settings.default_currency])
   const locked = (c: string) => c === settings.base_currency || c === settings.default_currency
@@ -37,52 +39,85 @@ export function CurrenciesSection({ settings }: { settings: Settings }) {
     if (await save({ currencies: [...settings.currencies, value] })) setCode('')
   }
 
+  const chips = (
+    <div ref={chipsRef} className="mchips">
+      {settings.currencies.map((c) => (
+        <span key={c} className={`tag${locked(c) ? '' : ' has-x'}`} data-flip-key={`cur-${c}`}>
+          {curLabel(c)}
+          {!locked(c) && (
+            <button type="button" className="x" aria-label={`Убрать ${c}`} onClick={() => remove(c)}>
+              <X aria-hidden="true" strokeWidth={2.2} />
+            </button>
+          )}
+        </span>
+      ))}
+    </div>
+  )
+  const picker = (
+    <Picker
+      id="m-defcur"
+      label="Валюта по умолчанию"
+      kind="currency"
+      value={settings.default_currency}
+      options={curOptions(settings.currencies)}
+      onChange={(v) => void save({ default_currency: v })}
+    />
+  )
+  const codeInput = (
+    <input
+      id="m-newcur"
+      className="inp"
+      type="text"
+      maxLength={3}
+      placeholder="PLN"
+      autoComplete="off"
+      autoCapitalize="characters"
+      spellCheck={false}
+      aria-invalid={!!error}
+      aria-describedby="m-curhint"
+      value={code}
+      onChange={(e) => {
+        setCode(e.target.value)
+        if (error) setError('')
+      }}
+      onKeyDown={onEnter(() => void add())}
+    />
+  )
+  const hint = (
+    <span id="m-curhint" className={`label${error ? ' err' : ''}`} role={error ? 'alert' : undefined}>
+      {error || HINT}
+    </span>
+  )
+
+  if (desk)
+    return (
+      <>
+        <SRow icon={Wallet} color="#30B455" title="Включённые валюты" desc="Курс берётся у НБУ">
+          {chips}
+        </SRow>
+        <SRow icon={Tag} color="#AF52DE" title="Валюта по умолчанию" desc="Её подставляет быстрая строка и бот" htmlFor="m-defcur">
+          {picker}
+        </SRow>
+        <SRow icon={Plus} color="#32ADE6" title="Добавить валюту" desc={hint} htmlFor="m-newcur">
+          {codeInput}
+          <button type="button" className="fbtn" onClick={() => void add()}>
+            Добавить
+          </button>
+        </SRow>
+      </>
+    )
+
   return (
     <MoreCard title="Валюты">
-      <div ref={chipsRef} className="mchips">
-        {settings.currencies.map((c) => (
-          <span key={c} className={`tag${locked(c) ? '' : ' has-x'}`} data-flip-key={`cur-${c}`}>
-            {curLabel(c)}
-            {!locked(c) && (
-              <button type="button" className="x" aria-label={`Убрать ${c}`} onClick={() => remove(c)}>
-                <X aria-hidden="true" strokeWidth={2.2} />
-              </button>
-            )}
-          </span>
-        ))}
-      </div>
+      {chips}
       <div className="fld">
         <label htmlFor="m-defcur">Валюта по умолчанию</label>
-        <Picker
-          id="m-defcur"
-          label="Валюта по умолчанию"
-          kind="currency"
-          value={settings.default_currency}
-          options={curOptions(settings.currencies)}
-          onChange={(v) => void save({ default_currency: v })}
-        />
+        {picker}
       </div>
       <div className="fld">
         <label htmlFor="m-newcur">Добавить валюту</label>
         <div className="quick">
-          <input
-            id="m-newcur"
-            className="inp"
-            type="text"
-            maxLength={3}
-            placeholder="PLN"
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            aria-invalid={!!error}
-            aria-describedby="m-curhint"
-            value={code}
-            onChange={(e) => {
-              setCode(e.target.value)
-              if (error) setError('')
-            }}
-            onKeyDown={onEnter(() => void add())}
-          />
+          {codeInput}
           <button type="button" className="btn-acc" onClick={() => void add()}>
             Добавить
           </button>

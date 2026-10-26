@@ -9,7 +9,9 @@ import { csvFileName, downloadCsv, toCsv } from '../../export.ts'
 import { parseAmount } from '../../lib/amount.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
 import { useToast } from '../../ui/Toast.tsx'
-import { FAILED, MoreCard, useSaveSettings } from './common.tsx'
+import { useDesk } from '../../desk/layout.ts'
+import { CreditCard, Download, Scale } from '../../ui/icons.ts'
+import { FAILED, MoreCard, SRow, useSaveSettings } from './common.tsx'
 import { onEnter } from '../../ui/keys.ts'
 import { ImportPanel } from './ImportPanel.tsx'
 
@@ -23,14 +25,23 @@ const MODES: { value: Settings['accounts_mode']; label: string }[] = [
 /** «Режим счетов»: switching keeps every account and record (only `accounts_mode` is written). */
 export function ModeSection({ settings }: { settings: Settings }) {
   const save = useSaveSettings(settings)
+  const seg = (
+    <Segmented<Settings['accounts_mode']>
+      label="Режим счетов"
+      options={MODES}
+      value={settings.accounts_mode}
+      onChange={(accounts_mode) => void save({ accounts_mode })}
+    />
+  )
+  if (useDesk())
+    return (
+      <SRow icon={CreditCard} color="#0A84FF" title="Режим счетов" desc="Переключение не удаляет ни счета, ни записи">
+        {seg}
+      </SRow>
+    )
   return (
     <MoreCard title="Режим счетов">
-      <Segmented<Settings['accounts_mode']>
-        label="Режим счетов"
-        options={MODES}
-        value={settings.accounts_mode}
-        onChange={(accounts_mode) => void save({ accounts_mode })}
-      />
+      {seg}
       <p className="label">Переключение не удаляет ни счета, ни записи.</p>
     </MoreCard>
   )
@@ -58,6 +69,7 @@ function ReconcileRow({
   const [real, setReal] = useState('')
   const [hint, setHint] = useState<{ text: string; err?: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
+  const desk = useDesk()
 
   async function submit() {
     if (busy) return
@@ -91,6 +103,43 @@ function ReconcileRow({
     }
   }
 
+  const control = (
+    <div className="quick">
+      <input
+        id={inputId}
+        className="inp num"
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder={String(Math.round(current))}
+        aria-label={`Реальный остаток ${name}`}
+        aria-invalid={!!hint?.err}
+        value={real}
+        onChange={(e) => {
+          setReal(e.target.value)
+          if (hint) setHint(null)
+        }}
+        onKeyDown={onEnter(() => void submit())}
+      />
+      <button type="button" className="btn-gray" aria-label={`Сверить ${name}`} disabled={busy} onClick={() => void submit()}>
+        Сверить
+      </button>
+    </div>
+  )
+
+  // PC «Параметры»: a row — what is counted and how much is there now, the field and «Сверить» on the right
+  if (desk)
+    return (
+      <SRow
+        icon={Scale}
+        color="#FF9500"
+        title={`Сверка · ${name}`}
+        desc={hint ? <span className={hint.err ? 'merr' : undefined} role={hint.err ? 'alert' : 'status'}>{hint.text}</span> : `Сейчас ${money(current, currency)} — впиши реальную сумму, разницу запишу корректировкой`}
+      >
+        {control}
+      </SRow>
+    )
+
   return (
     <div className="recon">
       <div className="mrow">
@@ -99,27 +148,7 @@ function ReconcileRow({
         </label>
         <span className="num mnow">{`сейчас ${money(current, currency)}`}</span>
       </div>
-      <div className="quick">
-        <input
-          id={inputId}
-          className="inp num"
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          placeholder={String(Math.round(current))}
-          aria-label={`Реальный остаток ${name}`}
-          aria-invalid={!!hint?.err}
-          value={real}
-          onChange={(e) => {
-            setReal(e.target.value)
-            if (hint) setHint(null)
-          }}
-          onKeyDown={onEnter(() => void submit())}
-        />
-        <button type="button" className="btn-gray" aria-label={`Сверить ${name}`} disabled={busy} onClick={() => void submit()}>
-          Сверить
-        </button>
-      </div>
+      {control}
       {hint && (
         <p className={`label${hint.err ? ' err' : ''}`} role={hint.err ? 'alert' : 'status'}>
           {hint.text}
@@ -152,10 +181,9 @@ export function ReconcileSection({
     ...new Set([settings.default_currency, ...settings.currencies, ...Object.keys(bal)]),
   ].filter((c) => c === settings.default_currency || (bal[c] ?? 0) !== 0)
 
-  return (
-    <MoreCard title="Сверка" className="mrecon">
-      <p className="label">Пересчитал наличку — впиши реальную сумму, разницу запишу корректировкой.</p>
-      {settings.accounts_mode === 'multi'
+  const desk = useDesk()
+  const rows =
+      settings.accounts_mode === 'multi'
         ? active.flatMap((a) => {
             const bal = balances(txs, a.id)
             return currenciesOf(bal).map((c) => (
@@ -167,7 +195,12 @@ export function ReconcileSection({
             return currenciesOf(bal).map((c) => (
               <ReconcileRow key={c} name={c} current={bal[c] ?? 0} currency={c} accountId={defaultAccount?.id} today={today} />
             ))
-          })()}
+          })()
+  if (desk) return <>{rows}</>
+  return (
+    <MoreCard title="Сверка" className="mrecon">
+      <p className="label">Пересчитал наличку — впиши реальную сумму, разницу запишу корректировкой.</p>
+      {rows}
     </MoreCard>
   )
 }
@@ -182,6 +215,7 @@ export function BackupSection({ today, partnerName }: { today: string; partnerNa
   const { db } = useApp()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  const desk = useDesk()
 
   async function download() {
     if (busy) return
@@ -201,6 +235,19 @@ export function BackupSection({ today, partnerName }: { today: string; partnerNa
     }
   }
 
+  if (desk)
+    return (
+      <>
+        <SRow icon={Download} color="#30B455" title="Резервная копия" desc="Все записи одним файлом для Excel">
+          <button type="button" className="fbtn" disabled={busy} onClick={() => void download()}>
+            Скачать CSV
+          </button>
+        </SRow>
+        <div className="srow simport">
+          <ImportPanel partnerName={partnerName} />
+        </div>
+      </>
+    )
   return (
     <MoreCard title="Резервная копия">
       <p className="label">Все записи одним файлом для Excel.</p>

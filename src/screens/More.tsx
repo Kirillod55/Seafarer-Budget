@@ -6,7 +6,7 @@ import { useApp } from '../context.tsx'
 import { useDesk } from '../desk/layout.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { useNav } from '../nav/Navigator.tsx'
-import { Archive, ChevronRight, CreditCard, Gauge, Tag, type LucideIcon } from '../ui/icons.ts'
+import { Archive, ChevronRight, CreditCard, Gauge, LogOut, Tag, type LucideIcon } from '../ui/icons.ts'
 import { AboutSection } from './more/AboutSection.tsx'
 import { AppearanceSection } from './more/AppearanceSection.tsx'
 import { BudgetSection } from './more/BudgetSection.tsx'
@@ -14,6 +14,7 @@ import { CurrenciesSection } from './more/CurrenciesSection.tsx'
 import { BackupSection, ModeSection, ReconcileSection } from './more/DataSection.tsx'
 import { BotSection, PartnerSection } from './more/PartnerSection.tsx'
 import { WipeSection } from './more/WipePanel.tsx'
+import { SGroup, SRow } from './more/common.tsx'
 import './record.css'
 import './goals.css'
 import './more/more.css'
@@ -72,13 +73,49 @@ export function More({ onSignOut }: { onSignOut(): void }) {
   // everything put away (spec §4 «Ещё → Архив»): records, goals, categories and accounts; binned rows are not here
   const archived = [txs, goals, categories, accounts].reduce((n, rows) => n + rows.filter((r) => r.archived).length, 0)
 
+  // PC: Windows «Параметры» — the prototype's groups of rows (moreDesk)
+  if (desk)
+    return (
+      <>
+        <NavBar title={title} />
+        <div className="more">
+          <SGroup title="Бюджет до посадки">
+            <BudgetSection settings={settings} txs={txs} rates={rates} moves={moves} goals={goals} accounts={accounts} today={today} />
+          </SGroup>
+          <SGroup title="Оформление и счета">
+            <AppearanceSection />
+            <ModeSection settings={settings} />
+          </SGroup>
+          <SGroup title="Валюты">
+            <CurrenciesSection settings={settings} />
+          </SGroup>
+          <SGroup title="Telegram-бот">
+            <PartnerSection settings={settings} />
+            <BotSection settings={settings} />
+          </SGroup>
+          <SGroup title="Данные">
+            <ReconcileSection settings={settings} accounts={accounts} txs={txs} today={today} />
+            <BackupSection today={today} partnerName={settings.partner_name} />
+            <WipeSection settings={settings} today={today} />
+            <SRow icon={LogOut} color="#FF3B30" title="Выйти из аккаунта">
+              <button type="button" className="fbtn danger" onClick={onSignOut}>
+                Выйти
+              </button>
+            </SRow>
+          </SGroup>
+          <SGroup title="О программе">
+            <AboutSection />
+          </SGroup>
+        </div>
+      </>
+    )
+
   return (
     <>
       <NavBar title={title} />
       <div className="more">
         <BudgetSection settings={settings} txs={txs} rates={rates} moves={moves} goals={goals} accounts={accounts} today={today} />
 
-        {!desk && (
         <div className="group menu">
           {MENU.map(({ screen, label, icon: Icon, color }) => {
             const count = screen === 'archive' && archived > 0 ? archived : 0
@@ -101,7 +138,6 @@ export function More({ onSignOut }: { onSignOut(): void }) {
             )
           })}
         </div>
-        )}
 
         <AppearanceSection />
         <PartnerSection settings={settings} />
@@ -111,7 +147,6 @@ export function More({ onSignOut }: { onSignOut(): void }) {
         <ReconcileSection settings={settings} accounts={accounts} txs={txs} today={today} />
         <BackupSection today={today} partnerName={settings.partner_name} />
         <WipeSection settings={settings} today={today} />
-        {desk && <AboutSection />}
 
         <button type="button" className="btn-gray danger msignout" onClick={onSignOut}>
           Выйти
