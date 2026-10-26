@@ -35,6 +35,22 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rolldownOptions: {
+      output: {
+        // the app's own code changes every release, the libraries rarely: separate chunks stay cached (and none is
+        // over Vite's 500 kB warning — stage 2 carry-over, the main JS was 749 kB)
+        codeSplitting: {
+          groups: [
+            { name: 'react', test: /node_modules[\/](react|react-dom|scheduler)[\/]/, priority: 3 },
+            { name: 'supabase', test: /node_modules[\/]@supabase[\/]/, priority: 2 },
+            { name: 'dexie', test: /node_modules[\/](dexie|dexie-react-hooks)[\/]/, priority: 2 },
+            { name: 'vendor', test: /node_modules[\/]/, priority: 1 },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@shared': fileURLToPath(new URL('./supabase/functions/_shared', import.meta.url)),

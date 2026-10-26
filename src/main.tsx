@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
-import '@fontsource-variable/onest'
+import './ui/fonts.css'
 import App from './App'
 import { AppProvider } from './context.tsx'
 import { db } from './db/local.ts'
