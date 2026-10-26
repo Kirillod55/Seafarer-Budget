@@ -43,32 +43,14 @@ html.desk.scrolling {
   scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
 }
 
+/* one width for every section (Kirill 2026-10-26): the title and the content start at the same x everywhere */
 html.desk .screen {
-  max-width: 1120px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 24px 32px 48px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-html.desk .screen[data-view='home'] {
-  max-width: 1320px;
-}
-
-html.desk .screen[data-view='cats'],
-html.desk .screen[data-view='archive'],
-html.desk .screen[data-view='calendar'],
-html.desk .screen[data-view='records'] {
-  max-width: 780px;
-}
-
-html.desk .screen[data-view='more'] {
-  max-width: 960px;
-}
-
-html.desk .screen[data-view='report'] {
-  max-width: 1240px;
 }
 
 html.desk .screen.below {
