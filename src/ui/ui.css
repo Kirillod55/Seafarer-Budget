@@ -782,3 +782,142 @@
   transform: scale(0.9);
   transition-duration: 0.1s;
 }
+
+/* ---------- forms shared by the screens: a column of fields (.rec), buttons, the reveal ---------- */
+/* Fields are 17 px or more (iOS never zooms the page on focus); colours only from tokens. */
+
+.rec {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rec .fld {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rec .fld > label,
+.rec .flabel {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+}
+
+/* the narrow column (currency, account) is wide enough for «USD $» */
+.rec .grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.rec .inp {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: max(17px, 1rem);
+  line-height: 1.2;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.rec .inp:focus {
+  outline: none;
+  border-color: var(--accent-text);
+}
+
+.rec .inp[aria-invalid='true'] {
+  border-color: var(--warn);
+}
+
+.rec .inp[readonly] {
+  background: var(--track);
+  color: var(--muted);
+}
+
+.rec .inp[readonly]:focus {
+  border-color: var(--line);
+}
+
+.rec input[type='date'].inp {
+  display: block;
+  font-size: max(17px, 1rem);
+  text-align: left;
+}
+
+.rec .inp::placeholder {
+  color: var(--muted);
+}
+
+.btn-acc,
+.btn-tint {
+  min-height: 44px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--r-btn);
+  font: inherit;
+  font-size: 0.882rem; /* 15 */
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s var(--ios);
+}
+
+.btn-acc {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* «В архив»: a lime tint, no glass (spec §6) */
+.btn-tint {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-text);
+}
+
+.btn-acc:active,
+.btn-tint:active {
+  transform: scale(0.96);
+}
+
+.textbtn {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.882rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* the new card and the move form show (prototype .reveal) */
+.reveal {
+  animation: reveal 0.38s var(--ios);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+
+  .btn-acc,
+  .btn-tint {
+    transition: none;
+  }
+}

@@ -124,7 +124,7 @@ describe('lockScroll', () => {
 
 describe('sheet CSS', () => {
   const sheetCss = readFileSync('src/ui/sheet.css', 'utf8')
-  const recordCss = readFileSync('src/screens/record.css', 'utf8')
+  const recordCss = readFileSync('src/screens/record.css', 'utf8') + readFileSync('src/ui/ui.css', 'utf8')
 
   it('every rule for fields in the sheet sets font-size ≥ 17 px (iOS never zooms on focus)', () => {
     const css = sheetCss + recordCss
