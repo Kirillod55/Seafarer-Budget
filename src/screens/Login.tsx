@@ -77,7 +77,7 @@ export function Login({
         </AuthBrand>
         <main className="au-main">
           <div className="au-center">
-            <form className="au-form" onSubmit={submit}>
+            <form className="au-form rec" onSubmit={submit}>
               <h1 className="au-h">Вход</h1>
               <div className="fld">
                 <label htmlFor="email">Email</label>

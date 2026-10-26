@@ -921,3 +921,14 @@
     transition: none;
   }
 }
+
+/* the browser's / WebView2's autofill paints its own pale background and text colour over the field;
+   keep the field in the theme's colours (an inset shadow is the only paint autofill lets through) */
+.inp:-webkit-autofill,
+.inp:-webkit-autofill:hover,
+.inp:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+  transition: background-color 9999s;
+}
