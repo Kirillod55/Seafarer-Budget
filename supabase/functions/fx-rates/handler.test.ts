@@ -162,3 +162,25 @@ describe('handleFxRequest', () => {
     expect(deps.writeRates).not.toHaveBeenCalled()
   })
 })
+
+describe('handleFxRequest: several dates at once (batched resolvePendingRates)', () => {
+  it('{dates}: one NBU call per uncached date, all rows in one answer', async () => {
+    const deps = makeDeps({
+      readRates: vi.fn(async (date: string) => date === '2026-10-19'
+        ? ['UAH', 'USD', 'EUR', 'MDL'].map((currency) => ({ date, currency, uah_per_unit: 1 }))
+        : []),
+      fetchNbu: vi.fn(async (url: string) => NBU.map((r) => ({ ...r, exchangedate: url.includes('20261020') ? '20.10.2026' : '21.10.2026' }))),
+    })
+    const res = await handleFxRequest(post({ dates: ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-20'] }), deps)
+    expect(res.status).toBe(200)
+    const rows = (await res.json()) as FxRate[]
+    expect(deps.fetchNbu).toHaveBeenCalledTimes(2)
+    expect(new Set(rows.map((r) => r.date))).toEqual(new Set(['2026-10-19', '2026-10-20', '2026-10-21']))
+  })
+
+  it('rejects more than 60 dates or a bad date', async () => {
+    const many = Array.from({ length: 61 }, (_, i) => new Date(Date.UTC(2026, 6, 1 + i)).toISOString().slice(0, 10))
+    expect((await handleFxRequest(post({ dates: many }), makeDeps())).status).toBe(400)
+    expect((await handleFxRequest(post({ dates: ['2026-13-01'] }), makeDeps())).status).toBe(400)
+  })
+})

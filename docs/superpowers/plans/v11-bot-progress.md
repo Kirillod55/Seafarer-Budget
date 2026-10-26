@@ -11,3 +11,4 @@ One line per finished task: stage.task — what — commit.
 - 5.1 groq.ts: request, schema, validation, fallback, cap — e3f2552
 - 5.2–5.4 voice, AI after rules, index.ts Groq port — 790c08b; stage 5 done
 - 6.1–6.3 keepalive.ts (reminder, summary, webhook, rates, purge, cleanup, backup, handler) — e9b9ff7
+- 6.4 /ping — 9b8b820

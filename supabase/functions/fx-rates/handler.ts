@@ -38,11 +38,7 @@ export async function handleFxRequest(req: Request, deps: FxDeps): Promise<Respo
   } catch {
     return json({ error: 'Invalid JSON body' }, 400)
   }
-  const { date, currencies } = (body ?? {}) as { date?: unknown; currencies?: unknown }
-  if (typeof date !== 'string' || !isRealDate(date)) {
-    return json({ error: 'Body must be { date: "YYYY-MM-DD" }' }, 400)
-  }
-
+  const { date, dates, currencies } = (body ?? {}) as { date?: unknown; dates?: unknown; currencies?: unknown }
   const wanted = [...BASE_CURRENCIES]
   if (Array.isArray(currencies)) {
     for (const c of currencies) {
@@ -50,11 +46,35 @@ export async function handleFxRequest(req: Request, deps: FxDeps): Promise<Respo
     }
   }
 
+  // several dates at once (after a big CSV import): one NBU call per date that is not cached
+  if (Array.isArray(dates)) {
+    const list = [...new Set(dates)]
+    if (list.length === 0 || list.length > MAX_DATES || !list.every((d) => typeof d === 'string' && isRealDate(d))) {
+      return json({ error: `Body must be { dates: ["YYYY-MM-DD", …] } with 1–${MAX_DATES} dates` }, 400)
+    }
+    const out: FxRate[] = []
+    for (const d of list as string[]) {
+      const r = await ratesFor(d, wanted, deps)
+      if ('rows' in r) out.push(...r.rows)
+    }
+    return json(out)
+  }
+
+  if (typeof date !== 'string' || !isRealDate(date)) {
+    return json({ error: 'Body must be { date: "YYYY-MM-DD" }' }, 400)
+  }
+  const r = await ratesFor(date, wanted, deps)
+  return 'rows' in r ? json(r.rows) : json({ error: r.error }, 502)
+}
+
+const MAX_DATES = 60
+
+async function ratesFor(date: string, wanted: string[], deps: FxDeps): Promise<{ rows: FxRate[] } | { error: string }> {
   try {
     // a hit only when every wanted currency is cached for that date (a newly added one is not yet)
     const cached = await deps.readRates(date)
     const have = new Set(cached.filter((r) => r.date === date).map((r) => r.currency))
-    if (wanted.every((c) => have.has(c))) return json(cached)
+    if (wanted.every((c) => have.has(c))) return { rows: cached }
   } catch {
     // cache read failure is not fatal: fall through to NBU
   }
@@ -63,14 +83,14 @@ export async function handleFxRequest(req: Request, deps: FxDeps): Promise<Respo
   try {
     rows = parseNbu(await deps.fetchNbu(nbuUrl(date)), wanted)
   } catch (e) {
-    return json({ error: `NBU request failed: ${e instanceof Error ? e.message : String(e)}` }, 502)
+    return { error: `NBU request failed: ${e instanceof Error ? e.message : String(e)}` }
   }
-  if (rows.length === 0) return json([])
+  if (rows.length === 0) return { rows: [] }
 
   try {
     await deps.writeRates(rows)
   } catch {
     // caching is best-effort; still return the fetched rates
   }
-  return json(rows)
+  return { rows }
 }
