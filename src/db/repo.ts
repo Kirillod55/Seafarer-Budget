@@ -49,6 +49,13 @@ export interface Repo {
    * whole «delete period»), or a table without a bin (settings, accounts and goal moves, whose removal stays final).
    */
   remove(table: SyncTable, id: string): Promise<string | null>
+  /**
+   * «Удалить» a category (spec §4 «Категории»): one batch bins the category and its limits, and its records move to
+   * «Прочее» / «Прочий доход» (archived and binned records too). restore(batch) brings back the category, the limit
+   * and the records' category — except a record moved elsewhere meanwhile. null: no such category, already in the
+   * bin or deleted for good, or «Прочее» / «Прочий доход» themselves (they cannot be removed).
+   */
+  removeCategory(id: string): Promise<string | null>
   /** Hide a record from the lists (it still counts in the balance and reports). */
   setArchived(id: string, archived: boolean): Promise<void>
   /** «Удалить записи…»: live records of the kind in the period go to the bin as one batch. */
@@ -83,6 +90,16 @@ const STANDARD_CATEGORIES = new Set(DEFAULT_CATEGORIES.map((c) => c.name))
 type CategoryKind = Category['kind']
 const OTHER_CATEGORY: Record<CategoryKind, string> = { expense: 'Прочее', income: 'Прочий доход' }
 const IMPORTED_CATEGORY_ICON = '🏷️'
+/** meta key of a category removal's record moves, for restore(batch) (local only: the undo lives on this device) */
+const movedKey = (batch: string) => `moved:${batch}`
+interface CategoryMoves {
+  from: string
+  to: string | null
+  ids: string[]
+  at: string
+}
+/** the undo bin lasts 24 h: older move lists are dropped */
+const MOVES_TTL_MS = 24 * 60 * 60 * 1000
 
 type SoftRow = Row<Base & SoftDeletable & Record<string, unknown>>
 
@@ -242,12 +259,57 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
   }
 
   // `base_rev = rev` goes out with the push (sync.ts toWire): the server lifts deleted_at only for a writer that saw it.
-  function restore(batch: string): Promise<number> {
-    return updateBatch(
-      batch,
-      (r) => !r.deleted && r.deleted_at !== null,
-      (r) => ({ ...r, deleted_at: null, deleted_batch: null, dirty: 1 }),
-    )
+  // A category removal's batch also takes its records back from «Прочее» (those still there), in the same transaction.
+  async function restore(batch: string): Promise<number> {
+    let count = 0
+    await db.transaction('rw', [...SOFT_TABLES.map(softTable), db.meta], async () => {
+      count = await updateBatch(
+        batch,
+        (r) => !r.deleted && r.deleted_at !== null,
+        (r) => ({ ...r, deleted_at: null, deleted_batch: null, dirty: 1 }),
+      )
+      const moved = (await db.meta.get(movedKey(batch)))?.value as CategoryMoves | undefined
+      if (!moved) return
+      const rows = (await db.transactions.bulkGet(moved.ids)).filter(
+        (t): t is Row<Transaction> => !!t && !t.deleted && t.category_id === moved.to,
+      )
+      await db.transactions.bulkPut(rows.map((t) => ({ ...t, category_id: moved.from, dirty: 1 as const })))
+      await db.meta.delete(movedKey(batch))
+      count += rows.length
+    })
+    if (count) deps.onChange()
+    return count
+  }
+
+  async function removeCategory(id: string): Promise<string | null> {
+    const batch = deps.uuid()
+    const at = deps.now().toISOString()
+    let done = false
+    await db.transaction('rw', [db.categories, db.limits, db.transactions, db.meta], async () => {
+      const category = await db.categories.get(id)
+      if (!category || category.deleted || category.deleted_at) return
+      if (category.name === OTHER_CATEGORY[category.kind]) return
+      const other = (await db.categories.toArray()).find(
+        (c) => alive(c) && c.id !== id && c.kind === category.kind && c.name === OTHER_CATEGORY[category.kind],
+      )
+      const to = other?.id ?? null
+      await db.categories.put(binned(category as unknown as SoftRow, at, batch) as never)
+      const limits = await db.limits.filter((l) => l.category_id === id && alive(l)).toArray()
+      await db.limits.bulkPut(limits.map((l) => binned(l as unknown as SoftRow, at, batch)) as never)
+      const txs = await db.transactions.filter((t) => t.category_id === id && !t.deleted).toArray()
+      await db.transactions.bulkPut(txs.map((t) => ({ ...t, category_id: to, dirty: 1 as const })))
+      // forget the moves of removals whose undo bin has run out
+      const stale = (await db.meta.filter((m) => m.key.startsWith('moved:')).toArray()).filter(
+        (m) => Date.parse((m.value as CategoryMoves).at) < deps.now().getTime() - MOVES_TTL_MS,
+      )
+      await db.meta.bulkDelete(stale.map((m) => m.key))
+      const moves: CategoryMoves = { from: id, to, ids: txs.map((t) => t.id), at }
+      await db.meta.put({ key: movedKey(batch), value: moves })
+      done = true
+    })
+    if (!done) return null
+    deps.onChange()
+    return batch
   }
 
   function markBatchDeleted(batch: string): Promise<number> {
@@ -445,6 +507,7 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
   return {
     put,
     remove,
+    removeCategory,
     setArchived,
     wipe,
     wipeAll,

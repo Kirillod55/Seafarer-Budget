@@ -1,42 +1,21 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Account, Category, Settings as SettingsRow } from '@shared/types.ts'
-import { RecordSheet } from './RecordSheet.tsx'
-import { LegacyAccounts, LegacyCategories } from './LegacyManage.tsx'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import type { Account, Settings as SettingsRow } from '@shared/types.ts'
+import { LegacyAccounts } from './LegacyManage.tsx'
+import { makeEnv, renderWithApp } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
 
-// The 1.0 categories and accounts management, kept until Tasks 11 / 14 replace it (moved from Settings.test.tsx).
+// The 1.0 accounts management, kept until Task 14 replaces it (moved from Settings.test.tsx).
 
 let env: AppContextValue
 let main: Account
-let cafe: Category
 
 async function seed(mode: 'single' | 'multi' = 'single') {
   await env.repo.initDefaults(mode, [{ currency: 'UAH', amount: 5000 }])
   main = (await env.db.accounts.toCollection().first())!
-  cafe = (await env.db.categories.toArray()).find((c) => c.name === 'Кафе и рестораны')!
-}
-
-/** Spend `uah` hryvnia so the UAH balance becomes 5000 - uah. */
-async function spend(uah: number, categoryId: string | null = cafe.id) {
-  return env.repo.addTransaction({
-    kind: 'expense',
-    amount: uah,
-    currency: 'UAH',
-    account_id: main.id,
-    to_account_id: null,
-    to_amount: null,
-    to_currency: null,
-    category_id: categoryId,
-    date: TEST_TODAY,
-    note: 'кофе',
-    source: 'app',
-  })
 }
 
 const settingsRow = async () => (await env.db.settings.toCollection().first())!
-const renderSettings = () => renderWithApp(<LegacyCategories />, env)
 const renderAccounts = () => renderWithApp(<LegacyAccounts />, env)
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }))
 
@@ -46,88 +25,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
-})
-
-describe('Legacy: categories', () => {
-  it('renames a category and changes its icon', async () => {
-    await seed()
-    renderSettings()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Изменить категорию Кафе и рестораны' }))
-    fireEvent.change(screen.getByLabelText('Название категории'), { target: { value: 'Кофейни' } })
-    fireEvent.change(screen.getByLabelText('Иконка'), { target: { value: '🍵' } })
-    click('Сохранить категорию')
-
-    await waitFor(async () =>
-      expect(await env.db.categories.get(cafe.id)).toMatchObject({ name: 'Кофейни', icon: '🍵', archived: false, dirty: 1 }),
-    )
-    expect(await screen.findByRole('button', { name: 'Изменить категорию Кофейни' })).toBeTruthy()
-  })
-
-  it('an empty name is rejected', async () => {
-    await seed()
-    renderSettings()
-    fireEvent.click(await screen.findByRole('button', { name: 'Изменить категорию Кафе и рестораны' }))
-    fireEvent.change(screen.getByLabelText('Название категории'), { target: { value: '  ' } })
-    click('Сохранить категорию')
-    expect(await screen.findByText('Введите название')).toBeTruthy()
-    expect((await env.db.categories.get(cafe.id))!.name).toBe('Кафе и рестораны')
-  })
-
-  it('archiving hides the category from the record picker; old records keep it; it can be restored', async () => {
-    await seed()
-    const old = await spend(80)
-    const view = renderSettings()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Архивировать категорию Кафе и рестораны' }))
-    await waitFor(async () => expect((await env.db.categories.get(cafe.id))!.archived).toBe(true))
-    expect((await env.db.transactions.get(old.id))!.category_id).toBe(cafe.id)
-
-    view.unmount()
-    renderWithApp(<RecordSheet open onClose={vi.fn()} />, env)
-    const picker = await screen.findByRole('group', { name: 'Категория' })
-    const names = within(picker)
-      .getAllByRole('button')
-      .map((b) => b.textContent ?? '')
-    expect(names).not.toContain('Кафе и рестораны')
-    expect(names).toContain('Продукты')
-  })
-
-  it('an archived category is listed with «Вернуть», which unarchives it', async () => {
-    await seed()
-    await env.repo.put<Category>('categories', { ...cafe, archived: true })
-    renderSettings()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Вернуть категорию Кафе и рестораны' }))
-    await waitFor(async () => expect((await env.db.categories.get(cafe.id))!.archived).toBe(false))
-  })
-
-  it('«+ Категория» adds a category of the chosen kind with an icon at the end of the list', async () => {
-    await seed()
-    renderSettings()
-
-    fireEvent.click(await screen.findByRole('button', { name: '+ Категория' }))
-    fireEvent.change(screen.getByLabelText('Название категории'), { target: { value: 'Подработка' } })
-    fireEvent.change(screen.getByLabelText('Тип'), { target: { value: 'income' } })
-    fireEvent.change(screen.getByLabelText('Иконка'), { target: { value: '🛠' } })
-    click('Сохранить категорию')
-
-    await waitFor(async () => {
-      const created = (await env.db.categories.toArray()).find((c) => c.name === 'Подработка')
-      expect(created).toMatchObject({ kind: 'income', icon: '🛠', archived: false, keywords: [], deleted: false, dirty: 1 })
-      const sorts = (await env.db.categories.toArray()).map((c) => c.sort)
-      expect(created!.sort).toBe(Math.max(...sorts))
-      expect(new Set(sorts).size).toBe(sorts.length)
-    })
-  })
-
-  it('a failing save shows «Не удалось сохранить»', async () => {
-    await seed()
-    renderSettings()
-    vi.spyOn(env.repo, 'put').mockRejectedValue(new Error('boom'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Архивировать категорию Кафе и рестораны' }))
-    expect(await screen.findByText('Не удалось сохранить')).toBeTruthy()
-  })
 })
 
 describe('Legacy: accounts', () => {

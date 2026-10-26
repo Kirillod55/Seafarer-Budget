@@ -347,6 +347,68 @@ describe('remove (soft) and restore', () => {
   })
 })
 
+describe('removeCategory', () => {
+  async function setup() {
+    await repo.initDefaults('single', [])
+    const cats = await db.categories.toArray()
+    const byName = (name: string) => cats.find((c) => c.name === name)!
+    return { cafe: byName('Кафе и рестораны'), other: byName('Прочее'), salary: byName('Зарплата'), otherIncome: byName('Прочий доход'), transport: byName('Транспорт и такси') }
+  }
+
+  it('bins the category and its limit in one batch and moves its records to «Прочее»; restore brings all of it back', async () => {
+    const { cafe, other, transport } = await setup()
+    const a = await repo.addTransaction({ ...baseTx, category_id: cafe.id })
+    const b = await repo.addTransaction({ ...baseTx, category_id: cafe.id, archived: true })
+    const elsewhere = await repo.addTransaction({ ...baseTx, category_id: transport.id })
+    await repo.put<Limit>('limits', { id: 'lim-cafe', category_id: cafe.id, monthly_usd: 100, deleted_at: null, deleted_batch: null })
+    await repo.put<Limit>('limits', { id: 'lim-taxi', category_id: transport.id, monthly_usd: 50, deleted_at: null, deleted_batch: null })
+    onChange.mockClear()
+
+    const batch = (await repo.removeCategory(cafe.id))!
+    expect(batch).toEqual(expect.any(String))
+    expect(await db.categories.get(cafe.id)).toMatchObject({ deleted: false, deleted_at: NOW_ISO, deleted_batch: batch, dirty: 1 })
+    expect(await db.limits.get('lim-cafe')).toMatchObject({ deleted_at: NOW_ISO, deleted_batch: batch, dirty: 1 })
+    expect(await db.limits.get('lim-taxi')).toMatchObject({ deleted_at: null })
+    for (const t of [a, b]) expect(await db.transactions.get(t.id)).toMatchObject({ category_id: other.id, deleted_at: null, dirty: 1 })
+    expect((await db.transactions.get(b.id))!.archived).toBe(true)
+    expect((await db.transactions.get(elsewhere.id))!.category_id).toBe(transport.id)
+    expect(onChange).toHaveBeenCalled()
+
+    expect(await repo.restore(batch)).toBe(4)
+    expect(await db.categories.get(cafe.id)).toMatchObject({ deleted_at: null, deleted_batch: null })
+    expect(await db.limits.get('lim-cafe')).toMatchObject({ deleted_at: null, deleted_batch: null })
+    for (const t of [a, b]) expect(await db.transactions.get(t.id)).toMatchObject({ category_id: cafe.id, dirty: 1 })
+    // the move is forgotten: a second restore changes nothing
+    expect(await repo.restore(batch)).toBe(0)
+  })
+
+  it('an income category goes to «Прочий доход»', async () => {
+    const { salary, otherIncome } = await setup()
+    const t = await repo.addTransaction({ ...baseTx, kind: 'income', category_id: salary.id })
+    await repo.removeCategory(salary.id)
+    expect((await db.transactions.get(t.id))!.category_id).toBe(otherIncome.id)
+  })
+
+  it('restore leaves a record that was moved to another category meanwhile where the user put it', async () => {
+    const { cafe, transport } = await setup()
+    const t = await repo.addTransaction({ ...baseTx, category_id: cafe.id })
+    const batch = (await repo.removeCategory(cafe.id))!
+    await repo.updateTransaction(t.id, { category_id: transport.id })
+    await repo.restore(batch)
+    expect((await db.transactions.get(t.id))!.category_id).toBe(transport.id)
+  })
+
+  it('«Прочее», «Прочий доход», a missing and a binned category are not removed', async () => {
+    const { cafe, other, otherIncome } = await setup()
+    expect(await repo.removeCategory(other.id)).toBeNull()
+    expect(await repo.removeCategory(otherIncome.id)).toBeNull()
+    expect(await repo.removeCategory('nope')).toBeNull()
+    expect(await repo.removeCategory(cafe.id)).toEqual(expect.any(String))
+    expect(await repo.removeCategory(cafe.id)).toBeNull()
+    expect(await db.categories.get(other.id)).toMatchObject({ deleted_at: null })
+  })
+})
+
 describe('wipeAll', () => {
   it('marks records, goals, limits and own categories; keeps settings, accounts and standard categories', async () => {
     await repo.initDefaults('single', [{ currency: 'UAH', amount: 5000 }])

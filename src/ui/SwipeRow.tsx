@@ -45,6 +45,13 @@ const RESTORE_MS = 1200
 /** the one open (or opening) row on the page */
 let openRow: { close(): void } | null = null
 
+/** Closes the open swipe row, if any; true when one was open (a tap on a plain row then only closes it). */
+export function closeOpenSwipeRow(): boolean {
+  if (!openRow) return false
+  openRow.close()
+  return true
+}
+
 /**
  * Focus the next row of the same list (or the previous one); with no other row, the list itself (made focusable
  * for this). The list is the nearest `.days` (DayGroups) or else the row's parent.

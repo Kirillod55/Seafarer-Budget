@@ -1,0 +1,151 @@
+/*
+ * «Категории» (prototype v60 cats(), catNewForm(): .tx.crow, .swatches/.swatch, .icgrid; spec §4, §6).
+ * Rows are SwipeRow (.swipe > .tx); the card reuses the goals' .gcard/.gacts/.gerr and the record sheet's .fld/.inp.
+ * Colours only from tokens; the swatches and glyph tiles take the chosen category colour through --c.
+ */
+
+.cats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cats > h1.large {
+  margin: 6px 0 2px;
+}
+
+/* «Добавить» — the screen's main button: lime text */
+.cats .navbtn.strong {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.cat-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cats .label {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+}
+
+.cat-foot {
+  margin: 4px 0 0;
+  line-height: 1.45;
+}
+
+/* category rows are a touch taller than records, the name in regular weight */
+.swipe > .tx.crow,
+.swipe.crow > .tx {
+  min-height: 62px;
+}
+
+.swipe > .tx.fixed {
+  touch-action: auto;
+}
+
+/* «В архив» is grey here (spec §4), not the records' orange */
+.cats .act.archive {
+  background: var(--act-edit);
+}
+
+/* ---------- «Новая категория» ---------- */
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 44px);
+  justify-content: space-between;
+  row-gap: 6px;
+}
+
+/* a 34 px dot inside a 44 px target */
+.swatch {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.3s var(--spring);
+}
+
+.swatch::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--c);
+  transition: box-shadow 0.2s var(--ios);
+}
+
+.swatch[aria-pressed='true']::before {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--c);
+}
+
+.swatch[aria-pressed='true'] {
+  transform: scale(1.06);
+}
+
+.icgrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.icgrid button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.3s var(--spring);
+}
+
+.icgrid button .ic {
+  transition: box-shadow 0.2s var(--ios);
+}
+
+.icgrid button[aria-pressed='true'] .ic {
+  box-shadow:
+    0 0 0 2px var(--card),
+    0 0 0 4px var(--c);
+}
+
+.icgrid button:active,
+.swatch:active {
+  transform: scale(0.9);
+}
+
+.swatch:focus-visible,
+.icgrid button:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swatch,
+  .swatch::before,
+  .icgrid button,
+  .icgrid button .ic {
+    transition: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .cats .label {
+    color: var(--text);
+  }
+}

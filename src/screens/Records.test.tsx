@@ -74,6 +74,24 @@ describe('Records («Расходы»)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Категории' })).toBeTruthy()
   })
 
+  it('an income category from «Категории» lists its incomes', async () => {
+    await env.repo.addTransaction({
+      kind: 'income',
+      amount: 900,
+      currency: 'USD',
+      account_id: accountId,
+      to_account_id: null,
+      to_amount: null,
+      to_currency: null,
+      category_id: cat['Зарплата'],
+      date: '2026-10-05',
+      note: 'аванс',
+      source: 'app',
+    })
+    renderAt({ tab: 'more', screen: 'records', month: '2026-10', category: cat['Зарплата'], from: 'cats' })
+    await waitFor(() => expect(within(top()).getByText('Аванс')).toBeTruthy())
+  })
+
   it('from the report without a category: «Расходы», «‹ Отчёт»', async () => {
     renderAt({ tab: 'report', screen: 'records', month: '2026-10', category: null, from: 'report' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Расходы' })).toBeTruthy()

@@ -2,9 +2,10 @@ import { NavBar } from './nav/NavBar.tsx'
 import { Navigator, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
 import { Calendar } from './screens/Calendar.tsx'
+import { Categories } from './screens/Categories.tsx'
 import { Goals } from './screens/Goals.tsx'
 import { Home } from './screens/Home.tsx'
-import { LegacyAccounts, LegacyCategories } from './screens/LegacyManage.tsx'
+import { LegacyAccounts } from './screens/LegacyManage.tsx'
 import { Limits } from './screens/Limits.tsx'
 import { More } from './screens/More.tsx'
 import { RecordSheetHost, useRecordSheet } from './screens/RecordSheet.tsx'
@@ -14,8 +15,8 @@ import { ToastHost } from './ui/Toast.tsx'
 
 /*
  * The signed-in app: the four-tab navigator with the screens in it. Stage 2 replaces the 1.0 screens one by one;
- * until then they sit inside the new navigation («Категории» shows the 1.0 list until Task 11, «Архив» is a
- * placeholder until Task 12). The record sheet is one for the whole app: RecordSheetHost around the navigator,
+ * until then they sit inside the new navigation («Архив» is a placeholder until Task 12). The record sheet is
+ * one for the whole app: RecordSheetHost around the navigator,
  * screens open it with useRecordSheet().openRecord(id?).
  */
 export function Shell({ onSignOut }: { onSignOut(): void }) {
@@ -57,14 +58,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
           </>
         )
       case 'cats':
-        return (
-          <>
-            <NavBar back={{ label: 'Ещё' }} title="Категории" />
-            <div className="legacy-titled">
-              <LegacyCategories />
-            </div>
-          </>
-        )
+        return <Categories />
       case 'archive':
         return <Soon back="Ещё" title="Архив" />
       case 'calendar':

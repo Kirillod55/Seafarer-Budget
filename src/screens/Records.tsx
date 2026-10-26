@@ -90,6 +90,8 @@ export function Records() {
   const from = params.from === 'cats' ? 'Категории' : 'Отчёт'
   const byId = new Map((data?.categories ?? []).map((c) => [c.id, c]))
   const cat = category ? categoryOf(category, byId) : null
+  // an income category (from «Категории») lists its incomes; everything else lists expenses
+  const kind = cat?.kind === 'income' ? 'income' : 'expense'
   const title = cat ? cat.name : 'Расходы'
   const heading = cat ? (
     <span className="rtitle">
@@ -110,7 +112,7 @@ export function Records() {
     const today = localDate(now(), settings?.timezone ?? 'UTC')
     const all = byWho(txs, who).filter(
       (t) =>
-        t.kind === 'expense' &&
+        t.kind === kind &&
         monthOf(t.date) === month &&
         (!category || (t.category_id ?? UNCATEGORIZED) === category),
     )
@@ -119,7 +121,7 @@ export function Records() {
     const total = round2(all.reduce((s, t) => s + t.amount_usd, 0))
     const line = all.length
       ? `${plural(all.length, 'запись', 'записи', 'записей')} на ${money(total, 'USD')}${archived ? ` · ${archived} из них в архиве` : ''}`
-      : `Трат${category ? ' в этой категории' : ''} в ${MONTHS_IN[m - 1]} нет`
+      : `${kind === 'income' ? 'Доходов' : 'Трат'}${category ? ' в этой категории' : ''} в ${MONTHS_IN[m - 1]} нет`
     body = (
       <>
         <p className="label num rec-line">{line}</p>

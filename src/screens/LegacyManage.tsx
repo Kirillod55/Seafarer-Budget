@@ -1,17 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
-import type { Account, Category } from '@shared/types.ts'
+import type { Account } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
 
 /*
- * The 1.0 management of categories and accounts, moved out of the old settings screen when «Ещё» was redone
- * (Task 10) so nothing is lost meanwhile: «Категории» shows LegacyCategories until Task 11 builds the new screen;
- * «Счета» shows LegacyAccounts (rename, aliases, archive) under the accounts until Task 14 redoes them.
+ * The 1.0 management of accounts, moved out of the old settings screen when «Ещё» was redone (Task 10) so nothing
+ * is lost meanwhile: «Счета» shows LegacyAccounts (rename, aliases, archive) under the accounts until Task 14.
  */
 
 const SAVE_FAILED = 'Не удалось сохранить'
-const DEFAULT_ICON = '🏷️'
 /** Runs a save: `busy` while it works, `error` («Не удалось сохранить») when it throws. Resolves to success. */
 function useAction() {
   const [busy, setBusy] = useState(false)
@@ -50,161 +48,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const byName = (a: { sort: number }, b: { sort: number }) => a.sort - b.sort
-const nextSort = (rows: { sort: number }[]) => rows.reduce((max, r) => Math.max(max, r.sort), -1) + 1
-/* ---------- categories ---------- */
-
-function CategoryForm({
-  category,
-  categories,
-  onClose,
-}: {
-  category: Category | null
-  categories: Category[]
-  onClose(): void
-}) {
-  const { repo } = useApp()
-  const { busy, error, setError, run } = useAction()
-  const [name, setName] = useState(category?.name ?? '')
-  const [kind, setKind] = useState<Category['kind']>(category?.kind ?? 'expense')
-  const [icon, setIcon] = useState(category?.icon ?? '')
-
-  async function save() {
-    if (!name.trim()) return setError('Введите название')
-    const saved = await run(async () => {
-      const common = { name: name.trim(), icon: icon.trim() || DEFAULT_ICON }
-      if (category) {
-        await repo.put<Category>('categories', { id: category.id, ...common })
-      } else {
-        await repo.put<Category>('categories', {
-          ...common,
-          kind,
-          keywords: [],
-          archived: false,
-          sort: nextSort(categories),
-        })
-      }
-    })
-    if (saved) onClose()
-  }
-
-  return (
-    <form
-      className="card stack"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void save()
-      }}
-    >
-      <h2>{category ? 'Категория' : 'Новая категория'}</h2>
-      <div>
-        <label htmlFor="cat-name">Название категории</label>
-        <input id="cat-name" className="field" type="text" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-      {!category && (
-        <div>
-          <label htmlFor="cat-kind">Тип</label>
-          <select id="cat-kind" className="field" value={kind} onChange={(e) => setKind(e.target.value as Category['kind'])}>
-            <option value="expense">Расход</option>
-            <option value="income">Доход</option>
-          </select>
-        </div>
-      )}
-      <div>
-        <label htmlFor="cat-icon">Иконка</label>
-        <input
-          id="cat-icon"
-          className="field"
-          type="text"
-          autoComplete="off"
-          placeholder={DEFAULT_ICON}
-          value={icon}
-          onChange={(e) => setIcon(e.target.value)}
-        />
-      </div>
-      <ErrorLine>{error}</ErrorLine>
-      <div className="row">
-        <button type="submit" className="btn btn-primary grow" disabled={busy}>
-          Сохранить категорию
-        </button>
-        <button type="button" className="btn" disabled={busy} onClick={onClose}>
-          Отмена
-        </button>
-      </div>
-    </form>
-  )
-}
-
-type CategoryEditing = { id: string } | 'new' | null
-
-function CategoriesSection({ categories }: { categories: Category[] }) {
-  const { repo } = useApp()
-  const { busy, error, run } = useAction()
-  const [editing, setEditing] = useState<CategoryEditing>(null)
-
-  if (editing) {
-    const category = editing === 'new' ? null : (categories.find((c) => c.id === editing.id) ?? null)
-    return <CategoryForm category={category} categories={categories} onClose={() => setEditing(null)} />
-  }
-
-  const setArchived = (c: Category, archived: boolean) =>
-    run(async () => {
-      await repo.put<Category>('categories', { id: c.id, archived })
-    })
-
-  return (
-    <Section title="Категории">
-      {(
-        [
-          ['expense', 'Расходы'],
-          ['income', 'Доходы'],
-        ] as const
-      ).map(([kind, title]) => (
-        <div key={kind}>
-          <h3 className="label">{title}</h3>
-          <ul className="set-list">
-            {categories
-              .filter((c) => c.kind === kind)
-              .sort(byName)
-              .map((c) => (
-                <li key={c.id} className={`set-row${c.archived ? ' archived' : ''}`}>
-                  <span className="set-icon" aria-hidden="true">
-                    {c.icon}
-                  </span>
-                  <span className="set-name">
-                    {c.name}
-                    {c.archived && <span className="muted small">{' · в архиве'}</span>}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-link"
-                    aria-label={`Изменить категорию ${c.name}`}
-                    disabled={busy}
-                    onClick={() => setEditing({ id: c.id })}
-                  >
-                    Изменить
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-link"
-                    aria-label={`${c.archived ? 'Вернуть' : 'Архивировать'} категорию ${c.name}`}
-                    disabled={busy}
-                    onClick={() => void setArchived(c, !c.archived)}
-                  >
-                    {c.archived ? 'Вернуть' : 'В архив'}
-                  </button>
-                </li>
-              ))}
-          </ul>
-        </div>
-      ))}
-      <ErrorLine>{error}</ErrorLine>
-      <button type="button" className="btn" onClick={() => setEditing('new')}>
-        + Категория
-      </button>
-    </Section>
-  )
-}
-
 /* ---------- accounts management ---------- */
 
 function AccountForm({ account, onClose }: { account: Account; onClose(): void }) {
@@ -315,18 +158,6 @@ function AccountsSection({ accounts }: { accounts: Account[] }) {
       </ul>
       <ErrorLine>{error}</ErrorLine>
     </Section>
-  )
-}
-
-/** «Категории» until Task 11: the 1.0 list with rename, icon, archive and «+ Категория». */
-export function LegacyCategories() {
-  const { db } = useApp()
-  const categories = useLiveQuery(() => db.categories.filter(alive).toArray(), [db])
-  if (!categories) return <p className="muted pad">Загрузка…</p>
-  return (
-    <div className="stack">
-      <CategoriesSection categories={categories} />
-    </div>
   )
 }
 
