@@ -269,11 +269,6 @@
   }
 }
 
-/* the old screens' own headings are replaced by the nav bar's large title (until each screen is redone) */
-.legacy-titled > .stack > h2:first-child {
-  display: none;
-}
-
 /* ---------- «Ещё» menu (prototype .group.menu; the screen is src/screens/More.tsx) ---------- */
 
 .menu {

@@ -1,0 +1,110 @@
+/*
+ * «Лимиты» (prototype v60 limits(): .card with .rowc, .pill ok/warn/over, .bar.thin, .textbtn.danger; spec §6
+ * «форма лимита — поля друг под другом»). Cards and forms reuse the goals' .gcard/.gacts/.btn-acc/.btn-gray/.gerr and
+ * the record sheet's .rec .fld/.inp. Colours only from tokens.
+ */
+
+.limits {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.limits .label {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.limits .navbtn.strong {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.limcard {
+  gap: 10px;
+}
+
+.limhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.limname {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 44px;
+  margin: -4px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem; /* 17 */
+  text-align: left;
+  cursor: pointer;
+}
+
+.limname .ic {
+  flex: none;
+}
+
+.limname-t {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.limhead > .pill {
+  flex: none;
+  align-self: center;
+}
+
+/* «Почти всё» (report.css has ok and over) */
+.limits .pill.warn {
+  color: var(--pill-warn);
+}
+
+.limcard .bar.thin {
+  margin: 0;
+}
+
+.limmeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -6px 0 -10px;
+}
+
+.limmeta > .num {
+  min-width: 0;
+  font-weight: 600;
+}
+
+.limmeta .label {
+  font-weight: 400;
+}
+
+.textbtn.danger {
+  flex: none;
+  color: var(--danger);
+}
+
+.limedit {
+  gap: 12px;
+  padding-top: 6px;
+}
+
+@media (prefers-contrast: more) {
+  .limits .label {
+    color: var(--text);
+  }
+}

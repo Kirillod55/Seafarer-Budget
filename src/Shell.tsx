@@ -1,4 +1,3 @@
-import { NavBar } from './nav/NavBar.tsx'
 import { Navigator, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
 import { Archive } from './screens/Archive.tsx'
@@ -38,14 +37,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
         if (route.tab === 'goals') return <Goals />
         return <More onSignOut={onSignOut} />
       case 'limits':
-        return (
-          <>
-            <NavBar back={{ label: 'Ещё' }} title="Лимиты" />
-            <div className="legacy-titled">
-              <Limits />
-            </div>
-          </>
-        )
+        return <Limits />
       case 'accounts':
         return <Accounts />
       case 'cats':

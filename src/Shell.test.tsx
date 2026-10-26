@@ -79,7 +79,7 @@ describe('Shell navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ещё' }))
     await screen.findByRole('button', { name: 'Выйти' })
     fireEvent.click(screen.getByRole('button', { name: 'Лимиты' }))
-    await screen.findByRole('button', { name: 'Задать лимит' })
+    await screen.findByRole('button', { name: 'Добавить' })
 
     let flashed = false
     const watch = new MutationObserver(() => {
