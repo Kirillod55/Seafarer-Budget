@@ -195,6 +195,22 @@ describe('Report', () => {
     expect(await within(top()).findByText(/2 записи на \$30/)).toBeTruthy()
   })
 
+  it('with «Маша» chosen, a category row opens «Расходы» with «Маша» pressed and only her records', async () => {
+    await seedTwoPeople()
+    renderReport()
+    await waitFor(() => expect(catRows()).toHaveLength(3))
+    fireEvent.click(screen.getByRole('button', { name: 'Маша' }))
+    await waitFor(() => expect(catRows()).toHaveLength(2))
+    fireEvent.click(screen.getByRole('button', { name: 'Продукты: открыть траты' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Продукты' })).toBeTruthy()
+    const who = within(top()).getByRole('group', { name: 'Чьи траты' })
+    expect(within(who).getByRole('button', { name: 'Маша' }).getAttribute('aria-pressed')).toBe('true')
+    expect(await within(top()).findByText(/1 запись на \$100/)).toBeTruthy()
+    expect(top().querySelector('.tx')!.textContent).toContain('Рынок')
+    expect(top().querySelectorAll('.tx')).toHaveLength(1)
+  })
+
   it('the «Расходы за месяц» tile opens all the month records', async () => {
     await seedOctober()
     renderReport()
