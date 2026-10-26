@@ -1,0 +1,218 @@
+/*
+ * «Ещё» (prototype v60 more(): .card.stack + h3, .grid2, .calc, .chips/.tag/.x, .quick, .rowc, .pill ok/warn,
+ * .btn-gray.danger). Fields reuse the record sheet's .rec .fld/.inp/.grid2; buttons .btn-acc / .btn-gray.
+ * Phone layout: one column; stage 3 turns it into «Параметры» on the PC through html classes.
+ */
+
+.more {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.more > .menu {
+  margin-bottom: 0;
+}
+
+.mcard {
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.mcard h3 {
+  margin: 0;
+  font-size: 1rem; /* 17 */
+  font-weight: 600;
+}
+
+.more .label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.more .label.err,
+.merr {
+  margin: 0;
+  color: var(--warn);
+  font-size: 0.765rem;
+}
+
+/* «= $58.47 в день на 60 дней» — the figure in lime text (the day budget is a main thing) */
+.calc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.882rem; /* 15 */
+  line-height: 1.4;
+}
+
+.calc b {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+/* ---------- «Архив · N» in the menu ---------- */
+
+.menu .mcount {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.882rem;
+}
+
+.menu .chev.after {
+  margin-left: 6px;
+}
+
+/* ---------- currencies ---------- */
+
+.mchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.882rem;
+}
+
+/* a removable pill: the ✕ sits in the pill's own padding; a fixed one has no empty place for it */
+.tag.has-x {
+  padding-right: 4px;
+}
+
+.tag .x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: var(--track);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tag .x svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tag .x:active {
+  transform: scale(0.92);
+}
+
+/* the field takes the room; the button keeps its width and never wraps */
+.quick {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.quick > .inp {
+  flex: 1;
+}
+
+.quick > button {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ---------- rows: «Telegram-бот · Подключена», «UAH · сейчас ₴4,920» ---------- */
+
+.mrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mrow-t {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 0.882rem;
+}
+
+.mpill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--track);
+  font-size: 0.765rem;
+  font-weight: 500;
+}
+
+.mpill.ok {
+  color: var(--ok);
+}
+
+.mpill.warn {
+  color: var(--pill-warn);
+}
+
+.recon {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.recon .flabel {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.mnow {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.765rem;
+}
+
+.mcard .btn-gray:active,
+.msignout:active {
+  transform: scale(0.97);
+}
+
+.mcard .btn-gray:disabled,
+.quick > button:disabled {
+  opacity: 0.55;
+}
+
+.msignout {
+  width: 100%;
+  margin-top: 4px;
+}
+
+@media (prefers-contrast: more) {
+  .mcard,
+  .tag {
+    border-color: var(--text);
+  }
+
+  .more .label,
+  .calc,
+  .mnow {
+    color: var(--text);
+  }
+}

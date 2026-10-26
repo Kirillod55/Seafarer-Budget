@@ -50,6 +50,7 @@ export {
   Target,
   Trash2,
   Upload,
+  UserRound,
   Download,
   X,
 } from 'lucide-react'

@@ -274,7 +274,7 @@
   display: none;
 }
 
-/* ---------- «Ещё» menu (prototype .group.menu; Task 10 redoes «Ещё») ---------- */
+/* ---------- «Ещё» menu (prototype .group.menu; the screen is src/screens/More.tsx) ---------- */
 
 .menu {
   display: flex;

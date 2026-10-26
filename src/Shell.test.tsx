@@ -101,7 +101,7 @@ describe('Shell navigation', () => {
       fireEvent.click(await screen.findByRole('button', { name }))
       expect(await screen.findByRole('heading', { level: 1, name })).toBeTruthy()
       expect(screen.getByRole('button', { current: 'page' }).textContent).toBe('Ещё')
-      if (name === 'Категории' || name === 'Архив') expect(screen.getByText('Скоро')).toBeTruthy()
+      if (name === 'Архив') expect(screen.getByText('Скоро')).toBeTruthy()
       const back = document.querySelector<HTMLButtonElement>('.navbar .navback')!
       expect(back.textContent).toBe('Ещё')
       fireEvent.click(back)
