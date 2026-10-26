@@ -146,7 +146,7 @@ describe('Archive', () => {
     // gone from the screen at once; the final deletion waits until «Отменить» is no longer offered
     await waitFor(() => expect(screen.getByRole('region', { name: 'Счета' }).textContent).not.toContain('Наличные'))
     expect((await env.db.accounts.get(empty.id))!.deleted).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Отменить' }))
     await rowOf('Наличные')
     expect((await env.db.accounts.get(empty.id))!.deleted).toBe(false)
   })

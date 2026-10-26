@@ -285,7 +285,7 @@ describe('TxRow and DayGroups', () => {
     expect(gone.deleted_at).toBeTruthy()
     expect(gone.deleted_batch).toBeTruthy()
     expect(kick).toHaveBeenCalled()
-    expect(screen.getByText('Запись удалена')).toBeTruthy()
+    expect(await screen.findByText('Запись удалена')).toBeTruthy()
 
     kick.mockClear()
     fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
@@ -305,7 +305,7 @@ describe('TxRow and DayGroups', () => {
 
     await waitFor(() => expect(screen.queryByText('Кофе')).toBeNull())
     expect((await env.db.transactions.get('t1'))!.deleted_at).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Отменить' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Отменить' })).toBeTruthy()
   })
 
   it('with motion on, a full swipe slides the row off, collapses it, then deletes it', async () => {
