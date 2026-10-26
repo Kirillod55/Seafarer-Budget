@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { minuteOf } from './ctx.ts'
 import { asMessage, buttons, cat, cb, MemStore, msg, NOW, OWNER, PARTNER, run, SETTINGS, seedTx, textOf, TODAY } from './testkit.ts'
 import type { Account } from '../types.ts'
 
@@ -44,8 +45,8 @@ describe('categories from the bot', () => {
     expect(s.txRows[0]).toMatchObject({ amount: 500, category_id: c.id })
     expect(textOf(r)).toContain('Создал категорию 🏋️ Спорт')
     await run(s, cb(buttons(r).at(-1)!.callback_data, asMessage(r[0])))
-    expect(s.txRows[0].deleted).toBe(true)
-    expect(s.categoryRows.find((x) => x.id === c.id)!.deleted).toBe(true)
+    expect(s.txRows[0]).toMatchObject({ deleted: false, deleted_at: NOW.toISOString() }) // in the bin (ruling 2026-10-26)
+    expect(s.categoryRows.find((x) => x.id === c.id)).toMatchObject({ deleted: false, deleted_at: NOW.toISOString() })
   })
 
   it('«, впиши туда последнюю трату» and «перенеси туда все сигареты за этот месяц»', async () => {
@@ -81,7 +82,7 @@ describe('money between accounts (group 1–2)', () => {
     const r = await run(s, msg('перевёл 200$ с основного на наличные'))
     expect(s.txRows[0]).toMatchObject({ kind: 'transfer', amount: 200, currency: 'USD', account_id: 'acc1', to_account_id: 'acc2-cash-0000' })
     expect(textOf(r)).toBe('🔁 Основной → Наличные · $200')
-    expect(buttons(r)[0].callback_data).toBe(`u:${s.txRows[0].id}`)
+    expect(buttons(r)[0].callback_data).toBe(`u:${s.txRows[0].id}:${minuteOf(NOW)}`)
     await run(s, msg('снял в банкомате 1000 гривен'))
     expect(s.txRows[1]).toMatchObject({ amount: 1000, currency: 'UAH', account_id: 'acc1', to_account_id: 'acc2-cash-0000' })
     await run(s, msg('перевод 500 грн на моно'))

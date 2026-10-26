@@ -1,6 +1,6 @@
 // Inline buttons of record replies: u (undo one), uall (undo every record of the message), ug (undo a
 // goal move), c (category picker / pick), a (move to another account), ow (where the word without an amount goes).
-import { byShort, categoryOf, describeTx, idsInKeyboard, load, partnerName, send, toOwner } from './ctx.ts'
+import { binPatch, byShort, categoryOf, describeTx, idsInKeyboard, load, partnerName, restoreButton, send, toOwner, UNDO_TIMEOUT, undoExpired } from './ctx.ts'
 import type { Ctx, Keyboard } from './ctx.ts'
 import { categoryKeyboard, manyKeyboard, recordKeyboard, singleText, writeRecords } from './records.ts'
 import type { BotReply } from './types.ts'
@@ -70,20 +70,32 @@ export async function recordCallback(ctx: Ctx, q: Query, data: string): Promise<
   }
 
   if (kind === 'uall') {
+    // uall:<new category's short id or empty>:<minute>
+    if (undoExpired(arg, ctx.now)) return [answer(q, UNDO_TIMEOUT)]
     const snap = await load(ctx)
     const ids = idsInKeyboard(q.message?.reply_markup)
     const mine = snap.txs.filter((t) => ids.includes(t.id))
     if (mine.some((t) => notMine(ctx, t))) return [answer(q, 'Это не твои записи')]
-    for (const t of mine) await ctx.store.updateTx(t.id, { deleted: true })
-    if (arg === undefined && id) {
-      // «Отменить все» after «создай категорию … и впиши туда»: the new category goes too
+    const batch = ctx.uuid()
+    for (const t of mine) await ctx.store.updateTx(t.id, binPatch(ctx, batch))
+    let kept = ''
+    let catBinned = false
+    if (id) {
+      // «Отменить все» after «создай категорию … и впиши туда»: the new category goes too, unless it has other records
       const cat = byShort(snap.categories, id)
-      if (cat) await ctx.store.update('categories', cat.id, { deleted: true })
+      if (cat && snap.txs.some((t) => t.category_id === cat.id && !mine.includes(t))) kept = '\nКатегорию оставил — в ней есть другие записи'
+      else if (cat) {
+        await ctx.store.update('categories', cat.id, binPatch(ctx, batch))
+        catBinned = true
+      }
     }
-    return [answer(q, 'Отменено'), edit(ctx, q, `Отменил ${mine.length ? mine.length : 'всё'}`), ...(mine.length ? undoNotice(ctx, mine.map((t) => describeTx(t, snap, ctx)).join('; ')) : [])]
+    const kb = mine.length || catBinned ? restoreButton(batch) : []
+    return [answer(q, 'Отменено'), edit(ctx, q, `Отменил ${mine.length ? mine.length : 'всё'}${kept}`, kb), ...(mine.length ? undoNotice(ctx, mine.map((t) => describeTx(t, snap, ctx)).join('; ')) : [])]
   }
 
   if (kind === 'ug') {
+    // goal moves have no bin: the move is removed for good, but only within the hour
+    if (undoExpired(arg, ctx.now)) return [answer(q, UNDO_TIMEOUT)]
     const moves = await ctx.store.goalMoves()
     const m = moves.find((x) => x.id === id && !x.deleted)
     if (!m) return [answer(q, 'Уже отменено')]
@@ -93,6 +105,7 @@ export async function recordCallback(ctx: Ctx, q: Query, data: string): Promise<
   }
 
   if (kind !== 'u' && kind !== 'c' && kind !== 'a') return null
+  if (kind === 'u' && undoExpired(arg, ctx.now)) return [answer(q, UNDO_TIMEOUT)]
   const snap = await load(ctx)
   const tx = snap.txs.find((t) => t.id === id)
   if (!tx) return [answer(q, 'Запись не найдена или уже удалена')]
@@ -100,9 +113,10 @@ export async function recordCallback(ctx: Ctx, q: Query, data: string): Promise<
   const multiMessage = idsInKeyboard(q.message?.reply_markup).length > 1
 
   if (kind === 'u') {
-    await ctx.store.updateTx(tx.id, { deleted: true })
+    const batch = ctx.uuid()
+    await ctx.store.updateTx(tx.id, binPatch(ctx, batch))
     const line = describeTx(tx, snap, ctx)
-    if (!multiMessage) return [answer(q, 'Удалено'), edit(ctx, q, `Удалено: ${line}`), ...undoNotice(ctx, line)]
+    if (!multiMessage) return [answer(q, 'Удалено'), edit(ctx, q, `Удалено: ${line}`, restoreButton(batch)), ...undoNotice(ctx, line)]
     // several records: keep the message, drop this record's buttons
     // deno-lint-ignore no-explicit-any
     const rows = ((q.message?.reply_markup as any)?.inline_keyboard ?? []) as Keyboard

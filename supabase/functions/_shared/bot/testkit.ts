@@ -60,6 +60,9 @@ export class MemStore implements BotStore {
   async goalMoves() { return this.moveRows.filter((m) => !m.deleted) }
   async limits() { return this.limitRows.filter(alive) }
   async transactions() { return this.txRows.filter(alive) }
+  async binned(table: 'categories' | 'goals' | 'limits') {
+    return (this.table(table).get() as Row[]).filter((r) => !r.deleted && (r.deleted_at ?? null) !== null) as never[]
+  }
   async binnedTransactions() { return this.txRows.filter((t) => !t.deleted && t.deleted_at !== null) }
   async rates() { return this.rateRows }
   async insertTx(t: Transaction) { this.txRows.push({ ...t, rev: ++this.rev }) }

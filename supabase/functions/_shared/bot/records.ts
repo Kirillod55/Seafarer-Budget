@@ -8,8 +8,8 @@ import { parseRecords } from '../multi.ts'
 import type { ParseContext, TxParsed } from '../parser.ts'
 import type { Category, GoalMove, Transaction } from '../types.ts'
 import {
-  activeAccounts, activeCategories, amountText, budgetOf, categoryOf, defaultAccount, describeTx, isMulti, load,
-  partnerName, records, send, short, toOwner, todayLine, usd,
+  activeAccounts, activeCategories, amountText, budgetOf, categoryOf, defaultAccount, describeTx, isMulti, load, minuteOf,
+  partnerName, records, send, short, toOwner, todayLine, undoTxData, usd,
 } from './ctx.ts'
 import type { Ctx, Keyboard, Snapshot } from './ctx.ts'
 import type { BotReply } from './types.ts'
@@ -66,7 +66,7 @@ export function recordKeyboard(ctx: Ctx, snap: Snapshot, tx: Transaction): Keybo
       kb.push(others.slice(i, i + 3).map((a) => ({ text: a.name, callback_data: `a:${tx.id}:${short(a.id)}` })))
     }
   }
-  kb.push([{ text: 'Отменить', callback_data: `u:${tx.id}` }])
+  kb.push([{ text: 'Отменить', callback_data: undoTxData(tx) }])
   return kb
 }
 
@@ -78,7 +78,7 @@ export function categoryKeyboard(snap: Snapshot, tx: Transaction): Keyboard {
   for (let i = 0; i < cats.length; i += 2) {
     kb.push(cats.slice(i, i + 2).map((c) => ({ text: `${c.icon} ${c.name}`, callback_data: `c:${tx.id}:${short(c.id)}` })))
   }
-  kb.push([{ text: 'Отменить', callback_data: `u:${tx.id}` }])
+  kb.push([{ text: 'Отменить', callback_data: undoTxData(tx) }])
   return kb
 }
 
@@ -156,9 +156,11 @@ export function manyText(ctx: Ctx, snap: Snapshot, txs: Transaction[], prefix: s
 export function manyKeyboard(snap: Snapshot, txs: Transaction[]): Keyboard {
   const kb: Keyboard = txs.map((t, i) => [
     { text: `✏️ ${i + 1} · ${categoryOf(t, snap.categories).name}`, callback_data: `c:${t.id}` },
-    { text: '✕', callback_data: `u:${t.id}` },
+    { text: '✕', callback_data: undoTxData(t) },
   ])
-  kb.push([{ text: 'Отменить все', callback_data: 'uall' }])
+  // stamped with the records' creation minute (the oldest one), like the «✕» buttons
+  const made = txs.map((t) => t.created_at).sort()[0] ?? new Date(0).toISOString()
+  kb.push([{ text: 'Отменить все', callback_data: `uall::${minuteOf(new Date(made))}` }])
   return kb
 }
 
@@ -228,7 +230,7 @@ export async function runGoal(ctx: Ctx, p: { goalName: string; amount: number; c
   const notice = amountUsd >= 0 ? `${name} отложила ${usd(amountUsd)} в «${goal.name}»` : `${name} забрала ${usd(-amountUsd)} из «${goal.name}»`
   return [
     send(ctx, `🎯 ${goal.name}: ${sign}${usd(amountUsd)}\nНакоплено ${usd(saved)} из ${usd(goal.target_usd)}`, [
-      [{ text: 'Отменить', callback_data: `ug:${move.id}` }],
+      [{ text: 'Отменить', callback_data: `ug:${move.id}:${minuteOf(ctx.now)}` }],
     ]),
     ...toOwner(ctx, notice),
   ]

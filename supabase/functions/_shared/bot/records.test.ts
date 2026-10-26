@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { asMessage, buttons, cat, cb, MemStore, msg, OWNER, PARTNER, run, SETTINGS, seedTx, textOf, TODAY } from './testkit.ts'
+import { minuteOf } from './ctx.ts'
+import { asMessage, buttons, cat, cb, MemStore, msg, NOW, OWNER, PARTNER, run, SETTINGS, seedTx, textOf, TODAY } from './testkit.ts'
 import type { Account } from '../types.ts'
 
 const multi = (s: MemStore) => {
@@ -30,7 +31,7 @@ describe('two chats and the author (spec §9)', () => {
     await run(s, msg('кофе 80'))
     expect(textOf(await run(s, msg('/undo', PARTNER)))).toContain('Нечего отменять')
     expect(s.txRows[0].deleted).toBe(false)
-    const r = await run(s, cb(`u:${s.txRows[0].id}`, {}, PARTNER))
+    const r = await run(s, cb(`u:${s.txRows[0].id}:${minuteOf(NOW)}`, {}, PARTNER))
     expect(textOf(r)).toBe('Это не твоя запись')
     expect(s.txRows[0].deleted).toBe(false)
   })
@@ -81,8 +82,8 @@ describe('record replies (spec §5)', () => {
     expect(textOf(r)).toContain('Записал 3:')
     expect(textOf(r)).toContain('2) 🚕 Транспорт и такси · ₴150')
     expect(buttons(r).map((b) => b.text)).toEqual(['✏️ 1 · Кафе и рестораны', '✕', '✏️ 2 · Транспорт и такси', '✕', '✏️ 3 · Продукты', '✕', 'Отменить все'])
-    await run(s, cb('uall', asMessage(r[0])))
-    expect(s.txRows.every((t) => t.deleted)).toBe(true)
+    await run(s, cb(buttons(r).at(-1)!.callback_data, asMessage(r[0])))
+    expect(s.txRows.every((t) => !t.deleted && t.deleted_at === NOW.toISOString())).toBe(true) // in the bin
   })
 
   it('a line without an amount writes nothing', async () => {

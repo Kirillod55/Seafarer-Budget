@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { handleUpdate, restorePatch } from './bot.ts'
+import { minuteOf } from './bot/ctx.ts'
 import { ACCOUNT, buttons, cat, cb, MemStore, msg, NOW, OWNER, run, SETTINGS, seedTx, textOf, TODAY, uuid } from './bot/testkit.ts'
 
 const short = (id: string) => id.slice(0, 8)
@@ -45,7 +46,7 @@ describe('handleUpdate (1.0 behaviour kept)', () => {
     })
     expect(r[0].payload.chat_id).toBe(OWNER)
     expect(textOf(r)).toContain('☕ Кафе и рестораны · ₴80 ($1.94)')
-    expect(buttons(r).map((b) => b.callback_data)).toEqual([`c:${t.id}`, `u:${t.id}`])
+    expect(buttons(r).map((b) => b.callback_data)).toEqual([`c:${t.id}`, `u:${t.id}:${minuteOf(NOW)}`])
   })
 
   it('converts foreign currency and marks a pending rate', async () => {
@@ -101,8 +102,8 @@ describe('handleUpdate (1.0 behaviour kept)', () => {
   it('callback u: deletes the record and edits the message', async () => {
     const s = new MemStore()
     await run(s, msg('кофе 80'))
-    const r = await run(s, cb(`u:${s.txRows[0].id}`))
-    expect(s.txRows[0].deleted).toBe(true)
+    const r = await run(s, cb(`u:${s.txRows[0].id}:${minuteOf(NOW)}`))
+    expect(s.txRows[0]).toMatchObject({ deleted: false, deleted_at: NOW.toISOString() }) // in the bin
     expect(String(r[1].payload.text)).toMatch(/^Удалено: /)
   })
 
@@ -135,7 +136,7 @@ describe('handleUpdate (1.0 behaviour kept)', () => {
     await run(s, msg('кофе 80'))
     const r = await run(s, msg('цель маш 500'))
     expect(s.moveRows[0]).toMatchObject({ goal_id: 'g1', amount_usd: 12.14, author: 'owner', source: 'bot' })
-    expect(buttons(r).map((b) => b.callback_data)).toEqual([`ug:${s.moveRows[0].id}`])
+    expect(buttons(r).map((b) => b.callback_data)).toEqual([`ug:${s.moveRows[0].id}:${minuteOf(NOW)}`])
     s.moveRows[0].created_at = '2026-10-21T10:00:01.000Z'
     await run(s, msg('/undo'))
     expect(s.moveRows[0].deleted).toBe(true)

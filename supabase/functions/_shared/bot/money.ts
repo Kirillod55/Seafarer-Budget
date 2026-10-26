@@ -4,7 +4,7 @@ import { money } from '../format.ts'
 import { round2, usdRate } from '../fx.ts'
 import { aliasMap, amountAt, extractAccount, fuzzyAccount, fuzzyCurrency, normalize, stripPunct } from '../parser.ts'
 import type { Account, Transaction } from '../types.ts'
-import { activeAccounts, dayMonth, defaultAccount, isMulti, load, partnerName, send, toOwner, usd } from './ctx.ts'
+import { activeAccounts, dayMonth, defaultAccount, isMulti, load, partnerName, send, toOwner, undoTxData, usd } from './ctx.ts'
 import type { Ctx, Snapshot } from './ctx.ts'
 import { accountKey } from '../fuzzy.ts'
 import type { BotReply } from './types.ts'
@@ -66,7 +66,7 @@ function baseTx(ctx: Ctx, over: Partial<Transaction>): Transaction {
   }
 }
 
-const undoKb = (id: string) => [[{ text: 'Отменить', callback_data: `u:${id}` }]]
+const undoKb = (tx: { id: string; created_at: string }) => [[{ text: 'Отменить', callback_data: undoTxData(tx) }]]
 
 export const TRANSFER_RE = /^(перев[её]л|перевела|перевод|перевести|перекинул|перекинула|снял|сняла|снять)\s/
 export const EXCHANGE_RE = /^(поменял|поменяла|обменял|обменяла|обмен|разменял|разменяла)\s/
@@ -97,7 +97,7 @@ export async function transfer(ctx: Ctx, text: string): Promise<BotReply[]> {
   const tx = baseTx(ctx, { kind: 'transfer', amount: m.value, currency: m.currency, account_id: from.id, to_account_id: to.id, ...usdOf(snap, m.value, m.currency, ctx.today) })
   await ctx.store.insertTx(tx)
   const line = `🔁 ${from.name} → ${to.name} · ${money(m.value, m.currency)}`
-  return [send(ctx, line, undoKb(tx.id)), ...toOwner(ctx, `${partnerName(ctx.settings)}: ${line}`)]
+  return [send(ctx, line, undoKb(tx)), ...toOwner(ctx, `${partnerName(ctx.settings)}: ${line}`)]
 }
 
 /** NBU: UAH per unit of `a` over UAH per unit of `b` (how many b for one a). */
@@ -129,7 +129,7 @@ export async function exchange(ctx: Ctx, text: string): Promise<BotReply[]> {
   const nbu = nbuCross(snap, unit.currency, local.currency, ctx.today)
   const nbuText = nbu ? ` (НБУ ${nbu.toFixed(2)})` : ''
   const line = `💱 ${money(give.value, give.currency)} → ${money(get.value, get.currency)} · курс ${rate.toFixed(2)}${nbuText}`
-  return [send(ctx, line, undoKb(tx.id)), ...toOwner(ctx, `${partnerName(ctx.settings)}: ${line}`)]
+  return [send(ctx, line, undoKb(tx)), ...toOwner(ctx, `${partnerName(ctx.settings)}: ${line}`)]
 }
 
 export const RECONCILE_RE = /^(на руках|в наличных|наличными|на сч[её]те|на карте|на)\s/
@@ -169,7 +169,7 @@ export async function reconcile(ctx: Ctx, text: string, confirmed: boolean): Pro
     ...usdOf(snap, diff, p.said.currency, ctx.today),
   })
   await ctx.store.insertTx(tx)
-  return [send(ctx, `Записал корректировку ${signed}`, undoKb(tx.id)), ...toOwner(ctx, `${partnerName(ctx.settings)}: корректировка ${signed}`)]
+  return [send(ctx, `Записал корректировку ${signed}`, undoKb(tx)), ...toOwner(ctx, `${partnerName(ctx.settings)}: корректировка ${signed}`)]
 }
 
 const TARGET: Record<string, string> = {

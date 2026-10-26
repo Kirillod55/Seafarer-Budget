@@ -12,7 +12,10 @@ import { aliasMap, amountAt, extractAccount, fuzzyAccount, fuzzyCurrency, matchC
 import type { Account, Goal, Limit, Settings } from '../types.ts'
 import { answer, edit } from './callbacks.ts'
 import type { Query } from './callbacks.ts'
-import { activeAccounts, byShort, dayMonth, defaultAccount, isMulti, load, partnerName, send, short, toOwner, usd, usdWhole } from './ctx.ts'
+import {
+  activeAccounts, binPatch, byShort, dayMonth, defaultAccount, isMulti, load, minuteOf, partnerName, restoreButton, send, short, toOwner,
+  UNDO_TIMEOUT, undoExpired, usd, usdWhole,
+} from './ctx.ts'
 import type { Ctx, Keyboard, Snapshot } from './ctx.ts'
 import { ONLY_OWNER_ACCOUNTS } from './texts.ts'
 import { restorePatch } from './types.ts'
@@ -20,7 +23,9 @@ import type { BotReply } from './types.ts'
 
 const SAVE: Keyboard = [[{ text: 'Сохранить', callback_data: 'ok' }, { text: 'Отмена', callback_data: 'no' }]]
 const ask = (ctx: Ctx, text: string): BotReply[] => [send(ctx, text, SAVE, { replyTo: ctx.messageId })]
-const done = (ctx: Ctx, text: string, undo: string): BotReply[] => [send(ctx, text, [[{ text: 'Отменить', callback_data: undo }]])]
+/** The saved reply with «Отменить»: the button carries its minute and works for an hour (ruling 2026-10-26). */
+const done = (ctx: Ctx, text: string, undo: string): BotReply[] =>
+  [send(ctx, text, [[{ text: 'Отменить', callback_data: `${undo}:${minuteOf(ctx.now)}` }]])]
 
 const MONTHS: Record<string, number> = {
   'января': 1, 'январю': 1, 'январь': 1, 'февраля': 2, 'февралю': 2, 'март': 3, 'марта': 3, 'марту': 3, 'апреля': 4, 'апрелю': 4,
@@ -312,7 +317,10 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
     return [answer(q, 'Сохранил'), edit(ctx, q, v.text, v.kb)]
   }
   if (kind === 'us') {
-    const old = data.slice(5)
+    // us:<what>:<old value>:<minute>
+    const parts = data.split(':')
+    if (parts.length < 4 || undoExpired(parts[parts.length - 1], ctx.now)) return [answer(q, UNDO_TIMEOUT)]
+    const old = parts.slice(2, -1).join(':')
     if (a === 'l') await setSettings(ctx, { next_contract_date: old === '-' ? null : old })
     else if (a === 'r') await setSettings(ctx, { reserve_usd: Number(old) })
     else if (a === 'c') await setSettings(ctx, { default_currency: old })
@@ -321,23 +329,32 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
     return [answer(q, 'Отменено'), edit(ctx, q, 'Отменено — как было')]
   }
   if (!['uac', 'ugl', 'ul', 'ulr', 'acd'].includes(kind)) return null
+  // «Отменить» of a new goal / limit / account: uac|ugl:<id>:<minute>, ul:<id>:<old>:<minute>
+  const stamp = kind === 'ul' ? data.split(':')[3] : b
+  if (kind !== 'acd' && kind !== 'ulr' && undoExpired(stamp, ctx.now)) return [answer(q, UNDO_TIMEOUT)]
   const snap = await load(ctx)
   if (kind === 'ugl') {
     const g = byShort(snap.goals, a)
     if (!g) return [answer(q, 'Уже отменено')]
     if (snap.moves.some((m) => m.goal_id === g.id)) return [answer(q, 'В цели уже есть деньги — удали её в приложении')]
-    await ctx.store.update('goals', g.id, { deleted: true })
-    return [answer(q, 'Отменено'), edit(ctx, q, `Отменено: цель «${g.name}» удалена`)]
+    const batch = ctx.uuid()
+    await ctx.store.update('goals', g.id, binPatch(ctx, batch))
+    return [answer(q, 'Отменено'), edit(ctx, q, `Отменено: цель «${g.name}» удалена`, restoreButton(batch))]
   }
   if (kind === 'ul') {
     const l = byShort(snap.limits, a)
     if (!l) return [answer(q, 'Уже отменено')]
-    if (b === '-') await ctx.store.update('limits', l.id, { deleted: true })
-    else await ctx.store.update('limits', l.id, { monthly_usd: Number(b) })
+    if (b === '-') {
+      const batch = ctx.uuid()
+      await ctx.store.update('limits', l.id, binPatch(ctx, batch))
+      return [answer(q, 'Отменено'), edit(ctx, q, 'Отменено — лимита нет', restoreButton(batch))]
+    }
+    await ctx.store.update('limits', l.id, { monthly_usd: Number(b) })
     return [answer(q, 'Отменено'), edit(ctx, q, 'Отменено — лимит как был')]
   }
   if (kind === 'ulr') {
-    const l = byShort(await ctx.store.limits(), a)
+    // the removed limit sits in the bin
+    const l = byShort(await ctx.store.binned('limits'), a)
     if (!l) return [answer(q, 'Уже нельзя вернуть')]
     await ctx.store.update('limits', l.id, restorePatch(l))
     return [answer(q, 'Отменено'), edit(ctx, q, 'Вернул лимит')]
@@ -347,6 +364,7 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
   const who = partnerName(s)
   if (kind === 'uac') {
     if (snap.txs.some((t) => t.account_id === acc.id || t.to_account_id === acc.id)) return [answer(q, 'На счёте уже есть записи — удали его в приложении')]
+    // accounts have no bin: a new, still empty account is removed for good (only within the hour)
     await ctx.store.update('accounts', acc.id, { deleted: true })
     return [answer(q, 'Отменено'), edit(ctx, q, `Отменено: счёт «${acc.name}» удалён`)]
   }

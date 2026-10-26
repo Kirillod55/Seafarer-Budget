@@ -85,7 +85,8 @@ export async function route(ctx: Ctx, text: string, confirmed = false): Promise<
   if (/^верни (удал[её]нное|вс[её])/.test(t)) return restoreLatest(ctx)
   const clear = clearPhrase(text)
   if (clear) return startClear(ctx, clear.scope, clear.kind)
-  if (/^(удали|убери|сотри)\s/.test(t)) return deleteByDescription(ctx, text)
+  // «убери лимит на кафе» is a settings phrase (group 5), not a record to delete
+  if (/^(удали|убери|сотри)\s/.test(t) && !/^(удали|убери) лимит/.test(t)) return deleteByDescription(ctx, text)
   if (SUMMARY_RE.test(t)) return summaryToggle(ctx, text)
   if (/^сколько (дней )?до посадки/.test(t)) return cmd.daysToLanding(ctx)
   if (PREF_RE.test(t)) return prefPhrase(ctx, text, confirmed)

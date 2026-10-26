@@ -8,7 +8,10 @@ import type { TxParsed } from '../parser.ts'
 import type { Category } from '../types.ts'
 import { answer, edit } from './callbacks.ts'
 import type { Query } from './callbacks.ts'
-import { activeCategories, byShort, describeTx, load, partnerName, records, send, short, toOwner, usd } from './ctx.ts'
+import {
+  activeCategories, binPatch, byShort, describeTx, load, minuteOf, partnerName, records, restoreButton, send, short, toOwner,
+  UNDO_TIMEOUT, undoExpired, usd,
+} from './ctx.ts'
 import type { Ctx } from './ctx.ts'
 import { OTHER_EXPENSE, parseCtx, saveMany } from './records.ts'
 import type { BotReply } from './types.ts'
@@ -97,7 +100,7 @@ export async function createCategory(ctx: Ctx, text: string): Promise<BotReply[]
     for (const t of moved) await ctx.store.updateTx(t.id, { category_id: cat.id })
     const total = moved.reduce((s, t) => s + t.amount_usd, 0)
     const line = moved.length === 1 ? `Перенёс: ${describeTx({ ...moved[0], category_id: cat.id }, snap, ctx)}` : `Перенёс ${records(moved.length)} · ${usd(total)}`
-    return [send(ctx, `${head}\n${line}`, [[{ text: 'Отменить', callback_data: `umv:${short(cat.id)}` }]]), ...notice]
+    return [send(ctx, `${head}\n${line}`, [[{ text: 'Отменить', callback_data: `umv:${short(cat.id)}:${minuteOf(ctx.now)}` }]]), ...notice]
   }
 
   if (body || (verb && !['впиши', 'запиши', 'добавь'].includes(verb))) {
@@ -111,16 +114,17 @@ export async function createCategory(ctx: Ctx, text: string): Promise<BotReply[]
       }
       const replies = await saveMany(ctx, items, [head])
       const kb = (replies[0].payload.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }).inline_keyboard
-      kb[kb.length - 1] = [{ text: 'Отменить все', callback_data: `uall:${short(cat.id)}` }]
+      kb[kb.length - 1] = [{ text: 'Отменить все', callback_data: `uall:${short(cat.id)}:${minuteOf(ctx.now)}` }]
       return [...replies, ...notice]
     }
   }
-  return [send(ctx, head, [[{ text: 'Отменить', callback_data: `ucat:${short(cat.id)}` }]]), ...notice]
+  return [send(ctx, head, [[{ text: 'Отменить', callback_data: `ucat:${short(cat.id)}:${minuteOf(ctx.now)}` }]]), ...notice]
 }
 
 export async function categoryCallback(ctx: Ctx, q: Query, data: string): Promise<BotReply[] | null> {
-  const [kind, id] = data.split(':')
+  const [kind, id, stamp] = data.split(':')
   if (kind !== 'cra' && kind !== 'ucat' && kind !== 'umv') return null
+  if (kind !== 'cra' && undoExpired(stamp, ctx.now)) return [answer(q, UNDO_TIMEOUT)]
   const [snap, all] = await Promise.all([load(ctx), ctx.store.categories()])
   const cat = byShort(all, id)
   if (!cat) return [answer(q, 'Категория не найдена')]
@@ -140,6 +144,8 @@ export async function categoryCallback(ctx: Ctx, q: Query, data: string): Promis
   } else if (inside.length) {
     return [answer(q, 'В категории уже есть записи — удали её в приложении')]
   }
-  await ctx.store.update('categories', cat.id, { deleted: true })
-  return [answer(q, 'Отменено'), edit(ctx, q, `Отменил: категория «${cat.name}» удалена`)]
+  // to the bin, never for good: «Вернуть» brings it back for 24 h
+  const batch = ctx.uuid()
+  await ctx.store.update('categories', cat.id, binPatch(ctx, batch))
+  return [answer(q, 'Отменено'), edit(ctx, q, `Отменил: категория «${cat.name}» удалена`, restoreButton(batch))]
 }

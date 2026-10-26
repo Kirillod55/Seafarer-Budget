@@ -182,3 +182,18 @@ export function idsInKeyboard(markup: unknown): string[] {
 /** The minute stamp carried by buttons that expire after 10 minutes. */
 export const minuteOf = (now: Date) => Math.floor(now.getTime() / 60_000)
 export const expired = (stamp: string | undefined, now: Date) => !stamp || minuteOf(now) - Number(stamp) > 10
+
+/**
+ * «Отменить» buttons (ruling 2026-10-26): they carry the minute they were made and work for an hour;
+ * what they remove goes to the 24 h bin (`deleted_at` + `deleted_batch`), never `deleted = true`.
+ * A button without a stamp (made before 1.1) counts as expired.
+ */
+export const UNDO_MINUTES = 60
+export const UNDO_TIMEOUT = 'Время вышло — удали через /clear или в приложении'
+export const undoExpired = (stamp: string | undefined, now: Date) =>
+  !stamp || !/^\d+$/.test(stamp) || minuteOf(now) - Number(stamp) > UNDO_MINUTES
+/** «Отменить» of one record: stamped with the record's creation minute. */
+export const undoTxData = (t: { id: string; created_at: string }) => `u:${t.id}:${minuteOf(new Date(t.created_at))}`
+/** The bin patch of one undo: every row it removes shares the batch, so «Вернуть» brings them back together. */
+export const binPatch = (ctx: Ctx, batch: string) => ({ deleted_at: ctx.now.toISOString(), deleted_batch: batch })
+export const restoreButton = (batch: string): Keyboard => [[{ text: 'Вернуть', callback_data: `rs:${batch}` }]]

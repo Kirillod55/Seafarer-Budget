@@ -32,8 +32,18 @@ export interface BotStore {
   saveDraft(updateId: number, draft: object): Promise<void>
   /** Take the draft once: the draft, 'used' when already taken, null when there is none (or it was cleaned up). */
   takeDraft(updateId: number): Promise<unknown>
+  /** Rows of a soft table other than transactions in the 24 h undo bin (for «Вернуть»). */
+  binned(table: 'categories' | 'goals' | 'limits'): Promise<BinnedRow[]>
   /** Transactions in the 24 h undo bin (`deleted_at` set, not deleted for good). */
   binnedTransactions(): Promise<Transaction[]>
+}
+
+export interface BinnedRow {
+  id: string
+  rev?: number
+  deleted: boolean
+  deleted_at?: string | null
+  deleted_batch?: string | null
 }
 
 export type WriteTable = 'settings' | 'accounts' | 'categories' | 'transactions' | 'goals' | 'goal_moves' | 'limits'

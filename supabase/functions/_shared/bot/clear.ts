@@ -15,7 +15,7 @@ import { answer, edit } from './callbacks.ts'
 import type { Query } from './callbacks.ts'
 import { NOT_HER_RECORD } from './texts.ts'
 import { restorePatch } from './types.ts'
-import type { BotReply } from './types.ts'
+import type { BinnedRow, BotReply } from './types.ts'
 
 type ClearKind = 'e' | 'a' // only expenses / expenses and incomes
 const SCOPE_LABEL: Record<WipeScope, string> = { day: 'Сутки', week: 'Неделя', month: 'Месяц', all: 'Всё время' }
@@ -91,12 +91,21 @@ async function bin(ctx: Ctx, rows: Transaction[]): Promise<string> {
 /** «Вернуть» / /undo: the batch comes back with base_rev = rev, while 24 h have not passed. */
 export async function restoreBatch(ctx: Ctx, batch: string | null): Promise<BotReply[]> {
   const nowMs = ctx.now.getTime()
-  const rows = (await ctx.store.binnedTransactions()).filter((t) =>
-    t.deleted_batch === batch && t.deleted_at && nowMs - Date.parse(t.deleted_at) <= RESTORE_MS &&
-    (ctx.author === 'owner' || t.author === 'partner'))
-  if (!batch || rows.length === 0) return [send(ctx, 'Вернуть уже нельзя — прошло больше 24 часов или всё возвращено')]
+  const fresh = (r: { deleted_batch?: string | null; deleted_at?: string | null }) =>
+    Boolean(batch) && r.deleted_batch === batch && Boolean(r.deleted_at) && nowMs - Date.parse(r.deleted_at!) <= RESTORE_MS
+  const batchTxs = (await ctx.store.binnedTransactions()).filter(fresh)
+  const rows = batchTxs.filter((t) => ctx.author === 'owner' || t.author === 'partner')
+  // a category / goal / limit an «Отменить» put in the same batch comes back too (Masha: only from a batch of hers)
+  const others: { table: 'categories' | 'goals' | 'limits'; row: BinnedRow }[] = []
+  if (batch && (ctx.author === 'owner' || batchTxs.every((t) => t.author === 'partner'))) {
+    for (const table of ['categories', 'goals', 'limits'] as const) {
+      for (const row of (await ctx.store.binned(table)).filter(fresh)) others.push({ table, row })
+    }
+  }
+  if (rows.length === 0 && others.length === 0) return [send(ctx, 'Вернуть уже нельзя — прошло больше 24 часов или всё возвращено')]
+  for (const o of others) await ctx.store.update(o.table, o.row.id, restorePatch(o.row))
   for (const t of rows) await ctx.store.update('transactions', t.id, restorePatch(t))
-  return [send(ctx, `Вернул ${records(rows.length)}`)]
+  return [send(ctx, rows.length ? `Вернул ${records(rows.length)}` : 'Вернул как было')]
 }
 
 /** «верни удалённое»: the newest batch still restorable. */

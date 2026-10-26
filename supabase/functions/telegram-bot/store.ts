@@ -153,5 +153,6 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
     },
     update: (table, id, patch) => update(table, id, patch),
     binnedTransactions: () => all<Transaction>('transactions', true),
+    binned: (table) => all(table, true),
   }
 }
