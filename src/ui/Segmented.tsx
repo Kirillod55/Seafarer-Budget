@@ -60,7 +60,14 @@ export function Segmented<T extends string>({
   useLayoutEffect(() => {
     const seg = segRef.current
     if (!seg) return
-    const again = () => place(indexRef.current, true)
+    // only a real change of the switch's width re-places the pill at once: a height change around it (a form below
+    // gliding to its new height, a scrollbar flickering in during that) must not cut the pill's slide short
+    let width = seg.offsetWidth
+    const again = () => {
+      if (seg.offsetWidth === width) return
+      width = seg.offsetWidth
+      place(indexRef.current, true)
+    }
     window.addEventListener('resize', again)
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(again) : null
     ro?.observe(seg)
