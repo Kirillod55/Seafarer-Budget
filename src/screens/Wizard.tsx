@@ -441,31 +441,179 @@ export function Wizard({ onDone, startAt = 'mode' }: { onDone(): void; startAt?:
     </main>
   )
   if (!desk) return main
-  // PC: the steps on the left as in a Windows installer — the current one lit, the passed ones a lime tick (spec §11)
-  const STEPS = ['Режим счетов', 'Остаток', 'Посадка']
+
+  // PC (spec §11 «Мастер», prototype wizardDesk): the steps on the left as in a Windows installer; on the right
+  // «Шаг N из 3», the title, the line under it and the fields; the buttons in a bar along the bottom (the prototype's
+  // «Закрыть демо» has no meaning in the real app — the bar keeps its place on the left empty).
+  const STEPS = [
+    ['Режим счетов', 'Один баланс или несколько'],
+    ['Остаток', 'Сколько денег сейчас'],
+    ['Посадка', 'Бюджет на день до неё'],
+  ] as const
+  const head = (n: number, title: string, sub: string) => (
+    <>
+      {!balanceOnly && <p className="au-kick">{`Шаг ${n} из 3`}</p>}
+      <h1 className="au-h">{title}</h1>
+      <p className="au-sub">{sub}</p>
+    </>
+  )
+  const err = error && (
+    <p className="gerr" role="alert">
+      {error}
+    </p>
+  )
+  const opt = (m: Mode, Icon: typeof Wallet, color: string, title: string, sub: string) => (
+    <button
+      key={m}
+      type="button"
+      className="au-opt"
+      role="radio"
+      aria-checked={mode === m}
+      onClick={() => setMode(m)}
+      onDoubleClick={() => choose(m)}
+    >
+      <span className="au-radio" aria-hidden="true" />
+      <span className="ic" style={{ '--c': color } as CSSProperties} aria-hidden="true">
+        <Icon strokeWidth={2} />
+      </span>
+      <b>{title}</b>
+      <small>{sub}</small>
+    </button>
+  )
+
+  const body =
+    step === 1 ? (
+      <>
+        {head(1, 'Как вести деньги?', 'Это можно поменять позже в «Параметрах» — счета и записи не потеряются.')}
+        <div className="au-opts" role="radiogroup" aria-label="Режим счетов">
+          {opt('single', Wallet, 'var(--acc-1)', 'Один баланс', 'Всё вместе, без выбора счёта. Проще всего.')}
+          {opt('multi', CreditCard, 'var(--acc-0)', 'Несколько счетов', 'Карта, наличные, накопления — у каждого свой остаток.')}
+        </div>
+      </>
+    ) : step === 2 ? (
+      <>
+        {head(
+          2,
+          'Сколько денег сейчас',
+          balanceOnly ? 'Данные удалены. Впиши, сколько денег сейчас, — с этого начнётся баланс.' : 'Начальный остаток — с него начнётся баланс.',
+        )}
+        <CurrencyRows rows={rows} setRows={setRows} known={known} error={error} onEnter={balanceOnly ? finishBalance : toLanding} />
+        {mode === 'multi' && !balanceOnly && <p className="label">Всё ляжет на счёт «Основной»; другие счета добавишь в «Счетах».</p>}
+      </>
+    ) : (
+      <>
+        {head(3, 'Бюджет до посадки', 'Поделю деньги на дни до посадки. Можно пропустить и указать позже.')}
+        <div className="au-row rec">
+          <div className="fld">
+            <label htmlFor="wz-date">Дата посадки</label>
+            <input id="wz-date" className="inp" type="date" value={date} onChange={(e) => setDate(e.target.value)} onKeyDown={enterRuns(() => finish(false))} />
+          </div>
+          <div className="fld">
+            <label htmlFor="wz-reserve">Запас к посадке, $</label>
+            <input
+              id="wz-reserve"
+              className="inp num"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="0"
+              aria-invalid={!!error}
+              value={reserve}
+              onChange={(e) => {
+                setReserve(e.target.value)
+                if (error) setError('')
+              }}
+              onKeyDown={enterRuns(() => finish(false))}
+            />
+          </div>
+        </div>
+        <div className="au-calc" aria-live="polite">
+          <span className="au-kick">Получится</span>
+          {typeof calc === 'string' ? (
+            <span>{calc}</span>
+          ) : (
+            <>
+              <b className="num">
+                {calc.perDay} <small>в день</small>
+              </b>
+              <span>{calc.rest.replace(/^ в день /, '')}</span>
+            </>
+          )}
+        </div>
+      </>
+    )
+
+  const buttons =
+    balanceOnly ? (
+      <>
+        <button type="button" className="fbtn" disabled={busy} onClick={onDone}>
+          Пропустить
+        </button>
+        <button type="button" className="fbtn primary" disabled={busy} onClick={finishBalance}>
+          Готово
+        </button>
+      </>
+    ) : step === 1 ? (
+      <button type="button" className="fbtn primary" onClick={() => choose(mode)}>
+        Дальше
+      </button>
+    ) : step === 2 ? (
+      <>
+        <button type="button" className="fbtn" onClick={() => go(1)}>
+          Назад
+        </button>
+        <button type="button" className="fbtn primary" onClick={toLanding}>
+          Дальше
+        </button>
+      </>
+    ) : (
+      <>
+        <button type="button" className="fbtn" disabled={busy} onClick={() => go(2)}>
+          Назад
+        </button>
+        <button type="button" className="fbtn" disabled={busy} onClick={() => finish(true)}>
+          Пропустить
+        </button>
+        <button type="button" className="fbtn primary" disabled={busy} onClick={() => finish(false)}>
+          Готово
+        </button>
+      </>
+    )
+
   return (
     <div className="au">
       <AuthBrand>
         {!balanceOnly && (
           <ol className="au-steps" aria-label="Шаги настройки">
-            {STEPS.map((name, i) => {
+            {STEPS.map(([name, sub], i) => {
               const n = i + 1
-              const st = n < step ? 'done' : n === step ? 'cur' : ''
               return (
-                <li key={name} className={st} aria-current={n === step ? 'step' : undefined}>
+                <li key={name} className={n < step ? 'done' : n === step ? 'cur' : ''} aria-current={n === step ? 'step' : undefined}>
                   <span className="au-dot" aria-hidden="true">
                     {n < step ? <Check strokeWidth={3} /> : n}
                   </span>
-                  <b>{name}</b>
+                  <span>
+                    <b>{name}</b>
+                    <small>{sub}</small>
+                  </span>
                 </li>
               )
             })}
           </ol>
         )}
       </AuthBrand>
-      <div className="au-main">
-        <div className="au-center">{main}</div>
-      </div>
+      <main className="au-main">
+        <div className="au-center">
+          <div key={step} className="au-form wide">
+            {body}
+            {step !== 2 && err}
+          </div>
+        </div>
+        <div className="au-bar">
+          <span className="au-sp" />
+          {buttons}
+        </div>
+      </main>
     </div>
   )
 }

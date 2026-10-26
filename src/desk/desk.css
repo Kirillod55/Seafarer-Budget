@@ -1578,35 +1578,145 @@ html.desk .mcard > h3 {
   text-decoration: underline;
 }
 
-/* the setup wizard inside the right pane */
-.au .wz {
-  width: 100%;
+/* the setup wizard (prototype wizardDesk) */
+.au-form.wide {
   max-width: 560px;
-  min-height: 0;
-  padding: 0;
-  background: none;
 }
 
-.au .wzstep .group.menu {
+.au-steps small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.au-kick {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.au-kick + .au-h {
+  margin-top: -6px;
+}
+
+.au-sub {
+  margin: -8px 0 6px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.au-opts {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  border: 0;
-  background: none;
 }
 
-.au .wzstep .group.menu > button {
+.au-opt {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+.au-opt:hover {
+  background: color-mix(in srgb, var(--text) 3%, var(--card));
+}
+
+.au-opt[aria-checked='true'] {
+  border-color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--accent-text);
+}
+
+.au-opt b {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.au-opt small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.au-radio {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  transition: border 0.15s;
+}
+
+.au-opt[aria-checked='true'] .au-radio {
+  border: 5px solid var(--accent-text);
+}
+
+.au-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.au-calc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--card);
 }
 
-.au .wzstep .group.menu > button::before {
-  display: none;
+.au-calc b {
+  color: var(--accent-text);
+  font-size: 24px;
+  font-weight: 600;
 }
 
-.au .wzstep .group.menu > button:hover {
-  border-color: var(--accent-text);
+.au-calc b small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.au-calc > span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.au-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--track) 40%, var(--bg));
+}
+
+.au-sp {
+  flex: 1;
+}
+
+.au-bar .fbtn {
+  min-width: 96px;
 }
 
 @media (max-width: 1180px) {
