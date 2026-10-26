@@ -1,3 +1,5 @@
+import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
+
 /*
  * Gesture physics, ported from the prototype (spring, project, rubber, tracker) — spec §6 «Второй проход»:
  * springs in Apple's terms (damping ratio + response in seconds) that start from the live on-screen value with
@@ -97,4 +99,28 @@ export function createTracker(): { add(x: number, t?: number): void; velocity():
       pts = []
     },
   }
+}
+
+/** The iOS curve (spec §6 --ios) for Web Animations. */
+export const IOS = 'cubic-bezier(.32,.72,0,1)'
+
+/**
+ * ‹ › paging (prototype .slide-r / .slide-l): call the returned `from(k)` just before `key` changes (k = -1 back,
+ * +1 forward); after that render the element slides in from that side. Off under reduced motion.
+ */
+export function useSlideIn(ref: RefObject<HTMLElement | null>, key: unknown): (k: number) => void {
+  const slide = useRef(0)
+  useLayoutEffect(() => {
+    const d = slide.current
+    const el = ref.current
+    slide.current = 0
+    if (!d || !el || prefersReducedMotion() || typeof el.animate !== 'function') return
+    el.animate([{ opacity: 0, transform: `translateX(${d * 28}px)` }, { opacity: 1, transform: 'none' }], {
+      duration: 420,
+      easing: IOS,
+    })
+  }, [key, ref])
+  return useCallback((k: number) => {
+    slide.current = k
+  }, [])
 }

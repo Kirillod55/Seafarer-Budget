@@ -1,6 +1,7 @@
 import { money } from '@shared/format.ts'
 import type { Account, Category, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
+import { bareCategory, partnerLabel } from '../lib/records.ts'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
 import { PartnerBadge } from '../ui/PartnerBadge.tsx'
 import { SwipeRow, type SwipeAction } from '../ui/SwipeRow.tsx'
@@ -17,24 +18,6 @@ export const KIND_TITLE: Record<Transaction['kind'], string> = {
   transfer: 'Перевод',
   exchange: 'Обмен',
   adjustment: 'Корректировка',
-}
-
-/** The tile for a record without a category (transfer, exchange, adjustment): neutral grey wallet. */
-export function bareCategory(name: string): Category {
-  return {
-    id: '',
-    deleted: false,
-    name,
-    kind: 'expense',
-    icon: '',
-    keywords: [],
-    archived: false,
-    sort: 0,
-    color: '#8E8E93',
-    glyph: 'wallet',
-    deleted_at: null,
-    deleted_batch: null,
-  }
 }
 
 /**
@@ -84,7 +67,7 @@ export function TxRow({
   const { repo } = useApp()
   const toast = useToast()
   const hers = tx.author === 'partner'
-  const name = (partnerName ?? '').trim() || 'Она'
+  const name = partnerLabel(partnerName)
   const title = category?.name ?? KIND_TITLE[tx.kind]
   const where = account && toAccount ? `${account.name} → ${toAccount.name}` : account?.name
   const moves = tx.kind === 'transfer' || tx.kind === 'exchange'

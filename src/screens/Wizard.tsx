@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { DEFAULT_SETTINGS } from '@shared/defaults.ts'
@@ -10,6 +10,7 @@ import { useApp } from '../context.tsx'
 import { parseAmount } from '../lib/amount.ts'
 import { CUR_BASE, curOptions } from '../ui/currencies.ts'
 import { plural } from '../ui/dates.ts'
+import { onEnter as enterRuns } from '../ui/keys.ts'
 import { ChevronRight, CreditCard, Wallet, X } from '../ui/icons.ts'
 import { Morph } from '../ui/Morph.tsx'
 import { prefersReducedMotion } from '../ui/motion.ts'
@@ -34,13 +35,6 @@ const MAX_ROWS = 5
 const NOT_A_NUMBER = 'Введите сумму числом, например 5000'
 const EASE_IN = 'cubic-bezier(.2,.8,.2,1)'
 const EASE_OUT = 'cubic-bezier(.4,0,.2,1)'
-
-const enterRuns = (run: () => void) => (e: KeyboardEvent) => {
-  if (e.key === 'Enter') {
-    e.preventDefault()
-    run()
-  }
-}
 
 /** The rows as opening balances; null when a sum is not a number (an empty one is 0). */
 function openingOf(rows: Row[]): { currency: string; amount: number }[] | null {

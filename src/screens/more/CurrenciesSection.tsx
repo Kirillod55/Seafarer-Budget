@@ -4,7 +4,8 @@ import { curLabel, curOptions } from '../../ui/currencies.ts'
 import { X } from '../../ui/icons.ts'
 import { Picker } from '../../ui/Picker.tsx'
 import { useFlip } from '../../ui/useFlip.ts'
-import { MoreCard, onEnter, useSaveSettings } from './common.tsx'
+import { MoreCard, useSaveSettings } from './common.tsx'
+import { onEnter } from '../../ui/keys.ts'
 
 const CODE = /^[A-Z]{3}$/
 const HINT = 'Курс берётся у НБУ — валюта должна быть в его списке'

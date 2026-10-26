@@ -6,7 +6,7 @@ import { RecordSheet, RecordSheetHost, useRecordSheet } from './RecordSheet.tsx'
 import { lockScroll } from '../ui/scrollLock.ts'
 import { spring } from '../ui/motion.ts'
 import { ToastHost } from '../ui/Toast.tsx'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { TEST_TODAY, makeEnv, renderWithApp, reducedMotion } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
 
 // the real springs, watched: the return spring's parameters are asserted
@@ -20,17 +20,6 @@ const rate = (date: string, currency: string, uah_per_unit: number): FxRate => (
 let env: AppContextValue
 let existing: Transaction
 let cafe: Category
-
-function reducedMotion(on: boolean) {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: on && q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
 
 async function seed(mode: 'single' | 'multi' = 'single') {
   await env.repo.initDefaults(mode, [{ currency: 'USD', amount: 100 }])

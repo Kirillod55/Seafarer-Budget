@@ -11,6 +11,18 @@ export const TEST_TODAY = '2026-10-21'
 
 let dbCounter = 0
 
+/** Stubs matchMedia so prefers-reduced-motion matches (`on`) or not; undo with vi.unstubAllGlobals(). */
+export function reducedMotion(on = true): void {
+  vi.stubGlobal('matchMedia', (q: string) => ({
+    matches: on && q.includes('prefers-reduced-motion: reduce'),
+    media: q,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+  }))
+}
+
 export function stubScheduler(): Scheduler {
   const status = { state: 'idle' as const, lastSyncAt: null, error: null }
   return {

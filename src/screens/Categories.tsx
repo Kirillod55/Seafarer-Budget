@@ -12,7 +12,7 @@ import { plural } from '../ui/dates.ts'
 import { SwipeRow, closeOpenSwipeRow, type SwipeAction } from '../ui/SwipeRow.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import { useFlip } from '../ui/useFlip.ts'
-import { useDayTick } from './Home.tsx'
+import { useDayTick } from '../ui/useDayTick.ts'
 import './categories.css'
 
 const FAILED = 'Не получилось — попробуй ещё раз'

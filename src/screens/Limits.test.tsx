@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Category, FxRate, Limit } from '@shared/types.ts'
 import { Limits } from './Limits.tsx'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { TEST_TODAY, makeEnv, renderWithApp, reducedMotion } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
 import { createSync, type Remote } from '../db/sync.ts'
 import { Navigator } from '../nav/Navigator.tsx'
@@ -14,17 +14,6 @@ let env: AppContextValue
 let cafe: Category
 
 /** Reduce Motion on: blocks swap at once. */
-function reducedMotion() {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
-
 async function seed() {
   await env.repo.initDefaults('single', [{ currency: 'UAH', amount: 10000 }])
   await env.db.fx_rates.bulkPut([rate(TEST_TODAY, 'UAH', 1), rate(TEST_TODAY, 'USD', 40)])

@@ -7,6 +7,7 @@ import { money } from '@shared/format.ts'
 import type { Account, Author, Category, FxRate, Settings, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
 import { parseAmount } from '../lib/amount.ts'
+import { partnerLabel } from '../lib/records.ts'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
 import { curLabel, curName } from '../ui/currencies.ts'
 import { Picker } from '../ui/Picker.tsx'
@@ -162,7 +163,7 @@ function RecordForm({
   const adjustment = existing?.kind === 'adjustment'
   const fixed = !plain && !adjustment
   const accountName = (id: string | null) => accounts.find((a) => a.id === id)?.name ?? ''
-  const partner = (settings.partner_name ?? '').trim() || 'Она'
+  const partner = partnerLabel(settings.partner_name)
 
   const [kind, setKind] = useState<Kind>(existing?.kind === 'income' ? 'income' : 'expense')
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '')

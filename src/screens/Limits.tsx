@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useId, useRef, useState, type RefObject } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { limitStatus } from '@shared/calc.ts'
@@ -11,12 +11,13 @@ import { parseAmount } from '../lib/amount.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
 import { MONTHS_NOM } from '../ui/dates.ts'
+import { onEnter } from '../ui/keys.ts'
 import { Picker } from '../ui/Picker.tsx'
 import { ProgressBar } from '../ui/ProgressBar.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import '../ui/ui.css' // .pill ok / warn / over
 import { useFlip } from '../ui/useFlip.ts'
-import { useDayTick } from './Home.tsx'
+import { useDayTick } from '../ui/useDayTick.ts'
 import './record.css'
 import './goals.css'
 import './limits.css'
@@ -24,13 +25,6 @@ import './limits.css'
 const FAILED = 'Не получилось — попробуй ещё раз'
 const usd = (n: number) => money(n, 'USD', { whole: true })
 const LEVEL: Record<'ok' | 'warn' | 'over', string> = { ok: 'В норме', warn: 'Почти всё', over: 'Превышен' }
-
-const enterRuns = (run: () => void) => (e: KeyboardEvent) => {
-  if (e.key === 'Enter') {
-    e.preventDefault()
-    run()
-  }
-}
 
 /**
  * Saves a limit for a category. A row of that category in the undo bin (`deleted_at`) is brought back instead of
@@ -110,7 +104,7 @@ function NewLimitCard({ choices, amountRef, onClose }: { choices: Category[]; am
             setAmount(e.target.value)
             if (error) setError('')
           }}
-          onKeyDown={enterRuns(() => void submit())}
+          onKeyDown={onEnter(() => void submit())}
         />
       </div>
       {error && (
@@ -169,7 +163,7 @@ function EditAmount({ limit, onClose }: { limit: Limit; onClose(): void }) {
             setAmount(e.target.value)
             if (error) setError('')
           }}
-          onKeyDown={enterRuns(() => void submit())}
+          onKeyDown={onEnter(() => void submit())}
         />
       </div>
       {error && (

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Settings } from '@shared/types.ts'
+import { partnerLabel } from '../../lib/records.ts'
 import { plural } from '../../ui/dates.ts'
 import { UserRound } from '../../ui/icons.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
-import { partnerLabel } from '../Records.tsx'
-import { MoreCard, onEnter, useSaveSettings } from './common.tsx'
+import { MoreCard, useSaveSettings } from './common.tsx'
+import { onEnter } from '../../ui/keys.ts'
 
 const NAME_MAX = 20
 

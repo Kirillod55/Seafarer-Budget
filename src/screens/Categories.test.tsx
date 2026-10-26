@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Category, Limit } from '@shared/types.ts'
 import type { AppContextValue } from '../context.tsx'
 import { Navigator, type Route } from '../nav/Navigator.tsx'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { TEST_TODAY, makeEnv, renderWithApp, reducedMotion } from '../test-utils.tsx'
 import { ToastHost } from '../ui/Toast.tsx'
 import { Categories } from './Categories.tsx'
 
@@ -12,17 +12,6 @@ let accountId: string
 const cat: Record<string, Category> = {}
 
 /** Reduce Motion on: springs land at once, swiped rows collapse without waiting. */
-function reducedMotion() {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
-
 const spend = (category: string, note = 'запись', archived = false) =>
   env.repo.addTransaction({
     kind: cat[category].kind,

@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, Category, Transaction } from '@shared/types.ts'
 import { useApp, type AppContextValue } from '../context.tsx'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { TEST_TODAY, makeEnv, renderWithApp, reducedMotion } from '../test-utils.tsx'
 import { SwipeRow } from '../ui/SwipeRow.tsx'
 import { ToastHost } from '../ui/Toast.tsx'
 import { DayGroups } from './DayGroups.tsx'
@@ -13,17 +13,6 @@ const ROW_W = 375
 let env: AppContextValue
 
 /** Reduce Motion on: springs land at once (a microtask), rows collapse without waiting. */
-function reducedMotion(on: boolean) {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: on && q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
-
 const cafe: Category = {
   id: 'cat-cafe',
   deleted: false,

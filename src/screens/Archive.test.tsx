@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, Category, Goal, Transaction } from '@shared/types.ts'
 import type { AppContextValue } from '../context.tsx'
 import { Navigator, useNav, type Route } from '../nav/Navigator.tsx'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { TEST_TODAY, makeEnv, renderWithApp, reducedMotion } from '../test-utils.tsx'
 import { ToastHost } from '../ui/Toast.tsx'
 import { Archive } from './Archive.tsx'
 import { Goals } from './Goals.tsx'
@@ -16,17 +16,6 @@ let main: Account
 const cat: Record<string, Category> = {}
 
 /** Reduce Motion on: nothing waits for an animation. */
-function reducedMotion() {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
-
 const spend = (note: string, opts: { amount?: number; account?: string; category?: string; archived?: boolean; kind?: Transaction['kind'] } = {}) =>
   env.repo.addTransaction({
     kind: opts.kind ?? 'expense',

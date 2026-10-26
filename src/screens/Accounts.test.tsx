@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, FxRate, Goal, GoalMove } from '@shared/types.ts'
 import { Accounts } from './Accounts.tsx'
-import { TEST_NOW, TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { TEST_NOW, TEST_TODAY, makeEnv, renderWithApp, reducedMotion } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
 import { Navigator } from '../nav/Navigator.tsx'
 import { ToastHost } from '../ui/Toast.tsx'
@@ -14,17 +14,6 @@ let main: Account
 let cash: Account
 
 /** Reduce Motion on: blocks swap at once. */
-function reducedMotion() {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
-
 async function seed(mode: 'single' | 'multi' = 'multi') {
   await env.repo.initDefaults(mode, [{ currency: 'UAH', amount: 5000 }])
   await env.db.fx_rates.bulkPut([rate(TEST_TODAY, 'UAH', 1), rate(TEST_TODAY, 'USD', 41.2)])

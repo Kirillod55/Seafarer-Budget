@@ -17,7 +17,7 @@ import { Picker } from '../ui/Picker.tsx'
 import { ProgressBar } from '../ui/ProgressBar.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import { useFlip } from '../ui/useFlip.ts'
-import { useDayTick } from './Home.tsx'
+import { useDayTick } from '../ui/useDayTick.ts'
 import './record.css'
 import './goals.css'
 

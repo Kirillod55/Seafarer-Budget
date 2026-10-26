@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { monthReport } from '@shared/calc.ts'
@@ -7,32 +7,25 @@ import { money } from '@shared/format.ts'
 import { round2 } from '@shared/fx.ts'
 import type { Account, Category, Transaction } from '@shared/types.ts'
 import { DayGroups, dayTitle } from '../components/DayGroups.tsx'
-import { bareCategory } from '../components/TxRow.tsx'
 import { useApp } from '../context.tsx'
+import { bareCategory } from '../lib/records.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
 import { Morph } from '../ui/Morph.tsx'
-import { prefersReducedMotion } from '../ui/motion.ts'
-import { MONTHS_NOM, dayMonth } from '../ui/dates.ts'
+import { prefersReducedMotion, useSlideIn } from '../ui/motion.ts'
+import { MONTHS_NOM, dayMonth, shiftMonth } from '../ui/dates.ts'
 import { Anchor, ChevronLeft, ChevronRight } from '../ui/icons.ts'
-import { useDayTick } from './Home.tsx'
+import { useDayTick } from '../ui/useDayTick.ts'
 import { useRecordSheet } from './RecordSheet.tsx'
 import './calendar.css'
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-const IOS = 'cubic-bezier(.32,.72,0,1)'
-
 /** «1 запись», «2 записи», «5 записей» */
 function records(n: number): string {
   const m10 = n % 10
   const m100 = n % 100
   const word = m10 === 1 && m100 !== 11 ? 'запись' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'записи' : 'записей'
   return `${n} ${word}`
-}
-
-function shiftMonth(month: string, k: number): string {
-  const [y, m] = month.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 7)
 }
 
 /** The month's days: blanks before the 1st (the week starts on Monday), then 'YYYY-MM-DD' for each day. */
@@ -71,7 +64,6 @@ export function Calendar() {
   const [picked, setPicked] = useState<string | null>(null)
   const [dir, setDir] = useState(1)
   const gridRef = useRef<HTMLDivElement>(null)
-  const slide = useRef(0)
   const pickAnim = useRef<Animation | null>(null)
 
   const today = localDate(now(), data?.settings?.timezone ?? 'UTC')
@@ -79,22 +71,13 @@ export function Calendar() {
   const sel = picked ?? today
 
   // ‹ ›: the new month slides in from the side it was paged to (prototype .slide-r / .slide-l)
-  useLayoutEffect(() => {
-    const d = slide.current
-    const el = gridRef.current
-    slide.current = 0
-    if (!d || !el || prefersReducedMotion() || typeof el.animate !== 'function') return
-    el.animate([{ opacity: 0, transform: `translateX(${d * 28}px)` }, { opacity: 1, transform: 'none' }], {
-      duration: 420,
-      easing: IOS,
-    })
-  }, [shown])
+  const slideFrom = useSlideIn(gridRef, shown)
 
   if (!data) return <p className="muted pad">Загрузка…</p>
   const { settings, txs, categories, accounts } = data
 
   const pageMonth = (k: number) => {
-    slide.current = k
+    slideFrom(k)
     setMonth(shiftMonth(shown, k))
   }
 

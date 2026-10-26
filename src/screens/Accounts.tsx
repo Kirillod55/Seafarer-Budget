@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useId, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, balances, reservingGoalMoves, reservedUsd } from '@shared/calc.ts'
@@ -11,12 +11,13 @@ import { parseAmount } from '../lib/amount.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { curOptions } from '../ui/currencies.ts'
 import { Archive, CreditCard, Pencil, Plus, Wallet } from '../ui/icons.ts'
+import { onEnter as enterRuns } from '../ui/keys.ts'
 import { Morph } from '../ui/Morph.tsx'
 import { Picker } from '../ui/Picker.tsx'
 import { Segmented } from '../ui/Segmented.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import { useFlip } from '../ui/useFlip.ts'
-import { useDayTick } from './Home.tsx'
+import { useDayTick } from '../ui/useDayTick.ts'
 import './record.css'
 import './goals.css'
 import './accounts.css'
@@ -30,13 +31,6 @@ const usdWhole = (n: number) => money(n, 'USD', { whole: true })
 type Op = 'transfer' | 'exchange' | 'reconcile'
 /** The card on top: «Новый счёт» or «Счёт» (edit); one at a time. */
 type Panel = { kind: 'new' } | { kind: 'edit'; id: string } | null
-
-const enterRuns = (run: () => void) => (e: KeyboardEvent) => {
-  if (e.key === 'Enter') {
-    e.preventDefault()
-    run()
-  }
-}
 
 /** «карта, visa ,» → ['карта', 'visa'] */
 const splitAliases = (text: string) =>

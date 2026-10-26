@@ -1,7 +1,7 @@
-import { useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useId, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
-import { monthReport } from '@shared/calc.ts'
+import { UNCATEGORIZED, monthReport } from '@shared/calc.ts'
 import { categoryStyle } from '@shared/defaults.ts'
 import { localDate, monthOf } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
@@ -9,18 +9,16 @@ import { round2 } from '@shared/fx.ts'
 import { Donut, type DonutPart } from '../components/Donut.tsx'
 import { TxRow, capitalize } from '../components/TxRow.tsx'
 import { useApp } from '../context.tsx'
+import { byWho, categoryOf, partnerLabel, whoOptions } from '../lib/records.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { useNav, type Who } from '../nav/Navigator.tsx'
-import { prefersReducedMotion } from '../ui/motion.ts'
+import { useSlideIn } from '../ui/motion.ts'
 import { MONTHS_IN, MONTHS_NOM, monthTitle, plural, shiftMonth } from '../ui/dates.ts'
 import { ChevronLeft, ChevronRight } from '../ui/icons.ts'
 import { Segmented } from '../ui/Segmented.tsx'
-import { useDayTick } from './Home.tsx'
-import { UNCATEGORIZED, byWho, categoryOf, partnerLabel, whoOptions } from './Records.tsx'
+import { useDayTick } from '../ui/useDayTick.ts'
 import { useRecordSheet } from './RecordSheet.tsx'
 import './report.css'
-
-const IOS = 'cubic-bezier(.32,.72,0,1)'
 
 /** The pill under the month total: «↓ на 17% меньше, чем в сентябре». */
 function comparison(total: number, prev: number, prevMonthKey: string): { text: string; cls: string } {
@@ -69,30 +67,20 @@ export function Report() {
   const [active, setActive] = useState<number | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const topId = useId()
-  const slide = useRef(0)
 
   const today = localDate(now(), data?.settings?.timezone ?? 'UTC')
   const current = monthOf(today)
   const month = chosen ?? current
 
   // ‹ ›: the cards slide in from the side the month was paged to
-  useLayoutEffect(() => {
-    const d = slide.current
-    const el = gridRef.current
-    slide.current = 0
-    if (!d || !el || prefersReducedMotion() || typeof el.animate !== 'function') return
-    el.animate([{ opacity: 0, transform: `translateX(${d * 28}px)` }, { opacity: 1, transform: 'none' }], {
-      duration: 420,
-      easing: IOS,
-    })
-  }, [month])
+  const slideFrom = useSlideIn(gridRef, month)
 
   if (!data) return <p className="muted pad">Загрузка…</p>
   const { settings, txs, categories, accounts } = data
   if (!settings) return <p className="muted pad">Сначала завершите настройку</p>
 
   const page = (k: number) => {
-    slide.current = k
+    slideFrom(k)
     setActive(null)
     setChosen(shiftMonth(month, k))
   }

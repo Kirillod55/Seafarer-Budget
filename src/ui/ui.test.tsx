@@ -11,6 +11,7 @@ import { Segmented } from './Segmented.tsx'
 import { ToastHost, useToast } from './Toast.tsx'
 import { useCountUp } from './useCountUp.ts'
 import { useFlip } from './useFlip.ts'
+import { reducedMotion } from '../test-utils.tsx'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -19,17 +20,6 @@ afterEach(() => {
 })
 
 /** iPhone «Уменьшение движения» on or off for the code under test. */
-function reducedMotion(on: boolean) {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: on && q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
-
 /** Run with a stubbed Element.prototype.animate, restoring jsdom's (absent) one even when the test fails. */
 function withAnimate<T>(stub: (this: Element, ...a: Parameters<Element['animate']>) => unknown, body: () => T): T {
   const had = Object.prototype.hasOwnProperty.call(Element.prototype, 'animate')

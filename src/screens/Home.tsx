@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, dailyBudget, reservingGoalMoves, reservedUsd, type DailyBudget } from '@shared/calc.ts'
@@ -16,6 +16,7 @@ import { PullToRefresh } from '../ui/PullToRefresh.tsx'
 import { dayMonth, weekdayDayMonth } from '../ui/dates.ts'
 import { Anchor, Calendar, Plus } from '../ui/icons.ts'
 import { useCountUp } from '../ui/useCountUp.ts'
+import { useDayTick } from '../ui/useDayTick.ts'
 import { useRecordSheet } from './RecordSheet.tsx'
 import './home.css'
 
@@ -24,50 +25,6 @@ const REFRESH_TIMEOUT_MS = 15000
 
 const usd = (n: number) => money(n, 'USD')
 const usdWhole = (n: number) => money(n, 'USD', { whole: true })
-
-/** Milliseconds from now to the next local midnight in the time zone (+0.5 s, so the new day has begun). */
-export function msToMidnight(now: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(now)
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0)
-  const passed = (get('hour') * 3600 + get('minute') * 60 + get('second')) * 1000 + now.getMilliseconds()
-  return Math.max(1000, 86_400_000 - passed + 500)
-}
-
-/**
- * «Сегодня» follows the clock: the screen re-renders at the next local midnight and whenever the app comes back to
- * the screen (an iPhone app sleeps in the background past midnight; its timers do not run there).
- */
-export function useDayTick(now: () => Date, timeZone: string | undefined): void {
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (!timeZone) return
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const arm = () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => {
-        setTick((n) => n + 1)
-        arm()
-      }, msToMidnight(now(), timeZone))
-    }
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return
-      setTick((n) => n + 1)
-      arm()
-    }
-    arm()
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      clearTimeout(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [now, timeZone])
-}
 
 /** A USD amount that counts to its new value (spec §6 «Цифры … плавно досчитываются», 0.6 s). */
 function CountUp({ value, className }: { value: number; className: string }) {

@@ -5,7 +5,8 @@ import { round2 } from '@shared/fx.ts'
 import type { Account, FxRate, Goal, GoalMove, Settings, Transaction } from '@shared/types.ts'
 import { parseAmount } from '../../lib/amount.ts'
 import { plural } from '../../ui/dates.ts'
-import { MoreCard, onEnter, useSaveSettings } from './common.tsx'
+import { MoreCard, useSaveSettings } from './common.tsx'
+import { onEnter } from '../../ui/keys.ts'
 
 const fmtReserve = (n: number | null | undefined) => String(n ?? 0)
 

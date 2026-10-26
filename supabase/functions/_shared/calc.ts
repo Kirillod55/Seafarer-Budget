@@ -13,7 +13,8 @@ const OVER_SHARE = 1.0
 const PACE_WINDOW_DAYS = 90
 const MAX_ETA_DAYS = 36_500 // 100 years
 const TOP_COUNT = 5
-const UNCATEGORIZED = 'uncategorized'
+/** The key of expenses without a category: monthReport's «Без категории» row, the records route's category. */
+export const UNCATEGORIZED = 'uncategorized'
 
 function sum(values: Iterable<number>): number {
   let total = 0

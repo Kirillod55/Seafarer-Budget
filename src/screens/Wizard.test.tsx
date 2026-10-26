@@ -2,23 +2,12 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Account, Settings } from '@shared/types.ts'
 import { Wizard } from './Wizard.tsx'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../test-utils.tsx'
+import { TEST_TODAY, makeEnv, renderWithApp, reducedMotion } from '../test-utils.tsx'
 import type { AppContextValue } from '../context.tsx'
 
 let env: AppContextValue
 
 /** Reduce Motion on: rows come and go at once. */
-function reducedMotion() {
-  vi.stubGlobal('matchMedia', (q: string) => ({
-    matches: q.includes('prefers-reduced-motion: reduce'),
-    media: q,
-    addEventListener() {},
-    removeEventListener() {},
-    addListener() {},
-    removeListener() {},
-  }))
-}
-
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }))
 const amount = (n: number) => screen.getByLabelText(n === 1 ? 'Сумма' : `Сумма ${n}`) as HTMLInputElement
 const currencyOf = (n: number) =>
