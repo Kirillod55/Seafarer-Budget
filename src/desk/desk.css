@@ -63,8 +63,7 @@ html.desk .screen[data-view='records'] {
   max-width: 780px;
 }
 
-html.desk .screen[data-view='more'],
-html.desk .screen[data-view='limits'] {
+html.desk .screen[data-view='more'] {
   max-width: 960px;
 }
 
@@ -1805,4 +1804,16 @@ html.desk .screen[data-view='report'] .dhead .navback:hover,
 html.desk .screen[data-view='report'] .dhead .navfwd:hover {
   background: var(--accent);
   filter: brightness(0.96);
+}
+
+/* the same press as «Новая запись» (.addbtn): a quick squeeze, a spring back */
+html.desk .screen[data-view='report'] .dhead .navback,
+html.desk .screen[data-view='report'] .dhead .navfwd {
+  transition: transform 0.45s var(--spring), filter 0.15s;
+}
+
+html.desk .screen[data-view='report'] .dhead .navback:active,
+html.desk .screen[data-view='report'] .dhead .navfwd:active {
+  transform: scale(0.88);
+  transition-duration: 0.1s;
 }

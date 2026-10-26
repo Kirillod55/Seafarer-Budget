@@ -19,6 +19,7 @@ import { useToast } from '../ui/Toast.tsx'
 import '../ui/ui.css' // .pill ok / warn / over
 import { useFlip } from '../ui/useFlip.ts'
 import { useDayTick } from '../ui/useDayTick.ts'
+import { Plus } from '../ui/icons.ts'
 import './record.css'
 import './goals.css'
 import './limits.css'
@@ -247,6 +248,7 @@ export function Limits() {
         trailing={
           data && settings && free.length > 0 ? (
             <button type="button" className="navbtn strong" onClick={openNew}>
+              <Plus aria-hidden="true" strokeWidth={2.4} />
               Добавить
             </button>
           ) : undefined

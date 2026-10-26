@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { curLabel, curName, curSign } from './currencies.ts'
-import { Check, ChevronsUpDown } from './icons.ts'
+import { Check, ChevronsUpDown, Plus } from './icons.ts'
 import { prefersReducedMotion } from './motion.ts'
 import './ui.css'
 
@@ -374,6 +374,7 @@ function OtherCurrency({
           }}
         />
         <button type="button" className="co-ok" onClick={ok}>
+          <Plus aria-hidden="true" strokeWidth={2.4} />
           Добавить
         </button>
       </div>

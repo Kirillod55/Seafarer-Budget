@@ -7,7 +7,7 @@ import { CategoryForm } from '../components/CategoryForm.tsx'
 import { useApp } from '../context.tsx'
 import { useDesk } from '../desk/layout.ts'
 import { money } from '@shared/format.ts'
-import { Archive, Pencil, Trash2 } from '../ui/icons.ts'
+import { Archive, Pencil, Plus, Trash2 } from '../ui/icons.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { useNav } from '../nav/Navigator.tsx'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
@@ -202,6 +202,7 @@ export function Categories() {
         trailing={
           panel?.kind === 'new' || editing ? undefined : (
             <button type="button" className="navbtn strong" onClick={() => setPanel({ kind: 'new' })}>
+              <Plus aria-hidden="true" strokeWidth={2.4} />
               Добавить
             </button>
           )

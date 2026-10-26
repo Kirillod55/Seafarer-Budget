@@ -101,6 +101,7 @@ export function CurrenciesSection({ settings }: { settings: Settings }) {
         <SRow icon={Plus} color="#32ADE6" title="Добавить валюту" desc={hint} htmlFor="m-newcur">
           {codeInput}
           <button type="button" className="fbtn" onClick={() => void add()}>
+            <Plus aria-hidden="true" strokeWidth={2.4} />
             Добавить
           </button>
         </SRow>
@@ -119,6 +120,7 @@ export function CurrenciesSection({ settings }: { settings: Settings }) {
         <div className="quick">
           {codeInput}
           <button type="button" className="btn-acc" onClick={() => void add()}>
+            <Plus aria-hidden="true" strokeWidth={2.4} />
             Добавить
           </button>
         </div>
