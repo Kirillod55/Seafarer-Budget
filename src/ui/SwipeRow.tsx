@@ -349,7 +349,8 @@ export function SwipeRow({
   }
 
   const keyDown = (e: ReactKeyboardEvent) => {
-    if (g.leaving) return
+    // PC: nothing slides open — the context-menu key opens the right-click menu (the browser sends contextmenu)
+    if (g.leaving || desk) return
     const onRow = e.target === fgRef.current
     if (onRow && (e.key === 'ArrowLeft' || e.key === 'ContextMenu')) {
       e.preventDefault()

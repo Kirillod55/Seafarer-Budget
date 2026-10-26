@@ -884,6 +884,10 @@ html.desk.desk-s .dgrid {
 .daside {
   position: sticky;
   top: 24px;
+  /* taller than the window: it scrolls on its own, so its bottom is never out of reach */
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 16px;
