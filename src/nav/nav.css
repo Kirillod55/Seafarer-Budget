@@ -274,11 +274,6 @@
   display: none;
 }
 
-/* the 1.0 report and goals have no nav bar yet: keep them below the iPhone notch */
-.legacy-top {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
-}
-
 /* ---------- «Ещё» menu (prototype .group.menu; Task 10 redoes «Ещё») ---------- */
 
 .menu {

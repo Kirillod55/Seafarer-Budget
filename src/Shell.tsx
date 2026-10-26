@@ -36,12 +36,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
       case 'root':
         if (route.tab === 'home') return <Home />
         if (route.tab === 'report') return <Report />
-        if (route.tab === 'goals')
-          return (
-            <div className="legacy-top">
-              <Goals />
-            </div>
-          )
+        if (route.tab === 'goals') return <Goals />
         return <More onSignOut={onSignOut} />
       case 'limits':
         return (

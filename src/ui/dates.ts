@@ -45,6 +45,22 @@ export function weekdayDayMonth(date: string): string {
   return `${WEEKDAYS_SHORT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}, ${dayMonth(date)}`
 }
 
+/** Dative month names: «Наберётся к июлю 2035». */
+export const MONTHS_DAT = [
+  'январю',
+  'февралю',
+  'марту',
+  'апрелю',
+  'маю',
+  'июню',
+  'июлю',
+  'августу',
+  'сентябрю',
+  'октябрю',
+  'ноябрю',
+  'декабрю',
+]
+
 /** Prepositional month names: «в сентябре». */
 export const MONTHS_IN = [
   'январе',

@@ -1,0 +1,269 @@
+/*
+ * «Цели» (prototype v60 goals(): .card.stack, .rowc, .bar.thin, .need, .goalacts, .btn-gray, .btn-tint, .btn-acc,
+ * .textbtn, .reveal; spec §6 «Цели: кнопки в одну строку»). Fields reuse the record sheet's .rec .fld/.inp/.grid2.
+ * Lime only for the main things: «Добавить» in the bar, «Создать» / «Отложить», «В архив» (a 16 % tint).
+ * Phone layout: one column; stage 3 may put the cards in two columns via html classes.
+ */
+
+.goals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.goals > h1.large {
+  margin: 6px 0 2px;
+  overflow-wrap: anywhere;
+}
+
+.goals .label {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* «＋ Добавить» — the screen's main button: lime text */
+.goals .navbtn.strong {
+  gap: 4px;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.goals .navbtn.strong svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- cards ---------- */
+
+.gcard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.gcard h3 {
+  margin: 0;
+  font-size: 1rem; /* 17 */
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ghead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.gname {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.gname .ic {
+  flex: none;
+}
+
+.gsum {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: none;
+  max-width: 50%;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.gsum .label {
+  font-weight: 400;
+}
+
+/* the bar sits right under the head: the card's gap is enough */
+.gcard .bar.thin {
+  margin: 0;
+}
+
+.gmeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.gmeta > span:first-child {
+  min-width: 0;
+}
+
+.gmeta > .num {
+  flex: none;
+}
+
+/* «Нужно откладывать $X в месяц» — ordinary text, not lime (spec §6) */
+.need {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.824rem; /* 14 */
+  font-weight: 500;
+}
+
+/* ---------- buttons ---------- */
+
+.goalacts,
+.gacts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goalacts > button {
+  padding-left: 14px;
+  padding-right: 14px;
+  white-space: nowrap;
+}
+
+/* «Отложить или забрать» takes the rest of the row; «В архив» keeps its width */
+.goalacts > .btn-gray {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.goalacts > .btn-tint {
+  flex: none;
+}
+
+.btn-acc,
+.btn-tint {
+  min-height: 44px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--r-btn);
+  font: inherit;
+  font-size: 0.882rem; /* 15 */
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s var(--ios);
+}
+
+.btn-acc {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* «В архив»: a lime tint, no glass (spec §6) */
+.btn-tint {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-text);
+}
+
+.btn-acc:active,
+.btn-tint:active,
+.goals .btn-gray:active {
+  transform: scale(0.96);
+}
+
+.goals .btn-gray {
+  transition: transform 0.2s var(--ios);
+}
+
+.gacts > button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.textbtn {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.882rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.gacts > .textbtn {
+  margin-left: auto;
+}
+
+.garch {
+  align-self: flex-start;
+}
+
+/* ---------- forms ---------- */
+
+.gcard.rec {
+  gap: 14px;
+}
+
+.gmove {
+  gap: 12px;
+}
+
+.gerr {
+  margin: 0;
+  color: var(--warn);
+  font-size: 0.824rem;
+}
+
+.gerr > p {
+  margin: 0;
+}
+
+.gempty,
+.gfoot {
+  margin: 0;
+}
+
+.gfoot {
+  margin-top: 6px;
+  line-height: 1.45;
+}
+
+/* the new card and the move form show (prototype .reveal) */
+.reveal {
+  animation: reveal 0.38s var(--ios);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+
+  .btn-acc,
+  .btn-tint,
+  .goals .btn-gray {
+    transition: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .gcard {
+    border-color: var(--text);
+  }
+
+  .goals .label {
+    color: var(--text);
+  }
+}
