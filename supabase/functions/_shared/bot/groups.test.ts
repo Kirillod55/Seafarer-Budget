@@ -193,7 +193,7 @@ describe('goals, limits, settings (groups 4, 5, 7)', () => {
     expect(check(s)).toBe(true)
   })
 
-  it('«создай счёт Монобанк» in multi mode; delete with zero balance is final, archive has «Отменить»', async () => {
+  it('«создай счёт Монобанк»; deleting an empty account asks «Да · Нет», «Нет» keeps it, «Да» deletes for good without undo', async () => {
     const s = new MemStore()
     multi(s)
     s.accountRows = s.accountRows.slice(0, 2)
@@ -202,25 +202,29 @@ describe('goals, limits, settings (groups 4, 5, 7)', () => {
     const mono = s.accountRows.find((a) => a.name === 'Монобанк')!
     expect(mono).toBeTruthy()
     const d = await run(s, msg('удали счёт Монобанк'))
-    expect(textOf(d)).toContain('Удалить счёт «Монобанк»?')
-    const arch = await run(s, cb(buttons(d)[1].callback_data))
-    expect(s.accountRows.find((a) => a.id === mono.id)!.archived).toBe(true)
-    await run(s, cb(buttons(arch)[0].callback_data))
-    expect(s.accountRows.find((a) => a.id === mono.id)!.archived).toBe(false)
-    await run(s, cb(buttons(d)[0].callback_data))
+    expect(textOf(d)).toBe('Удалить счёт «Монобанк»? Старые записи сохранятся, счёт пропадёт из списков. Вернуть нельзя.')
+    expect(buttons(d).map((b) => b.text)).toEqual(['Да', 'Нет'])
+    await run(s, cb('no'))
+    expect(s.accountRows.find((a) => a.id === mono.id)!.deleted).toBe(false)
+    const yes = await run(s, cb(buttons(d)[0].callback_data))
     expect(s.accountRows.find((a) => a.id === mono.id)!.deleted).toBe(true)
-    expect(textOf(await run(s, msg('удали счёт основной')))).toContain('Сначала сделай основным другой счёт')
+    expect(textOf(yes)).toContain('Удалил счёт «Монобанк»')
+    expect(buttons(yes)).toEqual([])
   })
 
-  it('an account with money: transfer the rest to the main account and delete', async () => {
+  it('the main account and an account with money are not deleted — the bot explains', async () => {
     const s = new MemStore()
     multi(s)
+    expect(textOf(await run(s, msg('удали счёт основной')))).toContain('Основной счёт удалить нельзя')
     s.txRows = [seedTx({ kind: 'income', amount: 1200, currency: 'UAH', amount_usd: 29.13, account_id: 'acc3-mono-0000' })]
     const d = await run(s, msg('закрой счёт монобанк'))
-    expect(textOf(d)).toContain('На счёте «Монобанк» ₴1,200 (≈ $29). Что сделать?')
-    await run(s, cb(buttons(d)[0].callback_data))
-    expect(s.txRows[1]).toMatchObject({ kind: 'transfer', amount: 1200, account_id: 'acc3-mono-0000', to_account_id: 'acc1' })
-    expect(s.accountRows.find((a) => a.id === 'acc3-mono-0000')!.deleted).toBe(true)
+    expect(textOf(d)).toContain('На счёте «Монобанк» ₴1,200 (≈ $29) — удалить можно только пустой счёт')
+    expect(buttons(d)).toEqual([])
+    // a stale «Да» from before the money arrived is checked again
+    const yes = await run(s, cb('acd:acc3-mon'))
+    expect(textOf(yes)).toContain('удалить можно только пустой счёт')
+    expect(s.accountRows.find((a) => a.id === 'acc3-mono-0000')!.deleted).toBe(false)
+    expect(textOf(await run(s, msg('убери счёт монобанк в архив')))).toContain('Архив счетов — в приложении')
   })
 
   it('daily summary: only the writer’s own flag, at once', async () => {

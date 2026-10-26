@@ -231,25 +231,30 @@ function findAccount(words: string[], snap: Snapshot): Account | undefined {
   return live.find((a) => words.some((w) => w.length >= 4 && accountKey(a.name).startsWith(accountKey(w))))
 }
 
+/**
+ * Spec §5 group 5 (ruling 2026-10-26): only an empty account that is not the main one is deleted, after
+ * «Да»; deleting is final (accounts have no 24 h bin), so there is no «Отменить». Otherwise the bot explains.
+ */
+function deleteBlocker(acc: Account, snap: Snapshot, today: string): string | null {
+  if (acc.id === defaultAccount(snap.accounts)?.id) return 'Основной счёт удалить нельзя — сначала сделай основным другой счёт в приложении'
+  const bal = Object.entries(balances(snap.txs, acc.id)).filter(([, v]) => Math.abs(v) >= 0.005)
+  if (bal.length === 0) return null
+  const usdTotal = bal.reduce((s, [c, v]) => s + (toUsd(snap, v, c, today) ?? 0), 0)
+  const rest = bal.map(([c, v]) => money(v, c)).join(' + ')
+  return `На счёте «${acc.name}» ${rest} (≈ ${usdWhole(usdTotal)}) — удалить можно только пустой счёт. Переведи остаток, например: «перевод ${rest} с ${acc.name.toLowerCase()} на ${defaultAccount(snap.accounts)!.name.toLowerCase()}»`
+}
+
 export async function accountDelete(ctx: Ctx, text: string): Promise<BotReply[]> {
   if (!isMulti(ctx.settings)) return [send(ctx, 'Счета — в режиме «Несколько счетов» (включается в приложении)')]
+  const t = normalize(text)
+  if (/архив/.test(t)) return [send(ctx, 'Архив счетов — в приложении: там его видно и можно вернуть')]
   const snap = await load(ctx)
-  const words = normalize(text).split(' ').slice(2).filter((w) => !['в', 'архив'].includes(w))
-  const acc = findAccount(words, snap)
+  const acc = findAccount(t.split(' ').slice(2), snap)
   if (!acc) return [send(ctx, 'Не нашёл такой счёт')]
-  if (acc.id === defaultAccount(snap.accounts)?.id) return [send(ctx, 'Сначала сделай основным другой счёт в приложении')]
-  const bal = Object.entries(balances(snap.txs, acc.id)).filter(([, v]) => Math.abs(v) >= 0.005)
-  const id = short(acc.id)
-  if (bal.length === 0) {
-    return [send(ctx, `Удалить счёт «${acc.name}»? Старые записи сохранятся, счёт пропадёт из списков. Удаление окончательное, «В архив» можно вернуть`, [
-      [{ text: 'Удалить', callback_data: `acd:${id}` }, { text: 'В архив', callback_data: `aca:${id}` }, { text: 'Отмена', callback_data: 'no' }],
-    ])]
-  }
-  const usdTotal = bal.reduce((s, [c, v]) => s + (toUsd(snap, v, c, ctx.today) ?? 0), 0)
-  const main = defaultAccount(snap.accounts)!
-  return [send(ctx, `На счёте «${acc.name}» ${bal.map(([c, v]) => money(v, c)).join(' + ')} (≈ ${usdWhole(usdTotal)}). Что сделать?`, [
-    [{ text: `Перевести на «${main.name}» и удалить`, callback_data: `act:${id}` }],
-    [{ text: 'Только в архив', callback_data: `aca:${id}` }, { text: 'Отмена', callback_data: 'no' }],
+  const blocker = deleteBlocker(acc, snap, ctx.today)
+  if (blocker) return [send(ctx, blocker)]
+  return [send(ctx, `Удалить счёт «${acc.name}»? Старые записи сохранятся, счёт пропадёт из списков. Вернуть нельзя.`, [
+    [{ text: 'Да', callback_data: `acd:${short(acc.id)}` }, { text: 'Нет', callback_data: 'no' }],
   ])]
 }
 
@@ -313,7 +318,7 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
     else if (a === 'm') await setSettings(ctx, { remind_after_days: Number(old) as Settings['remind_after_days'] })
     return [answer(q, 'Отменено'), edit(ctx, q, 'Отменено — как было')]
   }
-  if (!['uac', 'ugl', 'ul', 'ulr', 'acd', 'aca', 'act', 'uaa'].includes(kind)) return null
+  if (!['uac', 'ugl', 'ul', 'ulr', 'acd'].includes(kind)) return null
   const snap = await load(ctx)
   if (kind === 'ugl') {
     const g = byShort(snap.goals, a)
@@ -343,33 +348,10 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
     await ctx.store.update('accounts', acc.id, { deleted: true })
     return [answer(q, 'Отменено'), edit(ctx, q, `Отменено: счёт «${acc.name}» удалён`)]
   }
-  if (kind === 'uaa') {
-    await ctx.store.update('accounts', acc.id, { archived: false })
-    return [answer(q, 'Отменено'), edit(ctx, q, `Вернул счёт «${acc.name}»`)]
-  }
-  if (kind === 'aca') {
-    await ctx.store.update('accounts', acc.id, { archived: true })
-    return [answer(q, 'Готово'), edit(ctx, q, `Счёт «${acc.name}» в архиве`, [[{ text: 'Отменить', callback_data: `uaa:${a}` }]]), ...toOwner(ctx, `${who} убрала в архив счёт «${acc.name}»`)]
-  }
-  // acd / act: deleting an account is final (accounts have no 24 h bin)
-  if (kind === 'act') {
-    const main = defaultAccount(snap.accounts)!
-    for (const [cur, v] of Object.entries(balances(snap.txs, acc.id))) {
-      if (Math.abs(v) < 0.005) continue
-      const r = usdRate(snap.rates, cur, ctx.today)
-      await ctx.store.insertTx({
-        // a positive rest moves to the main account; a debt is covered from it
-        id: ctx.uuid(), deleted: false, kind: 'transfer', amount: Math.abs(v), currency: cur,
-        rate_usd: r ? r.rate : 0, amount_usd: r ? round2(Math.abs(v) * r.rate) : 0, rate_pending: !r || !r.exact,
-        account_id: v > 0 ? acc.id : main.id, to_account_id: v > 0 ? main.id : acc.id, to_amount: null, to_currency: null, category_id: null,
-        date: ctx.today, note: `Остаток со счёта «${acc.name}»`, source: 'bot', created_at: ctx.now.toISOString(), author: ctx.author,
-        archived: false, deleted_at: null, deleted_batch: null,
-      })
-    }
-  }
+  // acd: «Да» — checked again, deleted for good
+  const blocker = deleteBlocker(acc, snap, ctx.today)
+  if (blocker) return [answer(q), edit(ctx, q, blocker)]
   await ctx.store.update('accounts', acc.id, { deleted: true })
-  return [answer(q, 'Удалено'), edit(ctx, q, `Удалил счёт «${acc.name}»${kind === 'act' ? `, остаток перевёл на «${main(snap).name}»` : ''}`), ...toOwner(ctx, `${who} удалила счёт «${acc.name}»`)]
+  return [answer(q, 'Удалено'), edit(ctx, q, `Удалил счёт «${acc.name}»`), ...toOwner(ctx, `${who} удалила счёт «${acc.name}»`)]
 }
-
-const main = (snap: Snapshot) => defaultAccount(snap.accounts)!
 export { addDays }
