@@ -18,3 +18,8 @@ One line per finished task: stage.task — what — commit.
 - ruling Q2: batched resolvePendingRates (fxRatesBatch, 60 dates) — 057d8d5
 - ruling Q3: «Записать» re-asks Groq — noted in roadmap
 - note: src/desk/settings.test.tsx (stage 3) failed once under full-suite load, green alone and on rerun — flaky
+- review 3–6, Important 1: deleting is the owner's (accounts, categories, /clear, «удали …» of Kirill's record); settings/goals/limits stay hers — cd317a7
+- review 3–6, Important 2: «Записать» saves the stored draft (bot_updates.draft), Groq not re-asked; replaces ruling Q3 — bb4c4b9
+- review 3–6, Important 3: «Отменить» → 24 h bin + «Вернуть», 1 h expiry stamp, category with records kept; «убери лимит» routing — 0b6e768
+- review 3–6, minors: keepalive purge age guard — 887d1e5; /clear updateMany — 5b7d9e5; constant-time secrets — e6ff710
+- review 3–6 done: 1046 tests green, tsc clean; roadmap and spec §5/§9 updated
