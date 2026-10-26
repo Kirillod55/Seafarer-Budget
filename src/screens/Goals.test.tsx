@@ -159,6 +159,31 @@ describe('Goals', () => {
     expect(moves).toMatchObject([{ goal_id: goal.id, amount_usd: -5, author: 'owner', source: 'app' }])
   })
 
+  it('«Забрать» never takes more than the goal holds: it stops at 0', async () => {
+    await seed()
+    const goal = await newGoal({ target_usd: 100 })
+    await addMove(goal.id, 50)
+    renderGoals()
+    expect(await screen.findByText('$50')).toBeTruthy()
+
+    await move('Забрать', '4000') // $100 asked, $50 saved
+
+    expect(await screen.findByText('$0')).toBeTruthy()
+    const taken = await env.db.goal_moves.filter((m) => m.amount_usd < 0).toArray()
+    expect(taken).toMatchObject([{ goal_id: goal.id, amount_usd: -50 }])
+  })
+
+  it('«Забрать» from an empty goal saves nothing and says so', async () => {
+    await seed()
+    await newGoal()
+    renderGoals()
+
+    await move('Забрать', '100')
+
+    expect(await screen.findByText('На цели пока ничего нет')).toBeTruthy()
+    expect(await env.db.goal_moves.count()).toBe(0)
+  })
+
   it('a currency without a known rate shows «Нет курса для этой валюты» and saves nothing', async () => {
     await seed()
     await newGoal()

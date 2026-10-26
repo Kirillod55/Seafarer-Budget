@@ -135,7 +135,20 @@ function NewGoalCard({ onClose }: { onClose(): void }) {
 }
 
 /** The form that shows inside a goal's card: amount and currency, «Отложить» / «Забрать» / «Отмена». */
-function MoveForm({ goal, settings, today, onClose }: { goal: Goal; settings: Settings; today: string; onClose(): void }) {
+function MoveForm({
+  goal,
+  savedUsd,
+  settings,
+  today,
+  onClose,
+}: {
+  goal: Goal
+  /** what the goal holds now: «Забрать» stops at 0 (prototype: saved = max(0, saved − amount)) */
+  savedUsd: number
+  settings: Settings
+  today: string
+  onClose(): void
+}) {
   const { db, repo, now } = useApp()
   const toast = useToast()
   const [amount, setAmount] = useState('')
@@ -148,6 +161,7 @@ function MoveForm({ goal, settings, today, onClose }: { goal: Goal; settings: Se
     if (busy) return
     const value = parseAmount(amount)
     if (!(value > 0)) return setError('Введите сумму')
+    if (take && !(savedUsd > 0)) return setError('На цели пока ничего нет')
     setBusy(true)
     try {
       // the latest rate known for today (R23); USD always converts at 1
@@ -156,7 +170,7 @@ function MoveForm({ goal, settings, today, onClose }: { goal: Goal; settings: Se
       const usdAmount = round2(value * found.rate)
       await repo.put<GoalMove>('goal_moves', {
         goal_id: goal.id,
-        amount_usd: take ? -usdAmount : usdAmount,
+        amount_usd: take ? -Math.min(usdAmount, round2(savedUsd)) : usdAmount,
         date: today,
         note: '',
         author: 'owner',
@@ -267,7 +281,7 @@ function GoalCard({
         <p className="need">{`Нужно откладывать ${usd(p.perMonthNeeded)} в месяц`}</p>
       )}
       {open ? (
-        <MoveForm goal={goal} settings={settings} today={today} onClose={() => onPanel(null)} />
+        <MoveForm goal={goal} savedUsd={p.savedUsd} settings={settings} today={today} onClose={() => onPanel(null)} />
       ) : (
         <div className="goalacts">
           <button type="button" className="btn-gray" onClick={() => onPanel({ kind: 'move', goalId: goal.id })}>
