@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from './Home.tsx'
 import { RecordSheetHost } from './RecordSheet.tsx'
@@ -308,5 +309,97 @@ describe('Home: pull to refresh', () => {
     window.scrollTo(0, 0)
     expect(env.scheduler.syncNow).not.toHaveBeenCalled()
     expect(strip().dataset.phase).toBe('idle')
+  })
+
+  it('the first downward move at the top is taken at once (iOS commits a touch to scrolling on its first move)', async () => {
+    await seed({ next_contract_date: '2026-12-20' })
+    renderHome()
+    await screen.findByText('Баланс')
+    const el = document.querySelector('.ptr-wrap')!
+    fireEvent.touchStart(el, { touches: at(100) })
+    // fireEvent returns false when a listener called preventDefault
+    expect(fireEvent.touchMove(el, { touches: at(102) })).toBe(false)
+    fireEvent.touchEnd(el, { touches: [], changedTouches: at(102) })
+
+    // sideways stays free for the swipe rows and the back swipe
+    fireEvent.touchStart(el, { touches: [{ clientX: 100, clientY: 100 }] })
+    expect(fireEvent.touchMove(el, { touches: [{ clientX: 112, clientY: 102 }] })).toBe(true)
+    fireEvent.touchEnd(el, { touches: [], changedTouches: [{ clientX: 112, clientY: 102 }] })
+
+    // scrolled down: the page scrolls, nothing is taken
+    window.scrollTo(0, 50)
+    fireEvent.touchStart(el, { touches: at(100) })
+    expect(fireEvent.touchMove(el, { touches: at(102) })).toBe(true)
+    fireEvent.touchEnd(el, { touches: [], changedTouches: at(102) })
+    window.scrollTo(0, 0)
+  })
+
+  it('no text selection while pulling with a mouse', async () => {
+    await seed({ next_contract_date: '2026-12-20' })
+    env.scheduler.syncNow = vi.fn(async () => env.scheduler.status$.get())
+    renderHome()
+    await screen.findByText('Баланс')
+    const el = document.querySelector('.ptr-wrap')!
+    const p = { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 100 }
+    fireEvent.pointerDown(el, { ...p, clientY: 100 })
+    fireEvent.pointerMove(el, { ...p, clientY: 130 })
+    expect(document.documentElement.classList.contains('ptr-dragging')).toBe(true)
+    fireEvent.pointerUp(el, { ...p, clientY: 130 })
+    expect(document.documentElement.classList.contains('ptr-dragging')).toBe(false)
+  })
+})
+
+describe('Home: fix round 1', () => {
+  it('the reserve state shows only the reserve warning, never «Перерасход» with it', async () => {
+    await seed({ next_contract_date: '2026-10-30', reserve_usd: 1000 }, [
+      { kind: 'income', amount: 500, date: '2026-10-01' },
+      { kind: 'expense', amount: 20, date: '2026-10-21' },
+    ])
+    renderHome()
+    expect(await screen.findByText(/Ты тратишь запас к посадке/)).toBeTruthy()
+    expect(card().dataset.state).toBe('reserve')
+    expect(screen.queryByText(/Перерасход/)).toBeNull()
+    expect(screen.queryByText(/Осталось/)).toBeNull()
+  })
+
+  it('«today» moves on at the local midnight and when the app comes back to the screen', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-10-21T20:59:00Z')) // 23:59 in Kyiv (UTC+3)
+      env.now = () => new Date()
+      await seed({ next_contract_date: '2026-12-20' })
+      renderHome()
+      expect(await screen.findByRole('button', { name: /Сегодня, 21 октября/ })).toBeTruthy()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(61_000)
+      })
+      expect(await screen.findByRole('button', { name: /Сегодня, 22 октября/ })).toBeTruthy()
+
+      // asleep in the background past another midnight: back on screen it shows the new day
+      vi.setSystemTime(new Date('2026-10-23T08:00:00Z'))
+      act(() => void document.dispatchEvent(new Event('visibilitychange')))
+      expect(await screen.findByRole('button', { name: /Сегодня, 23 октября/ })).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('spinning icons stand still under «Уменьшение движения»', () => {
+    for (const [file, sel] of [
+      ['src/components/sync-cloud.css', '.syncind.syncing .spinr'],
+      ['src/ui/pull.css', '.ptr.loading .pr'],
+    ]) {
+      const css = readFileSync(file, 'utf8')
+      const at = css.indexOf('@media (prefers-reduced-motion: reduce)')
+      expect(at).toBeGreaterThanOrEqual(0)
+      const block = css.slice(at)
+      expect(block).toContain(sel)
+      expect(block).toMatch(/animation:\s*none/)
+    }
+  })
+
+  it('the page itself never bounces: overscroll-behavior-y none on html and body', () => {
+    const css = readFileSync('src/ui/tokens.css', 'utf8')
+    expect(css).toMatch(/html,\s*body\s*\{[^}]*overscroll-behavior-y:\s*none/)
   })
 })

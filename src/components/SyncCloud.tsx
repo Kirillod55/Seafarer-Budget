@@ -28,6 +28,9 @@ export function isNetworkError(message: string): boolean {
 
 export type CloudState = 'ok' | 'err' | 'off' | 'sync'
 
+/** rows cleared this soon after a sync finished still count as «just synced» */
+const POP_WINDOW_MS = 1000
+
 // The prototype's cloud (prototype v60 CLOUD / cloudIcon): an open cloud with a badge in its lower right corner.
 const CLOUD =
   'M11 18H6.66C4.08 18 2 15.99 2 13.52c0-2.48 2.09-4.49 4.66-4.49.39-1.76 1.79-3.2 3.67-3.77 1.88-.57 3.96-.19 5.45 1 1.49 1.19 2.16 3.01 1.77 4.77h.99c1.38 0 2.57.81 3.13 1.99'
@@ -85,11 +88,19 @@ export function SyncCloud() {
   }
 
   // the tick pops in when a sync has just finished
+  // The tick pops when a sync has just finished: the scheduler went syncing → idle within the last second. The
+  // pending count may still be stale for a moment (grey «waiting»), so the pop waits for the cloud to turn ok.
+  const [lastRun, setLastRun] = useState(status.state)
+  const [syncedAt, setSyncedAt] = useState(0)
+  if (lastRun !== status.state) {
+    setLastRun(status.state)
+    if (lastRun === 'syncing' && status.state === 'idle') setSyncedAt(Date.now())
+  }
   const [last, setLast] = useState(state)
   const [pop, setPop] = useState(false)
   if (last !== state) {
     setLast(state)
-    setPop(last === 'sync' && state === 'ok')
+    setPop(state === 'ok' && (last === 'sync' || Date.now() - syncedAt < POP_WINDOW_MS))
   }
 
   return (

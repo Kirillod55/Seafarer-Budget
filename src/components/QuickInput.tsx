@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
@@ -13,6 +13,8 @@ const EXAMPLE_HINT = 'Не нашёл сумму. Напишите, наприм
 const GOAL_HINT = 'Цели появятся позже. Пока записывайте расходы и доходы: кофе 80'
 const COMMAND_HINT = 'Команды появятся позже. Пока записывайте расходы и доходы: кофе 80'
 const NO_SETTINGS_HINT = 'Сначала завершите первый запуск.'
+/** how long «Записал: …» or an error stays under the field */
+const FEEDBACK_MS = 4000
 
 interface Feedback {
   kind: 'ok' | 'hint'
@@ -36,6 +38,13 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [busy, setBusy] = useState(false)
   const [focused, setFocused] = useState(false)
+
+  // the message after a save or an error stays ~4 s (and goes at once when the person types again)
+  useEffect(() => {
+    if (!feedback) return
+    const t = setTimeout(() => setFeedback(null), FEEDBACK_MS)
+    return () => clearTimeout(t)
+  }, [feedback])
   const defaultCurrency = useLiveQuery(async () => (await db.settings.filter(alive).first())?.default_currency, [db])
 
   async function submit(e: FormEvent) {
@@ -127,7 +136,10 @@ export function QuickInput({ onSaved }: { onSaved?: () => void }) {
           aria-label="Быстрая запись"
           placeholder="кофе 80, такси 15 eur…"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value)
+            setFeedback(null)
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           autoComplete="off"

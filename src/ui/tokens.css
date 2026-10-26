@@ -165,6 +165,12 @@ html {
   text-size-adjust: 100%;
 }
 
+/* the page never rubber-bands on iOS: on the home screen a pull moves only the sync strip */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
 body {
   margin: 0;
   background: var(--bg);

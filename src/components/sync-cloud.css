@@ -68,3 +68,10 @@
     transform: scale(0.3);
   }
 }
+
+/* Reduce Motion: the arrows stand still (the global rule in tokens.css does it too; kept explicit here) */
+@media (prefers-reduced-motion: reduce) {
+  .syncind.syncing .spinr {
+    animation: none;
+  }
+}

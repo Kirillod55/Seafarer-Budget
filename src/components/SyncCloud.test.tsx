@@ -100,4 +100,28 @@ describe('SyncCloud — an indicator, not a button', () => {
     expect(cloud().className).not.toContain('syncing')
     expect(cloud().className).toContain('pop')
   })
+
+  it('the tick still pops when the sync ends while stale «waiting» rows clear a moment later', async () => {
+    const { env, set } = envWith(idle)
+    const row = await env.repo.put<Account>('accounts', { name: 'X', aliases: [], is_default: false, archived: false, sort: 0 })
+    renderWithApp(<SyncCloud />, env)
+    await waitFor(() => expect(cloud().dataset.state).toBe('off'))
+    set({ state: 'syncing', lastSyncAt: 1, error: null })
+    expect(cloud().dataset.state).toBe('sync')
+    set({ state: 'idle', lastSyncAt: 2, error: null })
+    expect(cloud().dataset.state).toBe('off') // the live query has not seen the pushed rows yet
+    await env.db.accounts.update(row.id, { dirty: 0 })
+    await waitFor(() => expect(cloud().dataset.state).toBe('ok'))
+    expect(cloud().className).toContain('pop')
+  })
+
+  it('no pop when rows clear long after the last sync (not a sync finishing)', async () => {
+    const { env } = envWith(idle)
+    const row = await env.repo.put<Account>('accounts', { name: 'X', aliases: [], is_default: false, archived: false, sort: 0 })
+    renderWithApp(<SyncCloud />, env)
+    await waitFor(() => expect(cloud().dataset.state).toBe('off'))
+    await env.db.accounts.update(row.id, { dirty: 0 })
+    await waitFor(() => expect(cloud().dataset.state).toBe('ok'))
+    expect(cloud().className).not.toContain('pop')
+  })
 })

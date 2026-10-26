@@ -110,3 +110,17 @@
     transform: rotate(calc(var(--r0, 0deg) + 360deg));
   }
 }
+
+/* Reduce Motion: the arrows stand still (the global rule in tokens.css does it too; kept explicit here) */
+@media (prefers-reduced-motion: reduce) {
+  .ptr.loading .pr {
+    animation: none;
+  }
+}
+
+/* a mouse pull never selects text */
+html.ptr-dragging,
+html.ptr-dragging * {
+  -webkit-user-select: none;
+  user-select: none;
+}

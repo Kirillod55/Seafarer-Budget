@@ -118,10 +118,17 @@ export function PullToRefresh({
       const dy = y - y0
       if (mode === null) {
         const dx = x - x0
+        // iOS hands a touch to native scrolling on its first touchmove unless that one is prevented — and then the
+        // whole page would rubber-band with the strip. At the top, a move that leans down is ours from the first px;
+        // a sideways one stays free for the swipe rows and the back swipe.
+        if (dy > 0 && dy >= Math.abs(dx) && e.cancelable) e.preventDefault()
         if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return
         // mostly down: ours; sideways or up: the swipe rows', the back swipe's or the page's
         mode = dy > 0 && dy > Math.abs(dx) * 1.2 && !blocked() ? 'pull' : 'none'
-        if (mode === 'pull') setPhase('pull')
+        if (mode === 'pull') {
+          document.documentElement.classList.add('ptr-dragging') // a mouse pull selects no text
+          setPhase('pull')
+        }
       }
       if (mode !== 'pull') return
       if (e.cancelable) e.preventDefault()
@@ -178,6 +185,7 @@ export function PullToRefresh({
       const was = mode
       mode = null
       if (was !== 'pull') return
+      document.documentElement.classList.remove('ptr-dragging')
       // a drag is not a tap: the click that follows a mouse drag must not open the row under it
       const swallow = (ev: Event) => {
         ev.stopPropagation()
@@ -221,6 +229,7 @@ export function PullToRefresh({
     window.addEventListener('pointercancel', onPointerUp)
     return () => {
       alive = false
+      document.documentElement.classList.remove('ptr-dragging')
       for (const t of timers) clearTimeout(t)
       el.removeEventListener('touchstart', onTouchStart)
       el.removeEventListener('touchmove', onTouchMove)

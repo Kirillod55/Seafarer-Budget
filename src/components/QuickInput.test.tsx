@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CATEGORIES } from '@shared/defaults.ts'
 import { QuickInput } from './QuickInput.tsx'
@@ -113,6 +113,30 @@ describe('QuickInput', () => {
     await waitFor(() => expect(hint().textContent).toBe('Записал: Кафе и рестораны · ₴80'))
     expect(hint().className).toContain('show')
     expect(hint().className).not.toContain('err')
+  })
+
+  it('the message after a save or an error hides by itself after ~4 s and at once when typing', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const { input, submit } = await setup()
+      const hint = () => document.querySelector('.qhint') as HTMLElement
+      submit('кофе 80')
+      await waitFor(() => expect(hint().textContent).toMatch(/^Записал/))
+      expect(hint().className).toContain('show')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4100)
+      })
+      expect(hint().className).not.toContain('show')
+      expect(hint().textContent).not.toMatch(/^Записал/)
+
+      submit('кофе')
+      await waitFor(() => expect(hint().className).toContain('err'))
+      fireEvent.change(input, { target: { value: 'кофе 8' } })
+      expect(hint().className).not.toContain('err')
+      expect(hint().className).not.toContain('show')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('the send button is the lime arrow up «Записать», never «＋»', async () => {

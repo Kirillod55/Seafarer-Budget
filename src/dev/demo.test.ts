@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { alive } from '@shared/alive.ts'
 import { addDays, monthOf } from '@shared/dates.ts'
 import { createDb } from '../db/local.ts'
+import { SYNC_TABLES, type Account } from '@shared/types.ts'
+import { openDemo } from './demo-app.ts'
 import { seedDemo } from './demo.ts'
 import { isDemo } from './is-demo.ts'
 
@@ -70,5 +72,22 @@ describe('seedDemo', () => {
     const count = await db.transactions.count()
     await seedDemo(db, TODAY)
     expect(await db.transactions.count()).toBe(count)
+  })
+})
+
+describe('openDemo', () => {
+  it('the demo scheduler marks changes as sent, so the cloud shows «synced»', async () => {
+    const db = createDb('demo-open-1')
+    const app = await openDemo(db)
+    const acc = (await db.accounts.toCollection().first())!
+    await app.repo.put<Account>('accounts', { id: acc.id, name: 'Основной 2' })
+    expect(await db.accounts.where('dirty').equals(1).count()).toBe(1)
+    const states: string[] = []
+    app.scheduler.status$.subscribe(() => states.push(app.scheduler.status$.get().state))
+    const done = await app.scheduler.syncNow()
+    expect(done.state).toBe('idle')
+    expect(states).toContain('syncing')
+    for (const t of SYNC_TABLES) expect(await db.syncTable(t).where('dirty').equals(1).count()).toBe(0)
+    app.scheduler.stop()
   })
 })
