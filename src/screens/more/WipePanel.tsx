@@ -27,6 +27,8 @@ interface LastWipe {
   /** «54 записи» / «все данные» */
   what: string
   mode: Mode
+  /** «Удалить все данные» is waiting for the wizard's «Остаток»: reopened on mount (a reload must not lose it) */
+  pendingOpening?: boolean
 }
 
 /** how long «Удалить N записей» stays armed as «Нажми ещё раз — удалить» */
@@ -92,7 +94,7 @@ function useHeightGlide(ref: RefObject<HTMLElement | null>, dep: string) {
   }, [dep, ref])
 }
 
-const byDate =(a: Transaction, b: Transaction) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at)
+const byDate = (a: Transaction, b: Transaction) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at)
 
 /*
  * «Удаление данных» (spec §4 «Удаление данных», §6 «Плавная перерисовка»; prototype v60 wipePanel(), wipeShow(),
@@ -112,7 +114,6 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
   const [csv, setCsv] = useState(true)
   const [armed, setArmed] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [wizard, setWizard] = useState(false)
   const armTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [, setTick] = useState(0)
   const sumRef = useRef<HTMLDivElement>(null)
@@ -147,18 +148,17 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
   useEffect(() => () => clearTimeout(armTimer.current), [])
 
   // the «Вернуть удалённое» row: while the batch is in the bin and its 24 h have not run out
-  const nowMs = now().getTime()
   const last = data?.lastWipe
   const restoreAt =
-    last && restorable(data.binned, last.batch, nowMs)
+    last && restorable(data.binned, last.batch, now().getTime())
       ? Math.min(...data.binned.filter((r) => r.deleted_at).map((r) => Date.parse(r.deleted_at!))) + RESTORE_MS
       : null
   // hide the row when its time runs out, even if nothing else changes
   useEffect(() => {
     if (restoreAt === null) return
-    const t = setTimeout(() => setTick((n) => n + 1), Math.min(restoreAt - nowMs + 1000, 2 ** 31 - 1))
+    const t = setTimeout(() => setTick((n) => n + 1), Math.min(restoreAt - now().getTime() + 1000, 2 ** 31 - 1))
     return () => clearTimeout(t)
-  }, [restoreAt, nowMs])
+  }, [restoreAt]) // `now` is the app clock (stable); the delay is read when the row appears
   useHeightGlide(sumRef, `${mode}|${scope}|${kind}|${data?.txs.length ?? 0}`)
 
   if (!data) return <MoreCard title="Удаление данных" className="wipecard">{null}</MoreCard>
@@ -184,9 +184,15 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
   const undo = async (lw: LastWipe) => {
     await repo.restore(lw.batch)
     const cur = (await db.meta.get(LAST_WIPE))?.value as LastWipe | undefined
+    // deleting the record also closes the «Остаток» wizard (pendingOpening goes with it)
     if (cur?.batch === lw.batch) await db.meta.delete(LAST_WIPE)
-    if (lw.mode === 'all') setWizard(false)
     toast(lw.mode === 'all' ? 'Данные вернулись' : 'Записи вернулись')
+  }
+
+  /** the wizard finished («Готово» or «Пропустить»): it is not asked again */
+  const openingDone = async (batch: string) => {
+    const cur = (await db.meta.get(LAST_WIPE))?.value as LastWipe | undefined
+    if (cur?.batch === batch) await db.meta.put({ key: LAST_WIPE, value: { ...cur, pendingOpening: false } })
   }
 
   async function go() {
@@ -211,11 +217,10 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
         downloadCsv(mode === 'all' ? csvFileName(today) : `seafarer-budget-udalennye-${today}.csv`, toCsv(rows, categories, accounts, settings.partner_name))
       }
       const { batch, count: n } = mode === 'all' ? await repo.wipeAll() : await repo.wipe(scope, kind)
-      const lw: LastWipe = { batch, mode, what: mode === 'all' ? 'все данные' : records(n) }
+      const lw: LastWipe = { batch, mode, what: mode === 'all' ? 'все данные' : records(n), ...(mode === 'all' && { pendingOpening: true }) }
       await db.meta.put({ key: LAST_WIPE, value: lw })
       setMode(null)
       toast(mode === 'all' ? 'Все данные удалены' : `Удалено ${lw.what}`, { label: 'Вернуть', run: () => undo(lw) })
-      if (mode === 'all') setWizard(true)
     } catch {
       toast(FAILED)
     } finally {
@@ -299,6 +304,7 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
               </span>
               Сначала скачать копию (CSV)
             </label>
+            {mode === 'all' && <p className="label">В файле только записи: цели, лимиты и категории в него не попадут.</p>}
             <p className="label">
               Баланс изменится: удалённые траты больше не вычитаются, доходы не прибавляются. 24 часа удалённое можно вернуть.
             </p>
@@ -321,10 +327,10 @@ export function WipeSection({ settings, today }: { settings: Settings; today: st
         )}
         {restoreRow}
       </Morph>
-      {wizard &&
+      {last?.pendingOpening &&
         createPortal(
           <div className="wzlayer">
-            <Wizard startAt="balance" onDone={() => setWizard(false)} />
+            <Wizard startAt="balance" onDone={() => void openingDone(last.batch)} />
           </div>,
           document.body,
         )}

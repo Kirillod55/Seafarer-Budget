@@ -2,13 +2,14 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { alive } from '@shared/alive.ts'
 import { money } from '@shared/format.ts'
-import { selectForWipe } from '@shared/wipe.ts'
+import { balances } from '@shared/calc.ts'
+import { RESTORE_MS, selectForWipe } from '@shared/wipe.ts'
 import type { Account, Category, Settings as SettingsRow } from '@shared/types.ts'
 import { More } from '../More.tsx'
 import { Navigator, type Route } from '../../nav/Navigator.tsx'
 import { ToastHost } from '../../ui/Toast.tsx'
 import { plural } from '../../ui/dates.ts'
-import { TEST_TODAY, makeEnv, renderWithApp } from '../../test-utils.tsx'
+import { TEST_NOW, TEST_TODAY, makeEnv, renderWithApp } from '../../test-utils.tsx'
 import type { AppContextValue } from '../../context.tsx'
 
 let env: AppContextValue
@@ -260,5 +261,78 @@ describe('«Удаление данных» → «Удалить все данн
     expect(live[0]).toMatchObject({ kind: 'adjustment', amount: 700, note: 'Начальный остаток' })
     expect(initDefaults).not.toHaveBeenCalled()
     expect(await within(await wipeCard()).findByText(/^Удалено: все данные\. Вернуть можно до/)).toBeTruthy()
+  })
+
+  /** «Удалить все данные» with the tick off, up to the wizard's «Остаток» */
+  async function wipeAll() {
+    const card = await wipeCard()
+    fireEvent.click(await within(card).findByRole('button', { name: 'Удалить все данные…' }))
+    const panel = await within(card).findByRole('group', { name: 'Удалить все данные' })
+    expect(within(panel).getByText('В файле только записи: цели, лимиты и категории в него не попадут.')).toBeTruthy()
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Сначала скачать копию (CSV)' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Удалить все данные' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Нажми ещё раз — удалить' }))
+    await screen.findByRole('heading', { name: 'Сколько денег сейчас' })
+  }
+  const liveTxs = async () => (await env.db.transactions.toArray()).filter(alive)
+
+  it('«Вернуть удалённое» after the wizard’s new opening brings back the balance as it was (no double count)', async () => {
+    await seed()
+    await seedRecords()
+    const before = balances(await liveTxs())
+    renderMore()
+    await wipeAll()
+    fireEvent.change(screen.getByLabelText('Сумма'), { target: { value: '700' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Готово' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Сколько денег сейчас' })).toBeNull())
+    const card = await wipeCard()
+    fireEvent.click(await within(card).findByRole('button', { name: 'Вернуть удалённое' }))
+    await screen.findByText('Данные вернулись')
+    expect(balances(await liveTxs())).toEqual(before)
+  })
+
+  it('the «Остаток» wizard comes back after a reload until it is finished; «Вернуть» closes it', async () => {
+    await seed()
+    const first = renderMore()
+    await wipeAll()
+    first.unmount()
+    const second = renderMore()
+    expect(await screen.findByRole('heading', { name: 'Сколько денег сейчас' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Пропустить' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Сколько денег сейчас' })).toBeNull())
+    second.unmount()
+    renderMore()
+    const card = await wipeCard()
+    await within(card).findByRole('button', { name: 'Вернуть удалённое' })
+    expect(screen.queryByRole('heading', { name: 'Сколько денег сейчас' })).toBeNull()
+
+    // a pending wizard is closed by «Вернуть» too
+    await env.db.meta.update('lastWipe', { 'value.pendingOpening': true } as never)
+    await screen.findByRole('heading', { name: 'Сколько денег сейчас' })
+    fireEvent.click(within(card).getByRole('button', { name: 'Вернуть удалённое' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Сколько денег сейчас' })).toBeNull())
+  })
+})
+
+describe('«Вернуть удалённое» expires', () => {
+  it('the row goes away at deleted_at + 24 h', async () => {
+    await seed()
+    await seedRecords()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
+    renderMore()
+    const panel = await openRecords()
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Сначала скачать копию (CSV)' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Удалить 3 записи' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Нажми ещё раз — удалить' }))
+    const card = await wipeCard()
+    await within(card).findByRole('button', { name: 'Вернуть удалённое' })
+
+    let clock = TEST_NOW.getTime() + RESTORE_MS - 60_000
+    env.now = () => new Date(clock)
+    act(() => vi.advanceTimersByTime(RESTORE_MS - 120_000))
+    expect(within(card).getByRole('button', { name: 'Вернуть удалённое' })).toBeTruthy()
+    clock = TEST_NOW.getTime() + RESTORE_MS + 1000
+    act(() => vi.advanceTimersByTime(120_000))
+    await waitFor(() => expect(within(card).queryByRole('button', { name: 'Вернуть удалённое' })).toBeNull())
   })
 })

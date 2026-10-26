@@ -72,7 +72,10 @@ export interface Repo {
    * batch; settings, accounts and standard categories stay. `count` = rows marked in all tables.
    */
   wipeAll(): Promise<{ batch: string; count: number }>
-  /** Takes the batch out of the bin; rows deleted for good (`deleted`) meanwhile stay deleted. Returns rows restored. */
+  /**
+   * Takes the batch out of the bin; rows deleted for good (`deleted`) meanwhile stay deleted. Returns rows restored.
+   * For a wipeAll batch it first bins (as a new batch) the «Начальный остаток» written after that wipe.
+   */
   restore(batch: string): Promise<number>
   /**
    * «Загрузить из CSV»: adds the rows as new records tagged deleted_batch = batch (deleted_at null), so
@@ -108,6 +111,8 @@ const OTHER_CATEGORY: Record<CategoryKind, string> = { expense: 'Прочее', 
 const IMPORTED_CATEGORY_ICON = '🏷️'
 /** meta key of a category removal's record moves, for restore(batch) (local only: the undo lives on this device) */
 const movedKey = (batch: string) => `moved:${batch}`
+/** meta key of a «Удалить все данные» batch: when it was wiped, so restore(batch) can bin the openings written after it */
+const wipedAllKey = (batch: string) => `wipedAll:${batch}`
 interface CategoryMoves {
   from: string
   to: string | null
@@ -260,7 +265,7 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     const batch = deps.uuid()
     const at = deps.now().toISOString()
     let count = 0
-    await db.transaction('rw', SOFT_TABLES.map(softTable), async () => {
+    await db.transaction('rw', [...SOFT_TABLES.map(softTable), db.meta], async () => {
       for (const table of SOFT_TABLES) {
         const rows = (await softTable(table).toArray()).filter(
           (r) => alive(r) && !(table === 'categories' && STANDARD_CATEGORIES.has(r.name as string)),
@@ -268,6 +273,7 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
         await softTable(table).bulkPut(rows.map((r) => binned(r, at, batch)))
         count += rows.length
       }
+      await db.meta.put({ key: wipedAllKey(batch), value: { at } })
     })
     if (count) deps.onChange()
     return { batch, count }
@@ -296,9 +302,24 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
 
   // `base_rev = rev` goes out with the push (sync.ts toWire): the server lifts deleted_at only for a writer that saw it.
   // A category removal's batch also takes its records back from «Прочее» (those still there), in the same transaction.
+  // A «Удалить все данные» batch first bins the «Начальный остаток» written after the wipe (the wizard's «Остаток»
+  // step) into a new batch of its own — the restored book has its old opening, so the balance is not counted twice
+  // (spec §4, 2026-10-26); that new batch can itself be restored.
   async function restore(batch: string): Promise<number> {
     let count = 0
     await db.transaction('rw', [...SOFT_TABLES.map(softTable), db.meta], async () => {
+      const wiped = (await db.meta.get(wipedAllKey(batch)))?.value as { at: string } | undefined
+      if (wiped) {
+        const openings = await db.transactions
+          .filter((t) => alive(t) && t.kind === 'adjustment' && t.note === OPENING_NOTE && t.created_at >= wiped.at)
+          .toArray()
+        if (openings.length) {
+          const again = deps.uuid()
+          const at = deps.now().toISOString()
+          await db.transactions.bulkPut(openings.map((t) => binned(t as Row<Transaction> & SoftRow, at, again)))
+        }
+        await db.meta.delete(wipedAllKey(batch))
+      }
       count = await updateBatch(
         batch,
         (r) => !r.deleted && r.deleted_at !== null,

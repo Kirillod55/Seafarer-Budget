@@ -500,9 +500,12 @@ export function planImport(
   for (const row of rows) {
     if (row.kind === 'transfer') {
       // an unknown «Счёт куда» would fall back to the default account — often the «Счёт» itself
+      // and an unknown «Счёт» too: both sides of a transfer must be named accounts ('' = the default one)
+      const from = row.account.trim()
       const to = row.toAccount.trim()
-      if (!liveAccountNames.has(to)) {
-        errors.push({ line: row.line, reason: `Нет счёта «${to}» — перевод пропущу` })
+      const missing = [to, from].find((name) => name !== '' && !liveAccountNames.has(name))
+      if (missing !== undefined) {
+        errors.push({ line: row.line, reason: `Нет счёта «${missing}» — перевод пропущу` })
         continue
       }
       if (accountOf(row.account) === accountOf(to)) {

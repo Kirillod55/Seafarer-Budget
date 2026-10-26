@@ -531,6 +531,35 @@ describe('wipeAll', () => {
     expect(await repo.restore(batch)).toBe(5)
     expect(await db.goals.get('g1')).toMatchObject({ deleted_at: null })
   })
+
+  it('restoring a wipe-all bins the «Начальный остаток» written after it (new batch): no double balance', async () => {
+    await repo.initDefaults('single', [{ currency: 'UAH', amount: 5000 }])
+    await repo.addTransaction(baseTx)
+    const live = async () => (await db.transactions.toArray()).filter((t) => !t.deleted && !t.deleted_at)
+    const before = balances(await live())
+    const { batch } = await repo.wipeAll()
+    await repo.addOpening([{ currency: 'UAH', amount: 700 }])
+    const opening = (await live())[0]
+    expect(opening).toMatchObject({ kind: 'adjustment', note: 'Начальный остаток', amount: 700 })
+
+    expect(await repo.restore(batch)).toBe(2)
+    expect(balances(await live())).toEqual(before)
+    const binned = (await db.transactions.get(opening.id))!
+    expect(binned.deleted_at).toBe(NOW_ISO)
+    expect(binned.deleted_batch).not.toBe(batch)
+    // the new opening itself can be brought back
+    expect(await repo.restore(binned.deleted_batch!)).toBe(1)
+    expect((await db.transactions.get(opening.id))!.deleted_at).toBeNull()
+  })
+
+  it('restoring a «delete period» batch leaves openings alone', async () => {
+    await repo.initDefaults('single', [{ currency: 'UAH', amount: 5000 }])
+    await repo.addTransaction({ ...baseTx, date: TODAY })
+    const { batch } = await repo.wipe('day', 'expense')
+    await repo.addOpening([{ currency: 'UAH', amount: 700 }])
+    await repo.restore(batch)
+    expect((await db.transactions.toArray()).filter((t) => t.deleted_at)).toEqual([])
+  })
 })
 
 describe('removeEmptyAccount', () => {

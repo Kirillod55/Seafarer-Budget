@@ -360,7 +360,7 @@ describe('stage 1 carry-overs (Task 13)', () => {
 
   it('a transfer to an unknown «Счёт куда» is a row error, not a transfer onto the same account', () => {
     const { rows } = parseCsv(
-      ['Дата;Тип;Сумма;Валюта;Счёт;Счёт куда', '2026-10-21;Перевод;100;UAH;Основной;Банка', '2026-10-21;Перевод;50;UAH;Основной;Карта', '2026-10-21;Перевод;7;UAH;Сейф;Основной'].join('\n'),
+      ['Дата;Тип;Сумма;Валюта;Счёт;Счёт куда', '2026-10-21;Перевод;100;UAH;Основной;Банка', '2026-10-21;Перевод;50;UAH;Основной;Карта', '2026-10-21;Перевод;7;UAH;Сейф;Основной', '2026-10-21;Перевод;7;UAH;;Основной'].join('\n'),
       null,
     )
     const plan = planImport(rows, [], [food], [main, card])
@@ -368,7 +368,8 @@ describe('stage 1 carry-overs (Task 13)', () => {
     expect(plan.duplicates).toEqual([])
     expect(plan.errors).toEqual([
       { line: 2, reason: 'Нет счёта «Банка» — перевод пропущу' },
-      { line: 4, reason: 'Перевод на тот же счёт' },
+      { line: 4, reason: 'Нет счёта «Сейф» — перевод пропущу' },
+      { line: 5, reason: 'Перевод на тот же счёт' },
     ])
     expect(plan.unknownAccounts).toEqual([])
   })
