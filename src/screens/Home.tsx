@@ -43,7 +43,7 @@ export function msToMidnight(now: Date, timeZone: string): number {
  * «Сегодня» follows the clock: the screen re-renders at the next local midnight and whenever the app comes back to
  * the screen (an iPhone app sleeps in the background past midnight; its timers do not run there).
  */
-function useDayTick(now: () => Date, timeZone: string | undefined): void {
+export function useDayTick(now: () => Date, timeZone: string | undefined): void {
   const [, setTick] = useState(0)
   useEffect(() => {
     if (!timeZone) return

@@ -1,0 +1,214 @@
+/*
+ * «Календарь трат» (prototype v60 calendar(): .cal, .wd, .day, .calday, .cdin; spec §3, §6 «Календарь»).
+ * Lime only for the picked day and today's outline; the ‹ › arrows are text-coloured glass circles.
+ */
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar .label {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ---------- ‹ › next to the month ---------- */
+
+.cal-arrows {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.cal-arrow {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--round-h);
+  height: var(--round-h);
+  padding: 0;
+  border-radius: 50%;
+  border: 0.5px solid var(--glass-btn-edge);
+  background: var(--glass-btn);
+  box-shadow: inset 0 0.5px 0 var(--glass-btn-edge), 0 1px 6px rgba(0, 0, 0, 0.05);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.2s var(--ios);
+}
+
+/* 44 px touch target around the 36 px circle */
+.cal-arrow::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.cal-arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+.cal-arrow:active {
+  transform: scale(0.9);
+  transition-duration: 0.1s;
+}
+
+.cal-total {
+  margin: -8px 0 14px;
+}
+
+/* ---------- the grid ---------- */
+
+.cal {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.wd {
+  padding-bottom: 2px;
+  color: var(--muted);
+  font-size: 0.706rem; /* 12 */
+  text-align: center;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 4px 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.22s var(--ios),
+    border-color 0.22s var(--ios),
+    opacity 0.22s var(--ios);
+}
+
+.day .dn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.882rem; /* 15 */
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.day .dv {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px; /* fixed 12 px: whole dollars must fit the cell at any text size */
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.day .dn,
+.day .dv {
+  transition: color 0.22s var(--ios);
+}
+
+.day .anchor {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--anchor);
+}
+
+.day.today {
+  border-color: var(--accent-text);
+}
+
+.day.sel {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.day.sel .dn,
+.day.sel .dv,
+.day.sel .anchor {
+  color: var(--on-accent);
+}
+
+.day:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ---------- the day card under the grid ---------- */
+
+.calday {
+  margin-top: 18px;
+}
+
+.cdin {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cd-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.cd-head h3 {
+  margin: 0;
+  min-width: 0;
+  font-size: 1.059rem; /* 18 */
+  font-weight: 600;
+}
+
+.cd-sum {
+  flex: none;
+  font-weight: 600;
+}
+
+.cd-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
+  background: var(--track);
+  font-size: 0.765rem; /* 13 */
+  font-weight: 500;
+}
+
+/* the category's name is for VoiceOver; the tile says it on screen */
+.cd-cname {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cd-empty,
+.cd-note {
+  margin: 0;
+  padding: 0 4px;
+}

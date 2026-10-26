@@ -622,6 +622,37 @@ describe('Morph', () => {
       },
     )
   })
+
+  it('with dir the swap is sideways: old leaves towards −dir in 0.17 s, new rides in from +dir in 0.32 s', () => {
+    const calls: { el: Element; frames: Keyframe[]; opts: KeyframeAnimationOptions }[] = []
+    reducedMotion(false)
+    withAnimate(
+      function (this: Element, frames, opts) {
+        calls.push({ el: this, frames: frames as Keyframe[], opts: opts as KeyframeAnimationOptions })
+        return fakeAnim()
+      },
+      () => {
+        const { rerender } = render(
+          <Morph k="2026-10-21" dir={1}>
+            <p>Сегодня</p>
+          </Morph>,
+        )
+        rerender(
+          <Morph k="2026-10-05" dir={-1}>
+            <p>5 октября</p>
+          </Morph>,
+        )
+        const old = calls.find((c) => c.el.classList.contains('mOld'))!
+        const cur = calls.find((c) => c.el.classList.contains('mIn') && !c.el.classList.contains('mOld'))!
+        const box = calls.find((c) => c.el.classList.contains('morph'))!
+        expect(old.opts.duration).toBe(170)
+        expect(old.frames[1].transform).toBe('translateX(18px)')
+        expect(cur.opts.duration).toBe(320)
+        expect(cur.frames[0].transform).toBe('translateX(-22px)')
+        expect(box.opts.duration).toBe(320)
+      },
+    )
+  })
 })
 
 describe('useFlip', () => {

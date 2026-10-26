@@ -20,7 +20,7 @@ const KIND_TITLE: Record<Transaction['kind'], string> = {
 }
 
 /** The tile for a record without a category (transfer, exchange, adjustment): neutral grey wallet. */
-function bareCategory(name: string): Category {
+export function bareCategory(name: string): Category {
   return {
     id: '',
     deleted: false,

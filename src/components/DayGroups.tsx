@@ -31,6 +31,7 @@ export function DayGroups({
   today,
   maxDays,
   totals = false,
+  headings = true,
 }: {
   txs: Transaction[]
   categories: Category[]
@@ -44,6 +45,8 @@ export function DayGroups({
   maxDays?: number
   /** the day's spending (USD) right of each heading — the «Расходы» list */
   totals?: boolean
+  /** false: no day heading over the card (the calendar's day card has its own) */
+  headings?: boolean
 }) {
   const visible = txs.filter((t) => alive(t) && !t.archived)
   const byDay = new Map<string, Transaction[]>()
@@ -75,10 +78,12 @@ export function DayGroups({
         const spent = rows.filter((t) => t.kind === 'expense').reduce((s, t) => s + t.amount_usd, 0)
         return (
           <section key={day} className="daygroup" data-flip-key={`day-${day}`}>
-            <h3 className={`section${totals ? ' dsec' : ''}`}>
-              <span>{dayTitle(day, today)}</span>
-              {totals && <span className="num">{money(spent, 'USD')}</span>}
-            </h3>
+            {headings && (
+              <h3 className={`section${totals ? ' dsec' : ''}`}>
+                <span>{dayTitle(day, today)}</span>
+                {totals && <span className="num">{money(spent, 'USD')}</span>}
+              </h3>
+            )}
             <div className="group">
               {rows.map((t) => {
                 const b = born.current.get(t.id) ?? 0

@@ -2,6 +2,7 @@ import { Suspense, lazy, type CSSProperties } from 'react'
 import { NavBar } from './nav/NavBar.tsx'
 import { Navigator, useNav, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
+import { Calendar } from './screens/Calendar.tsx'
 import { Goals } from './screens/Goals.tsx'
 import { Home } from './screens/Home.tsx'
 import { Limits } from './screens/Limits.tsx'
@@ -73,7 +74,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
       case 'archive':
         return <Soon back="Ещё" title="Архив" />
       case 'calendar':
-        return <Soon back="Главная" title="Календарь" />
+        return <Calendar />
       case 'records':
         return <Soon back={route.from === 'cats' ? 'Категории' : 'Отчёт'} title="Расходы" />
     }

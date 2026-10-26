@@ -100,6 +100,20 @@
   overflow-wrap: anywhere;
 }
 
+/* the large title with buttons on its line (the calendar's ‹ ›) */
+.titlerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+
+.titlerow > h1.large {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- tabs ---------- */
 
 .tabs {

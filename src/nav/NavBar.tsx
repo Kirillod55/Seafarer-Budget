@@ -7,7 +7,18 @@ import { useNav, useScreenActive } from './Navigator.tsx'
  * trailing button, the large 32 pt title under it. The bar sticks to the top (below the iPhone notch); once the
  * large title has scrolled under it, the bar turns solid (--bar-bg, a crisp line) with a small centred title.
  */
-export function NavBar({ back, title, trailing }: { back?: { label: string }; title: string; trailing?: ReactNode }) {
+export function NavBar({
+  back,
+  title,
+  trailing,
+  aside,
+}: {
+  back?: { label: string }
+  title: string
+  trailing?: ReactNode
+  /** buttons on the large title's line, right-aligned (the calendar's ‹ ›) */
+  aside?: ReactNode
+}) {
   const nav = useNav()
   const barRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
@@ -48,9 +59,18 @@ export function NavBar({ back, title, trailing }: { back?: { label: string }; ti
           {title}
         </span>
       </div>
-      <h1 ref={titleRef} className="large" tabIndex={-1}>
-        {title}
-      </h1>
+      {aside ? (
+        <div className="titlerow">
+          <h1 ref={titleRef} className="large" tabIndex={-1}>
+            {title}
+          </h1>
+          {aside}
+        </div>
+      ) : (
+        <h1 ref={titleRef} className="large" tabIndex={-1}>
+          {title}
+        </h1>
+      )}
     </>
   )
 }
