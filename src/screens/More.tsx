@@ -11,6 +11,7 @@ import { BudgetSection } from './more/BudgetSection.tsx'
 import { CurrenciesSection } from './more/CurrenciesSection.tsx'
 import { BackupSection, ModeSection, ReconcileSection } from './more/DataSection.tsx'
 import { BotSection, PartnerSection } from './more/PartnerSection.tsx'
+import { WipeSection } from './more/WipePanel.tsx'
 import './record.css'
 import './goals.css'
 import './more/more.css'
@@ -26,7 +27,8 @@ const MENU: { screen: MenuScreen; label: string; icon: LucideIcon; color: string
 
 /**
  * «Ещё» (spec §4, §9, §10; prototype v60 more()): the landing budget, the menu of deeper screens («Архив · N»),
- * the theme, the second person and the bot, the accounts mode, currencies, «Сверка», the backup, then «Выйти».
+ * the theme, the second person and the bot, the accounts mode, currencies, «Сверка», the backup with «Загрузить из CSV»,
+ * «Удаление данных», then «Выйти».
  * Every setting is saved on its own: `repo.put('settings', { id, field })`.
  */
 export function More({ onSignOut }: { onSignOut(): void }) {
@@ -101,7 +103,7 @@ export function More({ onSignOut }: { onSignOut(): void }) {
         <CurrenciesSection settings={settings} />
         <ReconcileSection settings={settings} accounts={accounts} txs={txs} today={today} />
         <BackupSection today={today} partnerName={settings.partner_name} />
-        {/* Task 13: the «Удаление данных» card (WipePanel) goes here, under «Резервная копия» (spec §4) */}
+        <WipeSection settings={settings} today={today} />
 
         <button type="button" className="btn-gray danger msignout" onClick={onSignOut}>
           Выйти

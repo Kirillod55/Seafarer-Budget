@@ -212,9 +212,283 @@
   margin-top: 4px;
 }
 
+/* ---------- «Удаление данных» (prototype .wipe/.wsum/.wcheck/.wact/.wdanger/.wundo) and «Загрузить из CSV» ---------- */
+
+/* the swapped block (Morph): its content keeps the card's rhythm */
+.wbox > .mIn {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.wipecard .btn-gray.danger {
+  width: 100%;
+}
+
+.wipe {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.wipe .seg > button {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.wipe .fld {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wipe .flabel {
+  color: var(--muted);
+  font-size: 0.765rem;
+}
+
+.wrange {
+  margin-top: 2px;
+}
+
+.wsum {
+  padding: 12px 14px;
+  border-radius: var(--r-field);
+  background: color-mix(in srgb, var(--danger) 10%, var(--card));
+  color: var(--text);
+  font-size: 0.882rem; /* 15 */
+  line-height: 1.4;
+  overflow: hidden; /* while its height glides */
+  overflow-wrap: anywhere;
+}
+
+.wsum.empty {
+  background: var(--track);
+  color: var(--muted);
+}
+
+.wlead {
+  margin: 0;
+  font-size: 0.882rem;
+  line-height: 1.45;
+}
+
+.wcheck {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  width: max-content;
+  max-width: 100%;
+  font-size: 0.882rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.wcheck input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wtick {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--line);
+  border-radius: 7px;
+  color: transparent;
+  transition: background-color 0.2s var(--ios), border-color 0.2s var(--ios), color 0.2s var(--ios);
+}
+
+.wtick svg {
+  width: 16px;
+  height: 16px;
+}
+
+.wcheck input:checked + .wtick {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.wcheck input:focus-visible + .wtick {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+
+.wact {
+  display: grid;
+  /* «Отмена» as wide as its word: «Нажми ещё раз — удалить» needs the rest at 375 px */
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+}
+
+.wact > button {
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wdanger,
+.iload {
+  min-height: 44px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--r-btn);
+  font: inherit;
+  font-size: 0.882rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s var(--ios);
+}
+
+.wdanger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.iload {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.wdanger:active,
+.iload:active {
+  transform: scale(0.97);
+}
+
+.wdanger:disabled,
+.iload:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* «Нажми ещё раз — удалить» pulses for its 4 s */
+.wdanger.armed {
+  animation: armPulse 1s ease-in-out infinite;
+}
+
+@keyframes armPulse {
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+.wundo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* after «Удалить все данные»: the wizard's «Остаток» step over the whole app (below the toast) */
+.wzlayer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+}
+
+/* «Загрузить из CSV»: the file preview */
+.imp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.imp .isum {
+  margin: 0;
+  font-size: 0.882rem;
+  line-height: 1.4;
+}
+
+.iprev {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-field);
+  background: var(--track);
+  list-style: none;
+  font-size: 0.765rem;
+}
+
+.iprev li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.iprev .it {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iprev .ia {
+  flex: none;
+}
+
+.iprev .ia.inc {
+  color: var(--ok);
+}
+
+.iunknown,
+.ierr {
+  overflow-wrap: anywhere;
+}
+
+.ierrs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ifile {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wdanger.armed {
+    animation: none;
+  }
+}
+
 @media (prefers-contrast: more) {
   .mcard,
-  .tag {
+  .tag,
+  .wtick {
     border-color: var(--text);
   }
 

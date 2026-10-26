@@ -10,6 +10,7 @@ import { parseAmount } from '../../lib/amount.ts'
 import { Segmented } from '../../ui/Segmented.tsx'
 import { useToast } from '../../ui/Toast.tsx'
 import { FAILED, MoreCard, onEnter, useSaveSettings } from './common.tsx'
+import { ImportPanel } from './ImportPanel.tsx'
 
 const RECONCILE_NOTE = 'Сверка'
 
@@ -174,7 +175,7 @@ export function ReconcileSection({
 
 /**
  * «Резервная копия»: every record in one CSV for Excel (`seafarer-budget-ГГГГ-ММ-ДД.csv`, the «Кто» column and the
- * second half of transfers). «Загрузить из CSV» joins this card in Task 13 (ImportPanel).
+ * second half of transfers), and «Загрузить из CSV» (ImportPanel) under it.
  */
 export function BackupSection({ today, partnerName }: { today: string; partnerName: string | null }) {
   const { db } = useApp()
@@ -205,7 +206,7 @@ export function BackupSection({ today, partnerName }: { today: string; partnerNa
       <button type="button" className="btn-gray" disabled={busy} onClick={() => void download()}>
         Скачать CSV
       </button>
-      {/* Task 13: «Загрузить из CSV» (ImportPanel) goes here */}
+      <ImportPanel partnerName={partnerName} />
     </MoreCard>
   )
 }
