@@ -38,9 +38,18 @@ export function BudgetSection({
   const [error, setError] = useState('')
   const reserveRef = useRef<HTMLInputElement>(null)
 
-  // a change from elsewhere (sync, «Главная») shows up unless the field is being edited
-  useEffect(() => setDate(settings.next_contract_date ?? ''), [settings.next_contract_date])
+  // A change from elsewhere (sync, «Главная») shows up unless the field is being edited. `known` holds the stored
+  // values the fields already account for — the first render's and our own saves' — so neither the mount nor the
+  // echo of a save (which can arrive after the next keystroke) puts an older value back over what is being typed.
+  const known = useRef({ date: settings.next_contract_date, reserve: settings.reserve_usd })
   useEffect(() => {
+    if (settings.next_contract_date === known.current.date) return
+    known.current.date = settings.next_contract_date
+    setDate(settings.next_contract_date ?? '')
+  }, [settings.next_contract_date])
+  useEffect(() => {
+    if (settings.reserve_usd === known.current.reserve) return
+    known.current.reserve = settings.reserve_usd
     if (document.activeElement !== reserveRef.current) setReserve(fmtReserve(settings.reserve_usd))
   }, [settings.reserve_usd])
 
@@ -51,10 +60,16 @@ export function BudgetSection({
   // a field left empty clears the date when it loses focus
   const pickDate = (value: string) => {
     setDate(value)
-    if (value && value !== settings.next_contract_date) void save({ next_contract_date: value })
+    if (value && value !== settings.next_contract_date) {
+      known.current.date = value
+      void save({ next_contract_date: value })
+    }
   }
   const leaveDate = () => {
-    if (!date && settings.next_contract_date) void save({ next_contract_date: null })
+    if (!date && settings.next_contract_date) {
+      known.current.date = null
+      void save({ next_contract_date: null })
+    }
   }
 
   const commitReserve = () => {
@@ -62,7 +77,10 @@ export function BudgetSection({
     setError('')
     const value = round2(typed)
     setReserve(fmtReserve(value))
-    if (value !== (settings.reserve_usd ?? 0)) void save({ reserve_usd: value })
+    if (value !== (settings.reserve_usd ?? 0)) {
+      known.current.reserve = value
+      void save({ reserve_usd: value })
+    }
   }
 
   const reserveUsd = reserveOk ? round2(typed) : (settings.reserve_usd ?? 0)

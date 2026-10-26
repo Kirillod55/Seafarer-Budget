@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, RefreshCw, X } from './icons.ts'
 import { prefersReducedMotion } from './motion.ts'
 import './pull.css'
@@ -63,7 +63,8 @@ export function PullToRefresh({
   const opts = useRef({ onRefresh, disabled })
   opts.current = { onRefresh, disabled }
 
-  useEffect(() => {
+  // listening from the commit itself (a layout effect): a touch right after the screen appears is never missed
+  useLayoutEffect(() => {
     const el = wrap.current
     const st = strip.current
     const pi = icon.current

@@ -176,8 +176,9 @@ export function Sheet({
     }
   }, [])
 
-  // pull down to close, from any point of the sheet
-  useEffect(() => {
+  // pull down to close, from any point of the sheet — listening from the commit itself (a layout effect): a touch
+  // that lands right after the sheet appears must not slip past a not-yet-run passive effect
+  useLayoutEffect(() => {
     const sh = sheetRef.current
     const bd = backdropRef.current
     if (!sh || !bd) return
