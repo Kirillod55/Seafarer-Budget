@@ -9,3 +9,4 @@ src-tauri/target/
 .superpowers/
 src-tauri/gen/
 tsconfig.tsbuildinfo
+backups/

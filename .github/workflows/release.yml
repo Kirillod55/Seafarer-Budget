@@ -55,13 +55,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # signs the installer for the in-app updater (docs/release/tauri-updater.md)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ steps.meta.outputs.tag }}
           releaseName: 'Seafarer Budget ${{ steps.meta.outputs.tag }}'
           releaseDraft: false
           prerelease: false
           releaseAssetNamePattern: 'Seafarer-Budget-[version][setup][ext]'
-          uploadUpdaterJson: false
+          uploadUpdaterJson: true
 
       - name: Attach portable zip (and installer name safety net)
         shell: pwsh
