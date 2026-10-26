@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { categoryStyle } from '@shared/defaults.ts'
 import type { Category } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
 import { isLightColor } from '../ui/CategoryIcon.tsx'
@@ -51,10 +52,13 @@ export const CAT_GLYPHS: { key: string; name: string; emoji: string }[] = [
 const capitalize = (s: string) => (s ? s.charAt(0).toLocaleUpperCase('ru') + s.slice(1) : s)
 const same = (a: string, b: string) => a.trim().toLocaleLowerCase('ru') === b.trim().toLocaleLowerCase('ru')
 
-/** Why the name cannot be used, or '' when it can (empty, or a repeat of a live or archived category in any case). */
-export function nameError(name: string, categories: Category[]): string {
-  if (!name.trim()) return 'Введите название'
-  const twin = categories.find((c) => same(c.name, name))
+/**
+ * Why the name cannot be used, or '' when it can: empty, or a repeat in any case of another category — live,
+ * archived or in the 24 h bin (it may come back with «Отменить»). `self` is the category being edited.
+ */
+export function nameError(name: string, categories: Category[], self?: string): string {
+  if (!name.trim()) return 'Впиши название'
+  const twin = categories.find((c) => c.id !== self && !c.deleted && same(c.name, name))
   if (!twin) return ''
   return twin.archived ? 'Такая категория есть в архиве — верни её оттуда' : 'Такая категория уже есть'
 }
@@ -62,18 +66,29 @@ export function nameError(name: string, categories: Category[]): string {
 type Kind = Category['kind']
 
 /*
- * «Новая категория» (spec §4 «Категории»; prototype catNewForm()): Расход / Доход, the name (≤ 30, saved with a
+ * «Новая категория» / «Категория» (edit, from the swipe «Изменить»; spec §4, 2026-10-26) (spec §4 «Категории»; prototype catNewForm()): Расход / Доход, the name (≤ 30, saved with a
  * capital letter), a colour of 10 (5×2) and a glyph of 18 (6×3) drawn in that colour; «Создать» / «Отмена».
- * `categories` are the alive ones, archived included (a repeat of either is refused). The new category writes its
- * `color` and `glyph`, and the matching emoji as `icon` for the bot.
+ * `categories` are all not deleted for good — archived and binned included (a repeat of any is refused; the sort
+ * goes after all of them). The new category writes its `color` and `glyph`, and the matching emoji as `icon` for
+ * the bot. Editing: name, colour and glyph prefilled, the kind is fixed, «Сохранить» writes only what changed.
  */
-export function CategoryForm({ categories, onClose }: { categories: Category[]; onClose(): void }) {
+export function CategoryForm({
+  categories,
+  category,
+  onClose,
+}: {
+  categories: Category[]
+  /** the category to edit; unset = a new one */
+  category?: Category
+  onClose(): void
+}) {
   const { repo } = useApp()
   const toast = useToast()
-  const [kind, setKind] = useState<Kind>('expense')
-  const [name, setName] = useState('')
-  const [color, setColor] = useState(CAT_COLORS[2].value)
-  const [glyph, setGlyph] = useState('tag')
+  const start = category ? categoryStyle(category) : { color: CAT_COLORS[2].value, glyph: 'tag' }
+  const [kind, setKind] = useState<Kind>(category?.kind ?? 'expense')
+  const [name, setName] = useState(category?.name ?? '')
+  const [color, setColor] = useState(start.color)
+  const [glyph, setGlyph] = useState(start.glyph)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -85,15 +100,25 @@ export function CategoryForm({ categories, onClose }: { categories: Category[]; 
   async function save() {
     if (busy) return
     const clean = capitalize(name.trim().slice(0, NAME_MAX))
-    const why = nameError(clean, categories)
+    const why = nameError(clean, categories, category?.id)
     setError(why)
     if (why) return
+    const emoji = CAT_GLYPHS.find((g) => g.key === glyph)?.emoji ?? '🏷️'
     setBusy(true)
     try {
+      if (category) {
+        const patch: Partial<Category> = {}
+        if (clean !== category.name) patch.name = clean
+        if (color !== start.color) patch.color = color
+        if (glyph !== start.glyph) Object.assign(patch, { glyph, icon: emoji })
+        if (Object.keys(patch).length) await repo.put<Category>('categories', { id: category.id, ...patch })
+        onClose()
+        return
+      }
       await repo.put<Category>('categories', {
         name: clean,
         kind,
-        icon: CAT_GLYPHS.find((g) => g.key === glyph)?.emoji ?? '🏷️',
+        icon: emoji,
         keywords: [],
         archived: false,
         sort: categories.reduce((max, c) => Math.max(max, c.sort), -1) + 1,
@@ -119,17 +144,25 @@ export function CategoryForm({ categories, onClose }: { categories: Category[]; 
   }
 
   return (
-    <section className="card gcard rec reveal catform" data-flip-key="new-cat" aria-labelledby="cn-title">
-      <h3 id="cn-title">Новая категория</h3>
-      <Segmented<Kind>
-        label="Тип"
-        options={[
-          { value: 'expense', label: 'Расход' },
-          { value: 'income', label: 'Доход' },
-        ]}
-        value={kind}
-        onChange={setKind}
-      />
+    <section
+      className="card gcard rec reveal catform"
+      data-flip-key={category ? `edit-cat-${category.id}` : 'new-cat'}
+      aria-labelledby="cn-title"
+    >
+      <h3 id="cn-title">{category ? 'Категория' : 'Новая категория'}</h3>
+      {category ? (
+        <p className="label cat-kind">{category.kind === 'income' ? 'Доход' : 'Расход'}</p>
+      ) : (
+        <Segmented<Kind>
+          label="Тип"
+          options={[
+            { value: 'expense', label: 'Расход' },
+            { value: 'income', label: 'Доход' },
+          ]}
+          value={kind}
+          onChange={setKind}
+        />
+      )}
       <div className="fld">
         <label htmlFor="cn-name">Название</label>
         <input
@@ -194,7 +227,7 @@ export function CategoryForm({ categories, onClose }: { categories: Category[]; 
       )}
       <div className="gacts">
         <button type="button" className="btn-acc" disabled={busy} onClick={() => void save()}>
-          Создать
+          {category ? 'Сохранить' : 'Создать'}
         </button>
         <button type="button" className="btn-gray" disabled={busy} onClick={onClose}>
           Отмена

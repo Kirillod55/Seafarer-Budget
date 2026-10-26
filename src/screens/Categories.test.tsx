@@ -65,7 +65,7 @@ async function rowOf(name: string): Promise<HTMLElement> {
 }
 
 /** Opens a row's buttons from the keyboard and presses one. */
-async function act2(name: string, button: 'В архив' | 'Удалить') {
+async function act2(name: string, button: 'Изменить' | 'В архив' | 'Удалить') {
   const row = await rowOf(name)
   fireEvent.keyDown(row.querySelector('.tx')!, { key: 'ArrowLeft' })
   fireEvent.click(await within(row).findByRole('button', { name: button }))
@@ -224,7 +224,7 @@ describe('Категории: «Новая категория»', () => {
 
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: '   ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Создать' }))
-    expect(await screen.findByText('Введите название')).toBeTruthy()
+    expect(await screen.findByText('Впиши название')).toBeTruthy()
 
     await act(async () => {})
     expect((await env.db.categories.toArray()).length).toBe(count)
@@ -237,5 +237,94 @@ describe('Категории: «Новая категория»', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
     await waitFor(() => expect(screen.queryByText('Новая категория')).toBeNull())
     expect((await env.db.categories.toArray()).length).toBe(count)
+  })
+})
+
+describe('Категории: «Изменить»', () => {
+  it('the swipe has «Изменить», «В архив», «Удалить»; «Изменить» opens «Категория» prefilled, and a rename saves', async () => {
+    renderCats()
+    const row = await rowOf('Одежда')
+    fireEvent.keyDown(row.querySelector('.tx')!, { key: 'ArrowLeft' })
+    await waitFor(() =>
+      expect([...row.querySelectorAll('.act')].map((b) => b.textContent)).toEqual(['Изменить', 'В архив', 'Удалить']),
+    )
+    fireEvent.click(within(row).getByRole('button', { name: 'Изменить' }))
+
+    expect(await screen.findByText('Категория')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Добавить' })).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Тип' })).toBeNull()
+    const input = screen.getByLabelText('Название') as HTMLInputElement
+    expect(input.value).toBe('Одежда')
+    // the built-in style is preselected: #5856D6 is not among the 10, so no swatch; the shirt glyph is
+    expect(screen.getByRole('button', { name: 'Значок: Одежда' }).getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.change(input, { target: { value: 'одежда и обувь' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(async () => expect((await env.db.categories.get(cat['Одежда'].id))!.name).toBe('Одежда и обувь'))
+    const saved = (await env.db.categories.get(cat['Одежда'].id))!
+    // only the name changed: colour and glyph stay built-in (null)
+    expect(saved).toMatchObject({ color: null, glyph: null, kind: 'expense' })
+    await waitFor(() => expect(screen.queryByText('Категория')).toBeNull())
+    expect(await rowOf('Одежда и обувь')).toBeTruthy()
+  })
+
+  it('colour and glyph changes are saved; the same name in another case is not a repeat of itself', async () => {
+    renderCats()
+    await act2('Подарки', 'Изменить')
+    await screen.findByText('Категория')
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'подарки' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Цвет: Жёлтый' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Значок: Книга' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await waitFor(async () =>
+      expect(await env.db.categories.get(cat['Подарки'].id)).toMatchObject({ name: 'Подарки', color: '#FFCC00', glyph: 'book', icon: '📚' }),
+    )
+  })
+
+  it('renaming to another category’s name is refused', async () => {
+    renderCats()
+    await act2('Подарки', 'Изменить')
+    await screen.findByText('Категория')
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'ПРОДУКТЫ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Такая категория уже есть')).toBeTruthy()
+    expect((await env.db.categories.get(cat['Подарки'].id))!.name).toBe('Подарки')
+  })
+})
+
+describe('Категории: edge cases', () => {
+  it('a category in the bin still blocks its name (it may come back with «Отменить»); the new one sorts after it', async () => {
+    renderCats()
+    await act2('Подарки', 'Удалить')
+    await screen.findByText('Категория удалена, записи — в «Прочее»')
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+    fireEvent.change(await screen.findByLabelText('Название'), { target: { value: 'подарки' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать' }))
+    expect(await screen.findByText('Такая категория уже есть')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Спорт' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать' }))
+    await waitFor(async () => expect((await env.db.categories.toArray()).some((c) => c.name === 'Спорт')).toBe(true))
+    const all = await env.db.categories.toArray()
+    expect(new Set(all.map((c) => c.sort)).size).toBe(all.length)
+  })
+
+  it('a refused delete says why and moves nothing', async () => {
+    const t = await spend('Кафе и рестораны')
+    vi.spyOn(env.repo, 'removeCategory').mockResolvedValue(null)
+    renderCats()
+    await act2('Кафе и рестораны', 'Удалить')
+    expect(await screen.findByText('Категория уже удалена')).toBeTruthy()
+    expect((await env.db.transactions.get(t.id))!.category_id).toBe(cat['Кафе и рестораны'].id)
+  })
+
+  it('tapping «Прочее» while a row is open only closes that row', async () => {
+    renderCats()
+    const row = await rowOf('Продукты')
+    fireEvent.keyDown(row.querySelector('.tx')!, { key: 'ArrowLeft' })
+    await waitFor(() => expect(row.classList.contains('swiping')).toBe(true))
+    fireEvent.click((await rowOf('Прочее')).querySelector('.tx')!)
+    await waitFor(() => expect(row.classList.contains('swiping')).toBe(false))
+    expect(screen.queryByText(/^Расходы .* cats$/)).toBeNull()
   })
 })

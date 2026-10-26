@@ -374,7 +374,10 @@ describe('removeCategory', () => {
     expect((await db.transactions.get(elsewhere.id))!.category_id).toBe(transport.id)
     expect(onChange).toHaveBeenCalled()
 
+    onChange.mockClear()
     expect(await repo.restore(batch)).toBe(4)
+    // one notice, after the commit
+    expect(onChange).toHaveBeenCalledTimes(1)
     expect(await db.categories.get(cafe.id)).toMatchObject({ deleted_at: null, deleted_batch: null })
     expect(await db.limits.get('lim-cafe')).toMatchObject({ deleted_at: null, deleted_batch: null })
     for (const t of [a, b]) expect(await db.transactions.get(t.id)).toMatchObject({ category_id: cafe.id, dirty: 1 })

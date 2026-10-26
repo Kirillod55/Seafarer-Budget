@@ -27,7 +27,8 @@ const countLine = (n: number) => (n ? plural(n, 'запись', 'записи', 
 
 /*
  * «Категории» (spec §4 «Категории», §6 «Плавная перерисовка»; prototype cats()): expenses and incomes as lists,
- * the number of records under each name. Swipe left: «В архив» (grey) and «Удалить» (red) — the row folds away
+ * the number of records under each name. Swipe left: «Изменить» (the card «Категория»: name, colour, glyph; spec §4,
+ * 2026-10-26), «В архив» (grey) and «Удалить» (red) — the row folds away
  * and a toast says «Категория в архиве» or «Категория удалена, записи — в «Прочее»» («Прочий доход» for income);
  * the deleted category's limit goes too, and «Отменить» brings everything back (repo.removeCategory → restore).
  * «Прочее» and «Прочий доход» do not swipe («без категории попадают сюда»). A tap opens the category's records
@@ -37,21 +38,25 @@ export function Categories() {
   const { db, repo, now } = useApp()
   const nav = useNav()
   const toast = useToast()
-  const [adding, setAdding] = useState(false)
+  /** the card on top: «Новая категория» or «Категория» (edit); one at a time */
+  const [panel, setPanel] = useState<{ kind: 'new' } | { kind: 'edit'; id: string } | null>(null)
   const screenRef = useRef<HTMLDivElement>(null)
   const data = useLiveQuery(async () => {
     const [settings, categories, txs] = await Promise.all([
       db.settings.filter(alive).first(),
-      db.categories.filter(alive).toArray(),
+      // not deleted for good: binned ones still count for the name check and the sort (they may come back)
+      db.categories.filter((c) => !c.deleted).toArray(),
       db.transactions.filter(alive).toArray(),
     ])
     return { settings, categories, txs }
   }, [db])
   useDayTick(now, data?.settings?.timezone)
 
-  const shown = (data?.categories ?? []).filter((c) => !c.archived).sort((a, b) => a.sort - b.sort)
+  const shown = (data?.categories ?? []).filter((c) => alive(c) && !c.archived).sort((a, b) => a.sort - b.sort)
   const ids = shown.map((c) => c.id).join(',')
-  useFlip(screenRef, [ids, adding, !!data])
+  const editing = panel?.kind === 'edit' ? shown.find((c) => c.id === panel.id) : undefined
+  const panelKey = panel?.kind === 'new' ? 'new' : (editing?.id ?? '')
+  useFlip(screenRef, [ids, panelKey, !!data])
 
   // rows that come back (an «Отменить») or are new slide in; the first list does not
   const seen = useRef<Set<string> | null>(null)
@@ -81,6 +86,8 @@ export function Categories() {
     try {
       const batch = await repo.removeCategory(c.id)
       if (batch) toast(`Категория удалена, записи — в «${OTHER[c.kind]}»`, { label: 'Отменить', run: () => repo.restore(batch) })
+      // the repo refused: the category is already gone (deleted elsewhere meanwhile) or is «Прочее» itself
+      else toast(c.name === OTHER[c.kind] ? `«${c.name}» удалить нельзя` : 'Категория уже удалена')
     } catch {
       toast(FAILED)
     }
@@ -113,6 +120,7 @@ export function Categories() {
       )
     }
     const actions: SwipeAction[] = [
+      { key: 'edit', label: 'Изменить', run: () => setPanel({ kind: 'edit', id: c.id }) },
       { key: 'archive', label: 'В архив', run: () => void archive(c) },
       { key: 'delete', label: 'Удалить', run: () => void remove(c) },
     ]
@@ -130,8 +138,8 @@ export function Categories() {
         back={{ label: 'Ещё' }}
         title="Категории"
         trailing={
-          adding ? undefined : (
-            <button type="button" className="navbtn strong" onClick={() => setAdding(true)}>
+          panel?.kind === 'new' || editing ? undefined : (
+            <button type="button" className="navbtn strong" onClick={() => setPanel({ kind: 'new' })}>
               Добавить
             </button>
           )
@@ -141,7 +149,10 @@ export function Categories() {
         <p className="muted">Загрузка…</p>
       ) : (
         <>
-          {adding && <CategoryForm categories={data.categories} onClose={() => setAdding(false)} />}
+          {panel?.kind === 'new' && <CategoryForm categories={data.categories} onClose={() => setPanel(null)} />}
+          {editing && (
+            <CategoryForm key={editing.id} categories={data.categories} category={editing} onClose={() => setPanel(null)} />
+          )}
           {KINDS.map(([kind, title]) => {
             const list = shown.filter((c) => c.kind === kind)
             return (
@@ -152,7 +163,7 @@ export function Categories() {
             )
           })}
           <p className="label cat-foot" data-flip-key="foot">
-            Смахни категорию влево, чтобы убрать её в архив или удалить. Записи удалённой категории перейдут в
+            Смахни категорию влево, чтобы изменить её, убрать в архив или удалить. Записи удалённой категории перейдут в
             «Прочее». Архив — в «Ещё» → «Архив».
           </p>
         </>

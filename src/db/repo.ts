@@ -243,7 +243,12 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
   }
 
   /** Rewrites the rows of a batch that pass `pick`, in every table with a bin; returns how many. */
-  async function updateBatch(batch: string, pick: (r: SoftRow) => boolean, change: (r: SoftRow) => SoftRow): Promise<number> {
+  async function updateBatch(
+    batch: string,
+    pick: (r: SoftRow) => boolean,
+    change: (r: SoftRow) => SoftRow,
+    notify = true,
+  ): Promise<number> {
     let count = 0
     await db.transaction('rw', SOFT_TABLES.map(softTable), async () => {
       for (const table of SOFT_TABLES) {
@@ -254,7 +259,7 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
         count += rows.length
       }
     })
-    if (count) deps.onChange()
+    if (count && notify) deps.onChange()
     return count
   }
 
@@ -267,6 +272,7 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
         batch,
         (r) => !r.deleted && r.deleted_at !== null,
         (r) => ({ ...r, deleted_at: null, deleted_batch: null, dirty: 1 }),
+        false,
       )
       const moved = (await db.meta.get(movedKey(batch)))?.value as CategoryMoves | undefined
       if (!moved) return

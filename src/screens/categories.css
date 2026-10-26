@@ -149,3 +149,8 @@
     color: var(--text);
   }
 }
+
+/* «Категория» (edit): the kind is fixed, shown as a line under the title */
+.cat-kind {
+  margin: -6px 0 0;
+}
