@@ -30,16 +30,21 @@ html.desk .app {
   padding-left: var(--sidew);
 }
 
-/* the scrollbar keeps its place on every page: a tall page and a short one start at the same x */
+/* the scrollbar keeps its place on every page (a tall page and a short one are centred alike, nothing shifts when a
+   section opens) but stays invisible: it shows only while the page is being scrolled (html.scrolling, layout.ts) */
 html.desk {
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
 }
 
-/* every section starts at the same x (Windows Settings style): only the right edge depends on the page,
-   so switching sections in the menu never moves the title or the content sideways */
+html.desk.scrolling {
+  scrollbar-color: color-mix(in srgb, var(--muted) 55%, transparent) transparent;
+}
+
 html.desk .screen {
   max-width: 1120px;
-  margin: 0;
+  margin: 0 auto;
   padding: 24px 32px 48px;
   display: flex;
   flex-direction: column;

@@ -44,9 +44,19 @@ export function watchLayout(win: Window = window, doc: Document = document): () 
   sync()
   desk.addEventListener?.('change', sync)
   full.addEventListener?.('change', sync)
+  // the PC scrollbar is invisible until the page scrolls (desk.css html.scrolling); it fades out 0.8 s after
+  let idle: ReturnType<typeof setTimeout> | undefined
+  const onScroll = () => {
+    doc.documentElement.classList.add('scrolling')
+    clearTimeout(idle)
+    idle = setTimeout(() => doc.documentElement.classList.remove('scrolling'), 800)
+  }
+  win.addEventListener?.('scroll', onScroll, { passive: true })
   return () => {
     desk.removeEventListener?.('change', sync)
     full.removeEventListener?.('change', sync)
+    win.removeEventListener?.('scroll', onScroll)
+    clearTimeout(idle)
   }
 }
 
