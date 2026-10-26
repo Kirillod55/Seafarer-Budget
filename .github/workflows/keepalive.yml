@@ -11,6 +11,11 @@ on:
     - cron: '17 7 * * *'
     - cron: '17 19 * * *'
   workflow_dispatch:
+    inputs:
+      test_alarm:
+        description: 'Только проверить Telegram-уведомление (без пинга)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,6 +27,7 @@ jobs:
     steps:
       - name: Ping the keepalive function (3 tries)
         id: ping
+        if: inputs.test_alarm != true
         env:
           URL: ${{ secrets.KEEPALIVE_URL }}
           SECRET: ${{ secrets.KEEPALIVE_SECRET }}
@@ -35,17 +41,31 @@ jobs:
           exit 1
 
       - name: Tell Kirill and Masha in Telegram
-        if: failure() && steps.ping.outcome == 'failure'
+        # after a failed ping, or by hand: Run workflow → «Только проверить Telegram-уведомление»
+        if: always() && (steps.ping.outcome == 'failure' || inputs.test_alarm == true)
         env:
           TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           OWNER: ${{ secrets.OWNER_CHAT_ID }}
           PARTNER: ${{ secrets.PARTNER_CHAT_ID }}
+          TEST: ${{ inputs.test_alarm == true }}
         run: |
-          TEXT='⚠️ База не отвечает — зайди в Supabase и нажми Restore: https://supabase.com/dashboard/project/qvhernqypfbototyisfr'
-          for CHAT in "$OWNER" "$PARTNER"; do
-            [ -n "$CHAT" ] && curl --silent --max-time 30 -o /dev/null "https://api.telegram.org/bot${TOKEN}/sendMessage" \
-              --data-urlencode "chat_id=${CHAT}" --data-urlencode "text=${TEXT}" || true
-          done
+          if [ "$TEST" = "true" ]; then
+            TEXT='✅ Проверка: так придёт сообщение, если база перестанет отвечать.'
+          else
+            TEXT='⚠️ База не отвечает — зайди в Supabase и нажми Restore: https://supabase.com/dashboard/project/qvhernqypfbototyisfr'
+          fi
+          # Telegram's answer is checked: a wrong token or chat id fails this step (GitHub e-mails), never silently
+          send() {
+            curl --silent --max-time 30 "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=$1" --data-urlencode "text=${TEXT}" | grep -q '"ok":true'
+          }
+          [ -n "$TOKEN" ] || { echo 'TELEGRAM_BOT_TOKEN is empty'; exit 1; }
+          FAIL=0
+          if send "$OWNER"; then echo 'Kirill: delivered'; else echo 'Kirill: NOT delivered - check TELEGRAM_BOT_TOKEN and OWNER_CHAT_ID'; FAIL=1; fi
+          if [ -n "$PARTNER" ]; then
+            if send "$PARTNER"; then echo 'Masha: delivered'; else echo 'Masha: NOT delivered - check PARTNER_CHAT_ID'; FAIL=1; fi
+          fi
+          exit $FAIL
 
   monthly-commit:
     # the 60-day rule: a commit on the 1st keeps the schedule alive (pages.yml ignores this path)
