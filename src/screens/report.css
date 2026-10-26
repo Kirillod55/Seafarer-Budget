@@ -334,27 +334,6 @@
   padding-right: 20px;
 }
 
-.pill {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--track);
-  font-size: 0.706rem; /* 12 */
-  font-weight: 500;
-}
-
-.pill.ok {
-  color: var(--ok);
-}
-
-.pill.over {
-  color: var(--warn);
-}
-
 /* «Я / Маша»: lime for me, --partner for her */
 .split {
   display: flex;

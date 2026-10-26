@@ -2,7 +2,7 @@ import { alive } from '@shared/alive.ts'
 import { balances } from '@shared/calc.ts'
 import { resolveAccount, type ImportRow } from '@shared/csv.ts'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '@shared/defaults.ts'
-import { localDate } from '@shared/dates.ts'
+import { addDays, localDate } from '@shared/dates.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import {
   isSoftTable,
@@ -90,7 +90,7 @@ export interface Repo {
   ): Promise<void>
   /**
    * The wizard's «Остаток» step on its own (after «Удалить все данные», spec §4): opening balances as adjustments
-   * («Начальный остаток», dated today) on the default account — or the first active one by sort, or a new «Основной»
+   * («Начальный остаток», dated yesterday — spec §2) on the default account — or the first active one by sort, or a new «Основной»
    * when there is none. Settings and the other accounts are not touched (initDefaults would overwrite them); zero
    * amounts are skipped.
    */
@@ -520,7 +520,8 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
       accountIds.set(name, acc.id)
     }
 
-    const date = localDate(deps.now(), settings.timezone)
+    // dated yesterday: an opening balance is money held at the start of today, so the morning balance counts it (spec §2)
+    const date = addDays(localDate(deps.now(), settings.timezone), -1)
     for (const o of opening) {
       if (o.amount === 0) continue
       const tx = await buildTransaction({
@@ -542,15 +543,14 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
   }
 
   async function addOpening(opening: { currency: string; amount: number }[]): Promise<void> {
-    const date = await today()
+    const date = addDays(await today(), -1) // as in initDefaults: part of this morning's balance (spec §2)
     const rates = await db.fx_rates.toArray()
     await db.transaction('rw', db.accounts, db.transactions, async () => {
       const active = (await db.accounts.filter((a) => alive(a) && !a.archived).toArray()).sort((a, b) => a.sort - b.sort)
-      let account = active.find((a) => a.is_default) ?? active[0]
-      if (!account) {
-        account = { id: deps.uuid(), name: MAIN_ACCOUNT, aliases: [], is_default: true, archived: false, sort: 0, deleted: false, dirty: 1 }
-        await db.accounts.put(account)
-      }
+      const account =
+        active.find((a) => a.is_default) ??
+        active[0] ??
+        (await write<Account>('accounts', { name: MAIN_ACCOUNT, aliases: [], is_default: true, archived: false, sort: 0 }))
       for (const o of opening) {
         if (o.amount === 0) continue
         const tx = buildFrom(rates, {

@@ -77,7 +77,7 @@ describe('Мастер первого запуска', () => {
       ['UAH', 1200.5],
       ['USD', 300],
     ])
-    for (const t of opening) expect(t).toMatchObject({ kind: 'adjustment', account_id: accounts[0].id, date: TEST_TODAY, author: 'owner' })
+    for (const t of opening) expect(t).toMatchObject({ kind: 'adjustment', account_id: accounts[0].id, date: '2026-10-20', author: 'owner' })
     expect(await settingsRow()).toMatchObject({ accounts_mode: 'multi', next_contract_date: '2026-12-20', reserve_usd: 1000 })
   })
 

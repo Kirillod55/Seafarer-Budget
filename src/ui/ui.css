@@ -432,6 +432,33 @@
   }
 }
 
+/* ---------- status pills («В норме / Почти всё / Превышен», report tiles) ---------- */
+
+.pill {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--track);
+  font-size: 0.706rem; /* 12 */
+  font-weight: 500;
+}
+
+.pill.ok {
+  color: var(--ok);
+}
+
+.pill.warn {
+  color: var(--pill-warn);
+}
+
+.pill.over {
+  color: var(--warn);
+}
+
 /* ---------- progress bar ---------- */
 
 .bar {

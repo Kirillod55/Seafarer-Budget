@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { balances } from '@shared/calc.ts'
+import { balances, dailyBudget } from '@shared/calc.ts'
 import { parseCsv, planImport, toCsv, type ImportRow } from '@shared/csv.ts'
 import type { Account, Category, FxRate, Goal, Limit, Settings, Transaction } from '@shared/types.ts'
 import { createDb, type LocalDb } from './local.ts'
@@ -139,7 +139,7 @@ describe('initDefaults', () => {
       category_id: null,
       note: 'Начальный остаток',
       source: 'app',
-      date: TODAY,
+      date: '2026-10-20', // yesterday: part of this morning's balance (spec §2)
       account_id: accounts[0].id,
     })
     const settings = await db.settings.toArray()
@@ -194,6 +194,32 @@ describe('initDefaults', () => {
   })
 })
 
+describe('opening balances count in «Бюджет на день» on day one (spec §2: dated yesterday)', () => {
+  /** today's budget with landing 2026-10-30 (10 days with today), reserve $100, nothing in goals */
+  async function budgetToday() {
+    const [txs, accounts] = await Promise.all([db.transactions.toArray(), db.accounts.toArray()])
+    return dailyBudget({
+      txs: txs as Transaction[],
+      rates: [rate('2026-10-20', 'USD', 40)],
+      accounts: accounts as Account[],
+      reservedUsd: 0,
+      settings: { next_contract_date: '2026-10-30', reserve_usd: 100 },
+      today: TODAY,
+    })
+  }
+
+  it('after initDefaults: state ok, $1,100 − $100 over 10 days = $100 a day', async () => {
+    await repo.initDefaults('single', [{ currency: 'USD', amount: 1100 }])
+    expect(await budgetToday()).toMatchObject({ state: 'ok', days: 10, balanceMorningUsd: 1100, perDay: 100 })
+  })
+
+  it('after addOpening («Остаток» after «Удалить все данные»): the same', async () => {
+    await repo.initDefaults('single', [])
+    await repo.addOpening([{ currency: 'USD', amount: 1100 }])
+    expect(await budgetToday()).toMatchObject({ state: 'ok', days: 10, balanceMorningUsd: 1100, perDay: 100 })
+  })
+})
+
 describe('addOpening (the wizard from «Остаток» after «Удалить все данные»)', () => {
   it('writes only opening balances on the default account: settings and accounts stay as they are', async () => {
     await repo.initDefaults('multi', [{ currency: 'UAH', amount: 100, accountName: 'Карта' }])
@@ -225,7 +251,7 @@ describe('addOpening (the wizard from «Остаток» after «Удалить 
         kind: 'adjustment',
         account_id: cash.id,
         note: 'Начальный остаток',
-        date: TODAY,
+        date: '2026-10-20', // yesterday, as initDefaults
         source: 'app',
         author: 'owner',
         archived: false,

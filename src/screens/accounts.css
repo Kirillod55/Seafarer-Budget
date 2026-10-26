@@ -89,7 +89,7 @@
   overflow: hidden;
   border-radius: 22px;
   background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 62%, var(--acc-shade)) 100%);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--c) 28%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--c) 28%, transparent), inset 0 1px 0 var(--acc-edge);
   color: var(--on-acc);
   scroll-snap-align: start;
 }
@@ -112,7 +112,7 @@
   right: -48px;
   width: 180px;
   height: 180px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--acc-sheen);
 }
 
 .acard::after {
@@ -120,7 +120,7 @@
   bottom: -70px;
   width: 140px;
   height: 140px;
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--acc-sheen-2);
 }
 
 .acard-top {
@@ -148,7 +148,7 @@
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--acc-tile);
 }
 
 .acard-ic svg {
@@ -161,7 +161,7 @@
   margin-left: auto;
   padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--acc-badge);
   font-size: 0.647rem; /* 11 */
   font-weight: 600;
 }
@@ -199,7 +199,7 @@
 .acard-cur span {
   padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--acc-chip);
 }
 
 .acard-acts {
@@ -229,7 +229,7 @@
   height: 16px;
   padding: 8px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--acc-tile);
   transition: transform 0.2s var(--ios);
 }
 

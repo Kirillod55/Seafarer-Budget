@@ -48,6 +48,7 @@ const splitAliases = (text: string) =>
 /* ---------- the account cards ---------- */
 
 function AccountCard({
+  flipKey,
   name,
   bal,
   usd,
@@ -57,6 +58,8 @@ function AccountCard({
   onEdit,
   onArchive,
 }: {
+  /** the account's id (a rename keeps the block), or 'single' */
+  flipKey: string
   name: string
   bal: Record<string, number>
   usd: number
@@ -67,13 +70,14 @@ function AccountCard({
   onArchive?(): void
 }) {
   const Icon = single ? Wallet : CreditCard
-  const shown = Object.entries(bal).filter(([, v]) => Math.abs(v) >= 0.005)
+  // whole amounts, as in the prototype: a currency that rounds to 0 is left out
+  const shown = Object.entries(bal).filter(([, v]) => Math.round(Math.abs(v)) !== 0)
   return (
     <section
       className="acard"
       style={{ '--c': `var(--acc-${index % ACC_COLORS})` } as CSSProperties}
       aria-label={name}
-      data-flip-key={`acc-${name}`}
+      data-flip-key={`acc-${flipKey}`}
     >
       <div className="acard-top">
         <span className="acard-ic" aria-hidden="true">
@@ -87,7 +91,7 @@ function AccountCard({
         {shown.length ? (
           shown.map(([cur, v]) => (
             <span key={cur} className="num">
-              {money(v, cur)}
+              {money(v, cur, { whole: true })}
             </span>
           ))
         ) : (
@@ -715,6 +719,7 @@ export function Accounts() {
               return (
                 <AccountCard
                   key={a.id}
+                  flipKey={a.id}
                   name={a.name}
                   bal={bal}
                   usd={balanceUsd(bal, rates, today)}
@@ -732,7 +737,7 @@ export function Accounts() {
             </button>
           </>
         ) : (
-          <AccountCard name="Один баланс" bal={all} usd={total} index={0} single isDefault={false} />
+          <AccountCard flipKey="single" name="Один баланс" bal={all} usd={total} index={0} single isDefault={false} />
         )}
       </div>
 

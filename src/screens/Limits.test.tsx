@@ -187,7 +187,7 @@ describe('Лимиты', () => {
     const limit = await setLimit(100)
     renderLimits()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Убрать' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Убрать лимит «Кафе и рестораны»' }))
     await waitFor(() => expect(screen.queryByRole('progressbar')).toBeNull())
     expect(await screen.findByText('Лимит убран')).toBeTruthy()
     expect(await env.db.limits.get(limit.id)).toMatchObject({ deleted: false, deleted_at: expect.any(String), dirty: 1 })

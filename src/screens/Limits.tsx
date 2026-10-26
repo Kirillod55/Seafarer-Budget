@@ -14,6 +14,7 @@ import { MONTHS_NOM } from '../ui/dates.ts'
 import { Picker } from '../ui/Picker.tsx'
 import { ProgressBar } from '../ui/ProgressBar.tsx'
 import { useToast } from '../ui/Toast.tsx'
+import '../ui/ui.css' // .pill ok / warn / over
 import { useFlip } from '../ui/useFlip.ts'
 import { useDayTick } from './Home.tsx'
 import './record.css'
@@ -287,7 +288,12 @@ export function Limits() {
                   <span className="num">
                     {usd(status.spentUsd)} <span className="label">{`из ${usd(limit.monthly_usd)} за ${monthName}`}</span>
                   </span>
-                  <button type="button" className="textbtn danger" onClick={() => void removeLimit(limit)}>
+                  <button
+                    type="button"
+                    className="textbtn danger"
+                    aria-label={`Убрать лимит «${category.name}»`}
+                    onClick={() => void removeLimit(limit)}
+                  >
                     Убрать
                   </button>
                 </div>

@@ -48,6 +48,14 @@
   --acc-5: #FF2D55;
   --on-acc: #FFFFFF;
   --acc-shade: #05060A;
+  /* the white overlays on an account card (prototype accCard): the two sheen circles, the top edge, the icon and
+     button tiles, the badge and the currency pills — the same in both themes, the card is coloured in both */
+  --acc-sheen: rgba(255, 255, 255, .12);
+  --acc-sheen-2: rgba(255, 255, 255, .07);
+  --acc-edge: rgba(255, 255, 255, .25);
+  --acc-tile: rgba(255, 255, 255, .22);
+  --acc-badge: rgba(255, 255, 255, .24);
+  --acc-chip: rgba(255, 255, 255, .2);
   --font: 'Onest Variable', 'Onest', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --ios: cubic-bezier(.32, .72, 0, 1);
   --spring: cubic-bezier(.34, 1.45, .64, 1);

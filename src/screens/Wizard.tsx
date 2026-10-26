@@ -278,7 +278,10 @@ export function Wizard({ onDone, startAt = 'mode' }: { onDone(): void; startAt?:
 
   const finish = (skip: boolean) => {
     const opening = openingOf(rows)
-    if (!opening) return go(2)
+    if (!opening) {
+      go(2)
+      return setError(NOT_A_NUMBER) // after go(), which clears the error
+    }
     const reserveUsd = skip || reserve.trim() === '' ? 0 : parseAmount(reserve)
     if (!Number.isFinite(reserveUsd) || reserveUsd < 0) return setError('Введите запас числом, например 1000')
     void run(async () => {

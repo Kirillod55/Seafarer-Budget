@@ -207,6 +207,8 @@ describe('Счета: operations', () => {
       source: 'app',
       author: 'owner',
       archived: false,
+      rate_usd: 1 / 41.2,
+      amount_usd: 24.27,
       dirty: 1,
     })
     expect((screen.getByLabelText('Сумма') as HTMLInputElement).value).toBe('')

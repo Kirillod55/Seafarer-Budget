@@ -67,11 +67,6 @@
   align-self: center;
 }
 
-/* «Почти всё» (report.css has ok and over) */
-.limits .pill.warn {
-  color: var(--pill-warn);
-}
-
 .limcard .bar.thin {
   margin: 0;
 }
