@@ -209,3 +209,10 @@ for (const [name, data] of TAURI_FILES) {
   writeFileSync(TAURI + name, data)
   console.log('wrote src-tauri/icons/' + name)
 }
+
+// Telegram bot avatar (set by hand in @BotFather → /setuserpic): full-bleed, Telegram crops it to a circle and the
+// anchor stays inside it.
+const BOT = fileURLToPath(new URL('../docs/design/', import.meta.url))
+mkdirSync(BOT, { recursive: true })
+writeFileSync(BOT + 'bot-avatar-640.png', render(640, fullBleed))
+console.log('wrote docs/design/bot-avatar-640.png')
