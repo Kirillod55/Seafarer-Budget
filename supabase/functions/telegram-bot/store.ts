@@ -71,6 +71,24 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
       fail('bot_updates insert', error)
     },
 
+    async saveDraft(updateId, draft) {
+      const { error } = await db.from('bot_updates').update({ draft }).eq('update_id', updateId)
+      if (error) fail('save draft', error)
+    },
+
+    async takeDraft(updateId) {
+      const { data, error } = await db.from('bot_updates').select('draft').eq('update_id', updateId).limit(1)
+      if (error) fail('read draft', error)
+      const row = (data ?? [])[0] as { draft: unknown } | undefined
+      if (!row) return null
+      if (row.draft === null) return 'used'
+      // taken once: only the update that clears a still-present draft gets it (a double tap gets 'used')
+      const { data: taken, error: takeErr } = await db.from('bot_updates').update({ draft: null })
+        .eq('update_id', updateId).not('draft', 'is', null).select('update_id')
+      if (takeErr) fail('take draft', takeErr)
+      return (taken ?? []).length ? row.draft : 'used'
+    },
+
     async settings() {
       const { data, error } = await db
         .from('settings')

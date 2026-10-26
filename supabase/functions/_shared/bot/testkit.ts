@@ -37,6 +37,17 @@ export class MemStore implements BotStore {
   writes: { table: WriteTable; id: string; patch: object }[] = []
   private rev = 100
 
+  drafts = new Map<number, object | null>()
+  async saveDraft(id: number, draft: object) {
+    if (this.seen.has(id)) this.drafts.set(id, JSON.parse(JSON.stringify(draft)))
+  }
+  async takeDraft(id: number) {
+    if (!this.drafts.has(id)) return null
+    const d = this.drafts.get(id)
+    if (d === null) return 'used'
+    this.drafts.set(id, null)
+    return d
+  }
   async seenUpdate(id: number) {
     if (this.seen.has(id)) return true
     this.seen.add(id)

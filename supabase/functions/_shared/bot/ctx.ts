@@ -28,6 +28,8 @@ export interface Ctx {
   ai: GroqPort | null
   /** getWebhookInfo for /ping (index.ts) */
   pingInfo?: () => Promise<PingInfo>
+  /** Telegram update_id of this update (the key of an AI draft in bot_updates) */
+  updateId?: number
   /** the user's message being answered (questions are sent as a reply to it) */
   messageId?: number
 }

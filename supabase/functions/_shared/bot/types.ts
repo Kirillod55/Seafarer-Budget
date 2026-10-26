@@ -25,6 +25,13 @@ export interface BotStore {
    * (set_rev() keeps the deletion otherwise); use `restorePatch`.
    */
   update(table: WriteTable, id: string, patch: object): Promise<void>
+  /**
+   * Keep the AI draft shown under «Записать» with the update that produced it (bot_updates.draft),
+   * so the button saves exactly what was shown (ruling 2026-10-26).
+   */
+  saveDraft(updateId: number, draft: object): Promise<void>
+  /** Take the draft once: the draft, 'used' when already taken, null when there is none (or it was cleaned up). */
+  takeDraft(updateId: number): Promise<unknown>
   /** Transactions in the 24 h undo bin (`deleted_at` set, not deleted for good). */
   binnedTransactions(): Promise<Transaction[]>
 }

@@ -51,13 +51,49 @@ describe('AI after the rules (spec §5)', () => {
 
   it('unsure: «🤖 Понял так» with «Записать», nothing saved until pressed', async () => {
     const s = new MemStore()
-    const g = groq([answer({ unsure: true, reason: 'не уверен в категории' }), answer({ unsure: true })])
+    const g = groq([answer({ unsure: true, reason: 'не уверен в категории' })])
     const q = await withAi(s, g, msg('взял всякое 2 раза по 75'))
     expect(s.txRows).toHaveLength(0)
     expect(textOf(q)).toContain('🤖 Понял так:')
     expect(buttons(q).map((b) => b.text)).toEqual(['Записать', 'Отмена'])
-    await withAi(s, g, cb('ai:ok', { ...asMessage(q[0]), reply_to_message: { message_id: 5, text: 'взял всякое 2 раза по 75' } }))
+    await withAi(s, g, cb(buttons(q)[0].callback_data, { ...asMessage(q[0]), reply_to_message: { message_id: 5, text: 'взял всякое 2 раза по 75' } }))
     expect(s.txRows).toHaveLength(1)
+  })
+
+  // ruling 2026-10-26 (review Important 2): «Записать» saves the shown draft, never asks Groq again
+  it('«Записать» saves exactly the shown records from the stored draft — Groq is not asked again', async () => {
+    const s = new MemStore()
+    const g = groq([
+      answer({ unsure: true, records: [rec({ amount: 75, note: 'всякое' }), rec({ amount: 40, category: 'Продукты', note: 'хлеб', days_ago: 1 })] }),
+      answer({ records: [rec({ amount: 999, note: 'другое' })] }),
+    ])
+    const update = msg('взял всякое 75 и хлеб 40')
+    const q = await withAi(s, g, update)
+    expect(buttons(q)[0].callback_data).toBe(`ai:ok:${update.update_id}`)
+    const r = await withAi(s, g, cb(buttons(q)[0].callback_data, asMessage(q[0])))
+    expect(g.calls).toBe(1)
+    expect(s.txRows.map((t) => [t.amount, t.note, t.category_id, t.date])).toEqual([
+      [75, 'всякое', cat('Транспорт и такси').id, '2026-10-21'],
+      [40, 'хлеб', cat('Продукты').id, '2026-10-20'],
+    ])
+    expect(textOf(r)).toContain('📝 «взял всякое 75 и хлеб 40» — записал')
+    // a second press does not save twice
+    expect(textOf(await withAi(s, g, cb(buttons(q)[0].callback_data, asMessage(q[0]))))).toContain('Уже записано')
+    expect(s.txRows).toHaveLength(2)
+  })
+
+  it('an expired or missing draft: «устарел», nothing saved, Groq not asked', async () => {
+    const s = new MemStore()
+    const g = groq([answer({ unsure: true }), answer({})])
+    const q = await withAi(s, g, msg('взял всякое 2 раза по 75'))
+    const later = new Date(Date.parse('2026-10-21T10:00:00Z') + 25 * 3600_000)
+    const r = await run(s, cb(buttons(q)[0].callback_data, asMessage(q[0])), later, { groq: g })
+    expect(textOf(r)).toContain('Черновик устарел — напиши ещё раз')
+    expect(s.txRows).toHaveLength(0)
+    // a 1.0-style button without a draft id
+    expect(textOf(await withAi(s, g, cb('ai:ok', asMessage(q[0]))))).toContain('Черновик устарел — напиши ещё раз')
+    expect(g.calls).toBe(1)
+    expect(s.txRows).toHaveLength(0)
   })
 
   it('a dropped record (foreign category) also waits for the button', async () => {

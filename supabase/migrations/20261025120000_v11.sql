@@ -229,3 +229,10 @@ begin
   end loop;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- bot_updates.draft: an unsure AI answer waiting for «Записать» (ruling 2026-10-26). The button saves
+-- these validated records exactly as shown and never asks the AI again; the bot takes the draft once
+-- (clears it). Rows go with the bot_updates cleanup after 30 days. Service role only, like the table.
+-- ---------------------------------------------------------------------------
+alter table public.bot_updates add column draft jsonb;

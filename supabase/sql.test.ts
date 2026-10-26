@@ -588,6 +588,22 @@ describe('v1.1 migration on PGlite', { timeout: SLOW }, () => {
     expect(row.note).toBe('stale')
   })
 
+  it('bot_updates.draft keeps an AI draft (jsonb, null by default); clients still cannot read bot_updates', async () => {
+    await db.query('insert into public.bot_updates (update_id) values (4242)')
+    expect((await one(db, 'select draft from public.bot_updates where update_id = 4242')).draft).toBeNull()
+    const draft = { at: '2026-10-21T10:00:00.000Z', text: 'взял всякое 75', items: [{ type: 'tx', amount: 75 }] }
+    await db.query('update public.bot_updates set draft = $1 where update_id = 4242', [JSON.stringify(draft)])
+    expect((await one(db, 'select draft from public.bot_updates where update_id = 4242')).draft).toEqual(draft)
+    // taken once: the conditional clear succeeds only while the draft is there
+    const take = `update public.bot_updates set draft = null where update_id = 4242 and draft is not null returning update_id`
+    expect((await db.query(take)).rows).toHaveLength(1)
+    expect((await db.query(take)).rows).toHaveLength(0)
+    for (const role of ['anon', 'authenticated']) {
+      const res = await one(db, `select has_table_privilege($1, 'public.bot_updates', 'select') as ok`, [role])
+      expect(res.ok, role).toBe(false)
+    }
+  })
+
   it('rls_auto_enable is revoked from client roles when present', async () => {
     const live = await openDb({ withRlsAutoEnable: true })
     for (const role of ['anon', 'authenticated']) {

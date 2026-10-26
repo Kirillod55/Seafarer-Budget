@@ -53,7 +53,7 @@ function toParsed(snap: Snapshot, res: AiResult): TxParsed[] {
  * Ask the AI and act on its answer. null when the AI is off, failed, or found nothing to do
  * (the caller then falls back to the rules or «Не понял»).
  */
-export async function aiAnswer(ctx: Ctx, text: string, confirmed = false): Promise<BotReply[] | null> {
+export async function aiAnswer(ctx: Ctx, text: string): Promise<BotReply[] | null> {
   if (!ctx.ai) return null
   const snap = await load(ctx)
   const res = await askAi(ctx.ai, text, aiLists(ctx, snap), ctx.today)
@@ -72,16 +72,23 @@ export async function aiAnswer(ctx: Ctx, text: string, confirmed = false): Promi
   }
 
   const items = toParsed(snap, res)
-  if ((res.unsure || res.dropped > 0) && !confirmed) {
+  if (res.unsure || res.dropped > 0) {
+    // the shown records wait in bot_updates.draft; «Записать» saves them as they are (ruling 2026-10-26)
+    if (ctx.updateId === undefined) return null
+    const draft: Draft = { at: ctx.now.toISOString(), text, items }
+    await ctx.store.saveDraft(ctx.updateId, draft)
     const lines = items.map((p, i) => {
       const tx = buildTx(ctx, snap, p)
       return tx ? `${i + 1}) ${describeTx(tx, snap, ctx)}${p.note ? ` · ${p.note}` : ''}` : ''
     })
     const why = res.reason ? `\n${res.reason}` : res.dropped ? '\nЧасть не разобрал — проверь' : ''
     return [send(ctx, `📝 «${text}»\n🤖 Понял так:\n${lines.join('\n')}${why}`,
-      [[{ text: 'Записать', callback_data: 'ai:ok' }, { text: 'Отмена', callback_data: 'no' }]], { replyTo: ctx.messageId })]
+      [[{ text: 'Записать', callback_data: `ai:ok:${ctx.updateId}` }, { text: 'Отмена', callback_data: 'no' }]], { replyTo: ctx.messageId })]
   }
+  return saveAi(ctx, snap, items)
+}
 
+async function saveAi(ctx: Ctx, snap: Snapshot, items: TxParsed[]): Promise<BotReply[]> {
   const replies = items.length === 1 ? await saveOne(ctx, items[0], ['🤖 Понял так:']) : await saveMany(ctx, items, ['🤖 Понял так:'])
   // learn: next time the rules know the word without the AI
   for (const p of items) {
@@ -89,6 +96,38 @@ export async function aiAnswer(ctx: Ctx, text: string, confirmed = false): Promi
     if (cat && cat.name.toLowerCase() !== OTHER_EXPENSE && p.note) await learn(ctx, p.note, cat)
   }
   return replies
+}
+
+/** An unsure AI answer kept for «Записать»: the validated records exactly as shown. */
+interface Draft {
+  at: string
+  text: string
+  items: TxParsed[]
+}
+
+export const DRAFT_EXPIRED = 'Черновик устарел — напиши ещё раз'
+const DRAFT_MS = 24 * 60 * 60 * 1000
+
+function isDraft(d: unknown): d is Draft {
+  // deno-lint-ignore no-explicit-any
+  const x = d as any
+  return Boolean(x) && typeof x.at === 'string' && typeof x.text === 'string' && Array.isArray(x.items) && x.items.length > 0 &&
+    // deno-lint-ignore no-explicit-any
+    x.items.every((p: any) => p?.type === 'tx' && typeof p.amount === 'number' && p.amount > 0 && typeof p.currency === 'string' &&
+      typeof p.date === 'string' && (p.kind === 'expense' || p.kind === 'income'))
+}
+
+/**
+ * «Записать» under an unsure AI answer: saves the stored draft once, never asks the AI again.
+ * 'used' when it was already saved; null when there is no draft or it is older than 24 h.
+ */
+export async function confirmDraft(ctx: Ctx, updateId: number): Promise<{ text: string; replies: BotReply[] } | 'used' | null> {
+  if (!Number.isSafeInteger(updateId) || updateId <= 0) return null
+  const d = await ctx.store.takeDraft(updateId)
+  if (d === 'used') return 'used'
+  if (!isDraft(d) || ctx.now.getTime() - Date.parse(d.at) > DRAFT_MS) return null
+  const snap = await load(ctx)
+  return { text: d.text, replies: await saveAi(ctx, snap, d.items) }
 }
 
 /** Voice: length check, transcription, then the usual handling; the first reply starts with «🎤 Услышал: «…»». */

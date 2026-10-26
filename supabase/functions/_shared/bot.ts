@@ -8,7 +8,7 @@ import { categoryCallback } from './bot/categories.ts'
 import { clearCallback } from './bot/clear.ts'
 import { send } from './bot/ctx.ts'
 import type { Ctx, Keyboard } from './bot/ctx.ts'
-import { AI_FAILED, aiAnswer, voice } from './bot/ai.ts'
+import { confirmDraft, DRAFT_EXPIRED, voice } from './bot/ai.ts'
 import { fallback, route, runCommand } from './bot/intent.ts'
 import type { Command } from './bot/intent.ts'
 import type { GroqPort } from './groq.ts'
@@ -77,6 +77,7 @@ export async function handleUpdate(
   const ctx: Ctx = {
     chatId: chatId as number, author, ownerChatId: map.owner, partnerChatId: map.partner, settings, store, now,
     today: localDate(now, settings.timezone), uuid, groq: Boolean(opts.groq), ai: opts.groq ?? null, pingInfo: opts.pingInfo, messageId: update?.message?.message_id,
+    updateId: typeof update.update_id === 'number' ? update.update_id : undefined,
   }
   if (isCallback) return handleCallback(ctx, update.callback_query)
   if (typeof text !== 'string') return voice(ctx, media, opts.voiceFile, (heard) => handleText(ctx, heard))
@@ -111,11 +112,12 @@ async function handleCallback(ctx: Ctx, q: Query): Promise<BotReply[]> {
     const r = await h(ctx, q, data)
     if (r) return r
   }
-  if (data === 'ai:ok') {
-    const source = sourceText(q)
-    const r = source ? await aiAnswer({ ...ctx, messageId: undefined }, source, true) : null
-    if (!r) return [answer(q), edit(ctx, q, AI_FAILED)]
-    return [answer(q, 'Записал'), edit(ctx, q, `📝 «${source}» — записал`), ...r]
+  if (data === 'ai:ok' || data.startsWith('ai:ok:')) {
+    // the stored draft, exactly as shown; Groq is never asked again (ruling 2026-10-26)
+    const r = await confirmDraft({ ...ctx, messageId: undefined }, Number(data.slice(6) || NaN))
+    if (r === 'used') return [answer(q, 'Уже записано')]
+    if (!r) return [answer(q), edit(ctx, q, DRAFT_EXPIRED)]
+    return [answer(q, 'Записал'), edit(ctx, q, `📝 «${r.text}» — записал`), ...r.replies]
   }
   if (data.startsWith('cmd:')) return [answer(q), ...(await runCommand(ctx, data.slice(4) as Command))]
   if (data.startsWith('se:')) return [answer(q, 'Ответь на сообщение с номером: «2 90», «2 вчера», «2 наличные»')]
