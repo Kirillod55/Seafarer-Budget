@@ -89,16 +89,15 @@ export function Sidebar({ current, onOpen }: { current: SideItem; /** `part`: th
             <span className="lbl">{who}</span>
           </button>
         )}
-        <div className="keys">
-          <kbd>N</kbd> новая запись
-          <br />
-          <kbd>/</kbd> быстрый ввод
-          <br />
-          <kbd>↑</kbd>
-          <kbd>↓</kbd> <kbd>Enter</kbd> по списку
-          <br />
-          <kbd>Delete</kbd> удалить · <kbd>Esc</kbd> закрыть
-        </div>
+        {/* one shortcut per line: «N — новая запись» (Kirill 2026-10-26) */}
+        <ul className="keys">
+          <li><kbd>N</kbd> — новая запись</li>
+          <li><kbd>/</kbd> — быстрый ввод</li>
+          <li><kbd>↑</kbd> <kbd>↓</kbd> — по списку</li>
+          <li><kbd>Enter</kbd> — открыть</li>
+          <li><kbd>Delete</kbd> — удалить</li>
+          <li><kbd>Esc</kbd> — закрыть</li>
+        </ul>
       </div>
     </aside>
   )

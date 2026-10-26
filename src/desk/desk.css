@@ -211,7 +211,14 @@ html.desk .side {
 }
 
 .side .keys {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   line-height: 1.9;
+}
+
+.side .keys li {
+  white-space: nowrap;
 }
 
 kbd {
