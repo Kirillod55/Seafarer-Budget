@@ -56,7 +56,8 @@ export function activeItem(route: Route): SideItem {
   }
 }
 
-export function Sidebar({ current, onOpen }: { current: SideItem; onOpen(item: SideItem): void }) {
+export function Sidebar({ current, onOpen }: { current: SideItem; /** `part`: the settings group to scroll to (the partner status opens «Второй человек») */
+  onOpen(item: SideItem, part?: 'partner'): void }) {
   const { db } = useApp()
   const settings = useLiveQuery(() => db.settings.filter(alive).first(), [db])
 
@@ -83,7 +84,7 @@ export function Sidebar({ current, onOpen }: { current: SideItem; onOpen(item: S
       {item(SETTINGS)}
       <div className="foot">
         {settings && (
-          <button type="button" className={`who2${linked ? '' : ' off'}`} title={who} aria-label={who} onClick={() => onOpen('settings')}>
+          <button type="button" className={`who2${linked ? '' : ' off'}`} title={who} aria-label={who} onClick={() => onOpen('settings', 'partner')}>
             <span className="dotok" aria-hidden="true" />
             <span className="lbl">{who}</span>
           </button>

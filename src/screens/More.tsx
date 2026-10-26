@@ -7,6 +7,7 @@ import { useDesk } from '../desk/layout.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { useNav } from '../nav/Navigator.tsx'
 import { Archive, ChevronRight, CreditCard, Gauge, Tag, type LucideIcon } from '../ui/icons.ts'
+import { AboutSection } from './more/AboutSection.tsx'
 import { AppearanceSection } from './more/AppearanceSection.tsx'
 import { BudgetSection } from './more/BudgetSection.tsx'
 import { CurrenciesSection } from './more/CurrenciesSection.tsx'
@@ -110,6 +111,7 @@ export function More({ onSignOut }: { onSignOut(): void }) {
         <ReconcileSection settings={settings} accounts={accounts} txs={txs} today={today} />
         <BackupSection today={today} partnerName={settings.partner_name} />
         <WipeSection settings={settings} today={today} />
+        {desk && <AboutSection />}
 
         <button type="button" className="btn-gray danger msignout" onClick={onSignOut}>
           Выйти
