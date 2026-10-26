@@ -8,7 +8,7 @@ import { toCsv } from './csv.ts'
 import { addDays, localDate } from './dates.ts'
 import { money } from './format.ts'
 import { round2, usdRate } from './fx.ts'
-import { purgeDue } from './wipe.ts'
+import { purgeDue, RESTORE_MS } from './wipe.ts'
 import { SOFT_TABLES } from './types.ts'
 import type { Account, Category, FxRate, Goal, GoalMove, Settings, SoftTable, Transaction } from './types.ts'
 
@@ -32,7 +32,8 @@ export interface KeepaliveDeps {
   rates(): Promise<FxRate[]>
   /** rows of a soft table that sit in the bin (deleted_at set, deleted = false) */
   binned(table: SoftTable): Promise<{ id: string; deleted: boolean; deleted_at: string | null; deleted_batch: string | null }[]>
-  markDeleted(table: SoftTable, ids: string[]): Promise<void>
+  /** deleted = true for these bin rows, guarded at write time: only rows still binned with deleted_at < olderThan */
+  markDeleted(table: SoftTable, ids: string[], olderThan: string): Promise<void>
   fetchNbu(date: string, currencies: string[]): Promise<FxRate[]>
   writeRates(rows: FxRate[]): Promise<void>
   patchTx(id: string, patch: Partial<Transaction>): Promise<void>
@@ -192,7 +193,7 @@ export async function runKeepalive(deps: KeepaliveDeps, o: KeepaliveOptions): Pr
   await job('purge', async () => {
     for (const t of SOFT_TABLES) {
       const ids = purgeDue(await deps.binned(t), nowMs)
-      if (ids.length) await deps.markDeleted(t, ids)
+      if (ids.length) await deps.markDeleted(t, ids, new Date(nowMs - RESTORE_MS).toISOString())
     }
   })
   await job('bot_updates', () => deps.deleteBotUpdatesBefore(new Date(nowMs - BOT_UPDATES_DAYS * DAY_MS).toISOString()))

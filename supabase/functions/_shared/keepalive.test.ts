@@ -39,7 +39,11 @@ class Fake implements KeepaliveDeps {
   async accounts(): Promise<Account[]> { return [{ id: 'a1', deleted: false, name: 'Основной', aliases: [], is_default: true, archived: false, sort: 0 }] }
   async rates() { return this.fx }
   async binned(t: SoftTable) { return this.bin[t] ?? [] }
-  async markDeleted(t: SoftTable, ids: string[]) { this.purged[t] = ids }
+  purgeCutoff = ''
+  async markDeleted(t: SoftTable, ids: string[], olderThan: string) {
+    this.purged[t] = ids
+    this.purgeCutoff = olderThan
+  }
   async fetchNbu(date: string) {
     this.nbuCalls.push(date)
     return [{ date, currency: 'USD', uah_per_unit: 40 }, { date, currency: 'UAH', uah_per_unit: 1 }, { date, currency: 'EUR', uah_per_unit: 44 }]
@@ -120,6 +124,8 @@ describe('runKeepalive', () => {
     expect(f.patched.p1).toEqual({ rate_usd: 1.1, amount_usd: 11, rate_pending: false })
     expect(f.patched.p2).toEqual({ rate_usd: 1.1, amount_usd: 22, rate_pending: false })
     expect(f.purged.transactions).toEqual(['old'])
+    // the write itself is guarded: only rows still binned before the cutoff (a restore in between wins)
+    expect(f.purgeCutoff).toBe('2026-10-20T07:17:00.000Z')
     expect(f.updatesBefore).toBe('2026-09-21T07:17:00.000Z')
     expect(r.done).toEqual(expect.arrayContaining(['keepalive', 'webhook', 'rates', 'purge', 'bot_updates']))
   })

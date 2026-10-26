@@ -75,9 +75,11 @@ const deps: KeepaliveDeps = {
     return ((data ?? []) as FxRate[]).map((r) => ({ ...r, uah_per_unit: Number(r.uah_per_unit) }))
   },
   binned: (t: SoftTable) => rows(t, false, true),
-  async markDeleted(t, ids) {
+  async markDeleted(t, ids, olderThan) {
     for (let i = 0; i < ids.length; i += 200) {
+      // guarded at write time: a row restored (deleted_at = null) or re-binned since the read is left alone
       const { error } = await db.from(t).update({ deleted: true }).in('id', ids.slice(i, i + 200)).eq('user_id', OWNER_USER_ID)
+        .not('deleted_at', 'is', null).lt('deleted_at', olderThan)
       check(`purge ${t}`, error)
     }
   },
