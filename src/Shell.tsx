@@ -1,3 +1,4 @@
+import { DeskKeys } from './desk/DeskKeys.tsx'
 import { Sidebar, activeItem, routeOf } from './desk/Sidebar.tsx'
 import { Navigator, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
@@ -57,7 +58,12 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
       <Navigator
         renderScreen={renderScreen}
         onNavigate={closeRecord}
-        sidebar={(route, open) => <Sidebar current={activeItem(route)} onOpen={(item) => open(routeOf(item))} />}
+        sidebar={(route, open) => (
+          <>
+            <Sidebar current={activeItem(route)} onOpen={(item) => open(routeOf(item))} />
+            <DeskKeys />
+          </>
+        )}
       />
       {/* the one toast host: screens call useToast() */}
       <ToastHost />
