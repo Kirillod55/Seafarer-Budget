@@ -328,7 +328,9 @@ describe('More: «Второй человек в боте»', () => {
     await seed()
     await serverSettings({ partner_name: 'Маша' })
     renderMore()
-    const name = await screen.findByLabelText('Имя')
+    const name = (await screen.findByLabelText('Имя')) as HTMLInputElement
+    // the stored name first: otherwise its late arrival can overwrite the emptied field
+    await waitFor(() => expect(name.value).toBe('Маша'))
     fireEvent.change(name, { target: { value: '  ' } })
     fireEvent.keyDown(name, { key: 'Enter' })
     await waitFor(async () => expect((await settingsRow()).partner_name).toBeNull())

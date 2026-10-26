@@ -12,6 +12,7 @@ import { isTauri } from './runtime.ts'
 import { Shell } from './Shell.tsx'
 import { applyTextScale, applyTheme, loadTheme, watchSystemTheme } from './ui/theme.ts'
 import './styles.css'
+import './desk/desk.css'
 
 // The desktop (Tauri) build ships its own assets; a service worker there would only get in the way.
 if (!isTauri()) {
