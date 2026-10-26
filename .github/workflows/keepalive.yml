@@ -55,11 +55,17 @@ jobs:
             TEXT='⚠️ База не отвечает — зайди в Supabase и нажми Restore: https://supabase.com/dashboard/project/qvhernqypfbototyisfr'
           fi
           # Telegram's answer is checked: a wrong token or chat id fails this step (GitHub e-mails), never silently
+          # prints Telegram's own reason on failure (e.g. «Unauthorized» = wrong token, «chat not found» = wrong chat id);
+          # the reason never contains the token
           send() {
-            curl --silent --max-time 30 "https://api.telegram.org/bot${TOKEN}/sendMessage" \
-              --data-urlencode "chat_id=$1" --data-urlencode "text=${TEXT}" | grep -q '"ok":true'
+            ANSWER=$(curl --silent --max-time 30 "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=$1" --data-urlencode "text=${TEXT}")
+            echo "$ANSWER" | grep -q '"ok":true' && return 0
+            echo "  Telegram: $(echo "$ANSWER" | grep -o '"description":"[^"]*"' || echo 'no answer')"
+            return 1
           }
           [ -n "$TOKEN" ] || { echo 'TELEGRAM_BOT_TOKEN is empty'; exit 1; }
+          echo "token: ${#TOKEN} chars, has «:» $(case "$TOKEN" in *:*) echo yes;; *) echo no;; esac); owner id: ${#OWNER} chars; partner id: ${#PARTNER} chars"
           FAIL=0
           if send "$OWNER"; then echo 'Kirill: delivered'; else echo 'Kirill: NOT delivered - check TELEGRAM_BOT_TOKEN and OWNER_CHAT_ID'; FAIL=1; fi
           if [ -n "$PARTNER" ]; then
