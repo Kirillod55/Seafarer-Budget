@@ -6,6 +6,12 @@ export interface ToastAction {
   label: string
   /** May return a promise (e.g. repo.restore): a rejection shows «Не получилось — попробуй ещё раз». */
   run(): void | Promise<unknown>
+  /**
+   * Runs when the toast goes without its action: the 6 s ran out or another toast replaced it. For an undo that
+   * cannot be taken back once it reaches the server (an account's `deleted = true` is final): the deletion is
+   * written only here, once «Отменить» is no longer offered.
+   */
+  expire?(): void
 }
 
 type Show = (msg: string, action?: ToastAction) => void
@@ -40,9 +46,20 @@ export function ToastHost() {
   const deadline = useRef(0)
   const ids = useRef(0)
 
+  // the action of the toast on screen: its expire() runs once, unless «Отменить» was pressed
+  const current = useRef<ToastAction | undefined>(undefined)
+  const expireCurrent = () => {
+    const a = current.current
+    current.current = undefined
+    a?.expire?.()
+  }
+
   const hideIn = (ms: number) => {
     clearTimeout(timer.current)
-    timer.current = setTimeout(() => setToast(null), ms)
+    timer.current = setTimeout(() => {
+      setToast(null)
+      expireCurrent()
+    }, ms)
   }
   const hold = () => clearTimeout(timer.current)
   // let go: whatever is left of the 6 s, but at least 2.5 s more
@@ -50,6 +67,8 @@ export function ToastHost() {
 
   useEffect(() => {
     const mine: Show = (msg, action) => {
+      expireCurrent()
+      current.current = action
       setToast({ id: ++ids.current, msg, action })
       deadline.current = Date.now() + SHOW_MS
       hideIn(SHOW_MS)
@@ -63,6 +82,7 @@ export function ToastHost() {
 
   const act = (action: ToastAction) => {
     clearTimeout(timer.current)
+    current.current = undefined
     setToast(null)
     // «Отменить» usually restores from the bin (a promise): if that fails, say so instead of failing silently
     const failed = () => show(FAILED)

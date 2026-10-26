@@ -11,7 +11,7 @@ const FAILED = 'Не получилось — попробуй ещё раз'
 /** A note starts with a capital letter, old records too (spec §6 «Заметка траты с большой буквы»). */
 export const capitalize = (s: string): string => (s ? s.charAt(0).toLocaleUpperCase('ru') + s.slice(1) : s)
 
-const KIND_TITLE: Record<Transaction['kind'], string> = {
+export const KIND_TITLE: Record<Transaction['kind'], string> = {
   expense: 'Без категории',
   income: 'Без категории',
   transfer: 'Перевод',
@@ -41,7 +41,7 @@ export function bareCategory(name: string): Category {
  * The amount column: USD first (spec: expenses without «−», income green with «+»), the original currency below.
  * While the rate is still pending the USD figure is not known yet: the original amount comes first.
  */
-function amounts(tx: Transaction): { main: string; sub: string | null; inc: boolean } {
+export function amounts(tx: Transaction): { main: string; sub: string | null; inc: boolean } {
   if (tx.kind === 'transfer' || tx.kind === 'exchange') {
     const sub = tx.kind === 'exchange' && tx.to_amount !== null && tx.to_currency ? money(tx.to_amount, tx.to_currency) : null
     return { main: money(tx.amount, tx.currency), sub, inc: false }

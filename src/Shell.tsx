@@ -1,6 +1,7 @@
 import { NavBar } from './nav/NavBar.tsx'
 import { Navigator, type Route } from './nav/Navigator.tsx'
 import { Accounts } from './screens/Accounts.tsx'
+import { Archive } from './screens/Archive.tsx'
 import { Calendar } from './screens/Calendar.tsx'
 import { Categories } from './screens/Categories.tsx'
 import { Goals } from './screens/Goals.tsx'
@@ -15,9 +16,8 @@ import { ToastHost } from './ui/Toast.tsx'
 
 /*
  * The signed-in app: the four-tab navigator with the screens in it. Stage 2 replaces the 1.0 screens one by one;
- * until then they sit inside the new navigation («Архив» is a placeholder until Task 12). The record sheet is
- * one for the whole app: RecordSheetHost around the navigator,
- * screens open it with useRecordSheet().openRecord(id?).
+ * until then they sit inside the new navigation. The record sheet is one for the whole app: RecordSheetHost around
+ * the navigator, screens open it with useRecordSheet().openRecord(id?).
  */
 export function Shell({ onSignOut }: { onSignOut(): void }) {
   return (
@@ -60,7 +60,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
       case 'cats':
         return <Categories />
       case 'archive':
-        return <Soon back="Ещё" title="Архив" />
+        return <Archive />
       case 'calendar':
         return <Calendar />
       case 'records':
@@ -77,12 +77,3 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
   )
 }
 
-/** A screen that a later task builds. */
-function Soon({ back, title }: { back: string; title: string }) {
-  return (
-    <>
-      <NavBar back={{ label: back }} title={title} />
-      <p className="muted">Скоро</p>
-    </>
-  )
-}

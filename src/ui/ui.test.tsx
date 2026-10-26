@@ -451,6 +451,41 @@ describe('Toast', () => {
     expect(toastEl()).toBeNull()
   })
 
+  it('expire() runs when the toast goes without its action (time out or replaced), not after «Отменить»', () => {
+    vi.useFakeTimers()
+    const expire = vi.fn()
+    function Go() {
+      const toast = useToast()
+      return (
+        <button type="button" onClick={() => toast('Счёт удалён', { label: 'Отменить', run() {}, expire })}>
+          go
+        </button>
+      )
+    }
+    render(
+      <>
+        <Go />
+        <Trigger />
+        <ToastHost />
+      </>,
+    )
+    const [go, other] = screen.getAllByRole('button', { name: 'go' })
+    fireEvent.click(go)
+    act(() => void vi.advanceTimersByTime(5900))
+    expect(expire).not.toHaveBeenCalled()
+    act(() => void vi.advanceTimersByTime(200))
+    expect(expire).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(go)
+    fireEvent.click(other) // replaced by another toast
+    expect(expire).toHaveBeenCalledTimes(2)
+
+    fireEvent.click(go)
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить' }))
+    act(() => void vi.advanceTimersByTime(20_000))
+    expect(expire).toHaveBeenCalledTimes(2)
+  })
+
   it('a new toast replaces the old one and restarts the 6 s', () => {
     setup()
     act(() => void vi.advanceTimersByTime(4000))
