@@ -30,6 +30,7 @@ export {
   Calendar,
   ChartPie,
   Check,
+  Copy,
   ChevronDown,
   ChevronLeft,
   ChevronRight,

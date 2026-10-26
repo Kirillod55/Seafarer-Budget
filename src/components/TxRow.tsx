@@ -1,8 +1,11 @@
+import { alive } from '@shared/alive.ts'
+import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import type { Account, Category, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
 import { bareCategory, partnerLabel } from '../lib/records.ts'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
+import { Copy } from '../ui/icons.ts'
 import { PartnerBadge } from '../ui/PartnerBadge.tsx'
 import { SwipeRow, type SwipeAction } from '../ui/SwipeRow.tsx'
 import { useToast } from '../ui/Toast.tsx'
@@ -64,7 +67,7 @@ export function TxRow({
   onOpen(id: string): void
   className?: string
 }) {
-  const { repo } = useApp()
+  const { repo, db, now } = useApp()
   const toast = useToast()
   const hers = tx.author === 'partner'
   const name = partnerLabel(partnerName)
@@ -92,6 +95,32 @@ export function TxRow({
     }
   }
 
+  /** PC right-click «Дублировать на сегодня»: the same record dated today, with «Отменить» (spec §11). */
+  const duplicate = async () => {
+    try {
+      const settings = await db.settings.filter(alive).first()
+      const copy = await repo.addTransaction({
+        kind: tx.kind,
+        amount: tx.amount,
+        currency: tx.currency,
+        account_id: tx.account_id,
+        to_account_id: tx.to_account_id,
+        to_amount: tx.to_amount,
+        to_currency: tx.to_currency,
+        category_id: tx.category_id,
+        date: localDate(now(), settings?.timezone ?? 'UTC'),
+        note: tx.note,
+        source: 'app',
+      })
+      toast('Копия на сегодня', {
+        label: 'Отменить',
+        run: () => repo.remove('transactions', copy.id),
+      })
+    } catch {
+      toast(FAILED)
+    }
+  }
+
   const actions: SwipeAction[] = [
     { key: 'edit', label: 'Изменить', run: () => onOpen(tx.id) },
     { key: 'archive', label: 'В архив', run: () => void archive() },
@@ -99,7 +128,12 @@ export function TxRow({
   ]
 
   return (
-    <SwipeRow actions={actions} onOpen={() => onOpen(tx.id)} className={className}>
+    <SwipeRow
+      actions={actions}
+      onOpen={() => onOpen(tx.id)}
+      className={className}
+      menu={[{ label: 'Дублировать на сегодня', icon: Copy, run: () => void duplicate() }]}
+    >
       <span className="ic-wrap" aria-hidden="true">
         <CategoryIcon category={category ?? bareCategory(title)} />
         {hers && <PartnerBadge name={name} />}

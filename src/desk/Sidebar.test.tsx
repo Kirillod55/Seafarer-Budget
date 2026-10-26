@@ -1,20 +1,9 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Settings } from '@shared/types.ts'
-import { Shell } from '../Shell.tsx'
-import { makeEnv, renderWithApp } from '../test-utils.tsx'
-import { applyLayout, type Layout } from './layout.ts'
+import { applyLayout } from './layout.ts'
+import { deskShell } from './test-desk.tsx'
 import { activeItem } from './Sidebar.tsx'
-
-export async function deskShell(layout: Layout = 'full', settings: Partial<Settings> = {}) {
-  const env = makeEnv()
-  await env.repo.initDefaults('single', [{ currency: 'USD', amount: 100 }])
-  const s = (await env.db.settings.toCollection().first())!
-  if (Object.keys(settings).length) await env.repo.put<Settings>('settings', { id: s.id, ...settings })
-  act(() => applyLayout(layout))
-  renderWithApp(<Shell onSignOut={vi.fn()} />, env)
-  return env
-}
 
 const menu = () => screen.getByRole('complementary', { name: 'Разделы' })
 const item = (name: string) => within(menu()).getByRole('button', { name })
@@ -61,7 +50,7 @@ describe('PC menu (spec §11 «Меню слева»)', () => {
   })
 
   it('partner status: red «не подключена к боту» until she wrote /start, green after', async () => {
-    const env = await deskShell('full', { partner_name: 'Маша' })
+    const { env } = await deskShell('full', { partner_name: 'Маша' })
     const off = await within(menu()).findByRole('button', { name: 'Маша не подключена к боту' })
     expect(off.className).toContain('off')
     const s = (await env.db.settings.toCollection().first())!

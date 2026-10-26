@@ -8,6 +8,9 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
+import { ContextMenu, type MenuItem } from '../desk/ContextMenu.tsx'
+import { useDesk } from '../desk/layout.ts'
+import { Archive, Pencil, Trash2, type LucideIcon } from './icons.ts'
 import { createTracker, prefersReducedMotion, project, rubber, spring } from './motion.ts'
 import './ui.css'
 
@@ -16,6 +19,8 @@ export interface SwipeAction {
   label: string
   run(): void
 }
+
+const ICON: Record<SwipeAction['key'], LucideIcon> = { edit: Pencil, archive: Archive, delete: Trash2 }
 
 /*
  * A list row that swipes left to show its actions (spec §6 «Второй проход»: «Строки трат и категорий»; prototype
@@ -76,8 +81,11 @@ export function SwipeRow({
   onOpen,
   children,
   className = '',
+  menu = [],
 }: {
   actions: SwipeAction[]
+  /** PC right-click menu: more items, put before «Удалить» (the record's «Дублировать на сегодня») */
+  menu?: MenuItem[]
   onOpen(): void
   children: ReactNode
   /** extra classes on the root (e.g. `row-in` for a row that has just appeared) */
@@ -89,6 +97,9 @@ export function SwipeRow({
   const [revealed, setRevealed] = useState(false)
   const [full, setFull] = useState(false)
   const [collapsing, setCollapsing] = useState(false)
+  // PC (spec §11 «Мышь и клавиатура»): no swiping; buttons on hover in place of the amount, a right-click menu
+  const desk = useDesk()
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null)
 
   const n = actions.length
   const open = n * (n > 2 ? 74 : 84)
@@ -238,7 +249,7 @@ export function SwipeRow({
 
   const down = (e: ReactPointerEvent) => {
     // a second finger is ignored; the same pointer going down again (a mouse is always one id) starts afresh
-    if (g.leaving || (g.pid !== null && g.pid !== e.pointerId) || (e.pointerType === 'mouse' && e.button !== 0)) return
+    if (desk || g.leaving || (g.pid !== null && g.pid !== e.pointerId) || (e.pointerType === 'mouse' && e.button !== 0)) return
     g.pid = e.pointerId
     g.x0 = e.clientX
     g.y0 = e.clientY
@@ -360,7 +371,21 @@ export function SwipeRow({
   const cls = ['swipe', revealed && 'swiping', full && 'full', collapsing && 'collapse', className].filter(Boolean).join(' ')
 
   return (
-    <div ref={rootRef} className={cls} data-swipe-row="" onKeyDown={keyDown}>
+    <div
+      ref={rootRef}
+      className={cls}
+      data-swipe-row=""
+      onKeyDown={keyDown}
+      onContextMenu={
+        desk
+          ? (e) => {
+              if (g.leaving) return
+              e.preventDefault()
+              setCtx({ x: e.clientX, y: e.clientY })
+            }
+          : undefined
+      }
+    >
       <div ref={actsRef} className={`acts n${n}`} aria-hidden={!revealed} inert={!revealed}>
         {actions.map((a) => (
           <button key={a.key} type="button" className={`act ${a.key}`} tabIndex={revealed ? 0 : -1} onClick={() => run(a)}>
@@ -383,6 +408,30 @@ export function SwipeRow({
       >
         {children}
       </button>
+      {desk && (
+        <div className="hov">
+          {actions.map((a) => {
+            const Icon = ICON[a.key]
+            return (
+              <button key={a.key} type="button" className={`hb${a.key === 'delete' ? ' del' : ''}`} title={a.label} aria-label={a.label} onClick={() => run(a)}>
+                <Icon aria-hidden="true" strokeWidth={2} />
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {ctx && (
+        <ContextMenu
+          x={ctx.x}
+          y={ctx.y}
+          onClose={() => setCtx(null)}
+          items={[
+            ...actions.filter((a) => a.key !== 'delete').map((a) => ({ label: a.label, icon: ICON[a.key], run: () => run(a) })),
+            ...menu,
+            ...actions.filter((a) => a.key === 'delete').map((a) => ({ label: a.label, icon: ICON[a.key], danger: true, run: () => run(a) })),
+          ]}
+        />
+      )}
     </div>
   )
 }
