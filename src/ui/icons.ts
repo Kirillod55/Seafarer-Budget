@@ -52,6 +52,7 @@ export {
   Upload,
   UserRound,
   Download,
+  Wallet,
   X,
 } from 'lucide-react'
 

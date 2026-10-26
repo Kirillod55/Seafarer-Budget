@@ -1,0 +1,319 @@
+/*
+ * «Счета» (prototype v60 accounts()/accCard(): .accsum, .acards, .acard, .acard-top/-ic/-badge/-bal/-cur/-more,
+ * .acard.add, .accops, .xrate; spec §11 «Раздел «Счета» — переделан полностью», phone part). Cards carry their colour
+ * as --c (tokens --acc-0…5) and white text (--on-acc) on their own gradient, in both themes. Forms reuse the record
+ * sheet's .rec .fld/.inp/.grid2 and the goals' .gcard/.gacts/.btn-acc/.btn-gray/.gerr.
+ * Phone layout: cards swipe sideways with snapping; stage 3 may grid them via html classes.
+ */
+
+.accs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.accs .label {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.accs .navbtn.strong {
+  gap: 4px;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.accs .navbtn.strong svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- summary ---------- */
+
+.accsum {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.accsum > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.accsum b {
+  overflow: hidden;
+  font-size: clamp(15px, 4.6vw, 19px);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------- cards ---------- */
+
+.acards {
+  display: flex;
+  gap: 12px;
+  margin: 0 -16px -10px;
+  padding: 2px 16px 20px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 16px;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.acards::-webkit-scrollbar {
+  display: none;
+}
+
+.acard {
+  position: relative;
+  display: flex;
+  flex: 0 0 80%;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 156px;
+  margin: 0;
+  padding: 16px;
+  overflow: hidden;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--c) 0%, color-mix(in srgb, var(--c) 62%, var(--acc-shade)) 100%);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--c) 28%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: var(--on-acc);
+  scroll-snap-align: start;
+}
+
+/* the only account fills the row */
+.acard:only-child {
+  flex-basis: 100%;
+}
+
+.acard::before,
+.acard::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.acard::before {
+  top: -56px;
+  right: -48px;
+  width: 180px;
+  height: 180px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.acard::after {
+  right: 30px;
+  bottom: -70px;
+  width: 140px;
+  height: 140px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.acard-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 0.941rem; /* 16 */
+  font-weight: 600;
+}
+
+.acard-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.acard-ic {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.acard-ic svg {
+  width: 18px;
+  height: 18px;
+}
+
+.acard-badge {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 0.647rem; /* 11 */
+  font-weight: 600;
+}
+
+.acard-bal {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  overflow: hidden;
+  font-size: 1.765rem; /* 30 */
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.acard-cur {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.765rem; /* 13 */
+}
+
+/* room for the buttons in the corner */
+.acard-cur.one {
+  padding-right: 48px;
+}
+
+.acard-cur.two {
+  padding-right: 96px;
+}
+
+.acard-cur span {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.acard-acts {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  display: flex;
+}
+
+/* 32 px tile, 44 px to touch */
+.acard-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--on-acc);
+  cursor: pointer;
+}
+
+.acard-btn svg {
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.22);
+  transition: transform 0.2s var(--ios);
+}
+
+.acard-btn:active svg {
+  transform: scale(0.92);
+}
+
+.acard.add {
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--line);
+  background: none;
+  box-shadow: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.acard.add::before,
+.acard.add::after {
+  display: none;
+}
+
+.acard.add svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* ---------- «Операции» ---------- */
+
+.accops > .seg {
+  margin-top: 2px;
+}
+
+.opform {
+  gap: 14px;
+}
+
+/* «Откуда / Куда»: two equal columns */
+.opform .grid2.even {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.opform > .btn-acc {
+  align-self: stretch;
+}
+
+.ophint {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.xrate {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.824rem; /* 14 */
+}
+
+.xrate b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.accfoot {
+  margin: 0;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acard-btn svg {
+    transition: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .accsum > div {
+    border-color: var(--text);
+  }
+
+  .accs .label,
+  .xrate,
+  .ophint {
+    color: var(--text);
+  }
+}

@@ -6,7 +6,6 @@ import { Calendar } from './screens/Calendar.tsx'
 import { Categories } from './screens/Categories.tsx'
 import { Goals } from './screens/Goals.tsx'
 import { Home } from './screens/Home.tsx'
-import { LegacyAccounts } from './screens/LegacyManage.tsx'
 import { Limits } from './screens/Limits.tsx'
 import { More } from './screens/More.tsx'
 import { RecordSheetHost, useRecordSheet } from './screens/RecordSheet.tsx'
@@ -48,15 +47,7 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
           </>
         )
       case 'accounts':
-        return (
-          <>
-            <NavBar back={{ label: 'Ещё' }} title="Счета" />
-            <div className="legacy-titled">
-              <Accounts />
-              <LegacyAccounts />
-            </div>
-          </>
-        )
+        return <Accounts />
       case 'cats':
         return <Categories />
       case 'archive':
