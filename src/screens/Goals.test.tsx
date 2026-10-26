@@ -101,6 +101,24 @@ describe('Goals', () => {
     await waitFor(() => expect(screen.queryByText('Новая цель')).toBeNull())
   })
 
+  it('the deadline is tomorrow at the earliest: the picker starts there, a past or today date is not saved', async () => {
+    await seed()
+    renderGoals()
+    fireEvent.click(await screen.findByRole('button', { name: 'Добавить' }))
+    const deadline = (await screen.findByLabelText('Срок')) as HTMLInputElement
+    expect(deadline.min).toBe('2026-10-22') // TEST_TODAY + 1
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Машина' } })
+    fireEvent.change(screen.getByLabelText('Цель, $'), { target: { value: '100' } })
+    fireEvent.change(deadline, { target: { value: '2026-10-21' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать' }))
+    expect(await screen.findByText('Срок — не раньше завтра')).toBeTruthy()
+    expect(await env.db.goals.count()).toBe(0)
+
+    fireEvent.change(deadline, { target: { value: '2026-10-22' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Создать' }))
+    await waitFor(async () => expect(await env.db.goals.toArray()).toMatchObject([{ name: 'Машина', deadline: '2026-10-22' }]))
+  })
+
   it('shows «Целей пока нет» without goals', async () => {
     await seed()
     renderGoals()

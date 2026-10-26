@@ -2,7 +2,7 @@ import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { goalProgress } from '@shared/calc.ts'
-import { localDate } from '@shared/dates.ts'
+import { addDays, localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import type { Goal, GoalMove, Settings } from '@shared/types.ts'
@@ -41,14 +41,18 @@ const enterSubmits = (run: () => void) => (e: KeyboardEvent) => {
   }
 }
 
-/** «Новая цель» (prototype goals(), S.goalNew): name, target in $, an optional deadline; «Создать» / «Отмена». */
-function NewGoalCard({ onClose }: { onClose(): void }) {
+/**
+ * «Новая цель» (prototype goals(), S.goalNew): name, target in $, an optional deadline (tomorrow at the earliest — a
+ * past deadline makes no plan); «Создать» / «Отмена».
+ */
+function NewGoalCard({ today, onClose }: { today: string; onClose(): void }) {
   const { repo } = useApp()
   const toast = useToast()
   const [name, setName] = useState('')
   const [target, setTarget] = useState('')
   const [deadline, setDeadline] = useState('')
-  const [errors, setErrors] = useState<{ name?: string; target?: string }>({})
+  const [errors, setErrors] = useState<{ name?: string; target?: string; deadline?: string }>({})
+  const minDeadline = addDays(today, 1)
   const [busy, setBusy] = useState(false)
 
   async function save() {
@@ -57,8 +61,9 @@ function NewGoalCard({ onClose }: { onClose(): void }) {
     const next: typeof errors = {}
     if (!name.trim()) next.name = 'Введите название'
     if (!(value > 0)) next.target = 'Введите сумму'
+    if (deadline && deadline < minDeadline) next.deadline = 'Срок — не раньше завтра'
     setErrors(next)
-    if (next.name || next.target) return
+    if (next.name || next.target || next.deadline) return
     setBusy(true)
     try {
       const n = name.trim()
@@ -113,13 +118,22 @@ function NewGoalCard({ onClose }: { onClose(): void }) {
         </div>
         <div className="fld">
           <label htmlFor="g-deadline">Срок</label>
-          <input id="g-deadline" className="inp" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          <input
+            id="g-deadline"
+            className="inp"
+            type="date"
+            min={minDeadline}
+            aria-invalid={!!errors.deadline}
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+          />
         </div>
       </div>
-      {(errors.name || errors.target) && (
+      {(errors.name || errors.target || errors.deadline) && (
         <div className="gerr" role="alert">
           {errors.name && <p>{errors.name}</p>}
           {errors.target && <p>{errors.target}</p>}
+          {errors.deadline && <p>{errors.deadline}</p>}
         </div>
       )}
       <div className="gacts">
@@ -355,7 +369,7 @@ export function Goals() {
         <p className="muted">Сначала завершите настройку</p>
       ) : (
         <>
-          {panel?.kind === 'new' && <NewGoalCard onClose={() => setPanel(null)} />}
+          {panel?.kind === 'new' && <NewGoalCard today={today} onClose={() => setPanel(null)} />}
           {active.map((g) => (
             <GoalCard
               key={g.id}
