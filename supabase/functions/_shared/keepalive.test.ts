@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { noBankRates, type BankRates } from './bankRates.ts'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from './defaults.ts'
 import { handleKeepalive, reminderDue, runKeepalive, runMorningRates, webhookProblem } from './keepalive.ts'
 import type { KeepaliveDeps, KeepaliveOptions } from './keepalive.ts'
@@ -49,6 +50,11 @@ class Fake implements KeepaliveDeps {
     return [{ date, currency: 'USD', uah_per_unit: 40 }, { date, currency: 'UAH', uah_per_unit: 1 }, { date, currency: 'EUR', uah_per_unit: 44 }]
   }
   async fetchBnm(date: string) { return [{ date, currency: 'BNM:USD', uah_per_unit: 18.0365 }, { date, currency: 'BNM:EUR', uah_per_unit: 20.0954 }] }
+  bank: BankRates = {
+    USD: { uah: { buy: 45.25, sell: 45.95 }, mdl: { buy: 17.85, sell: 18.15 } },
+    EUR: { uah: { buy: 50.3, sell: 51.3 }, mdl: { buy: 20.03, sell: 20.28 } },
+  }
+  async bankRates() { return this.bank }
   async cronToken() { return 'cr0n' }
   async writeRates(rows: FxRate[]) { this.fx.push(...rows) }
   async patchTx(id: string, p: Partial<Transaction>) { this.patched[id] = p }
@@ -174,13 +180,13 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     ]
     return f
   }
-  it('at 08:00 local: the rates go to both, hryvnias by the NBU and lei by the Moldovan bank', async () => {
+  it('at 08:00 local: buy and sell of each currency go to both', async () => {
     const f = fake()
     const res = await handleKeepalive(cron('cr0n'), f, opts(EIGHT), 's3cret')
     expect(await res.json()).toEqual({ ok: true, sent: true })
     const o = opts(EIGHT)
     expect(f.sent.map((m) => m.chat)).toEqual([o.ownerChatId, o.partnerChatId])
-    expect(f.sent[0].text).toBe('Курс на 2 ноября:\n$1 = ₴42 · MDL 18.04\n€1 = ₴49 · MDL 20.10\nГривна — НБУ, лей — НБМ')
+    expect(f.sent[0].text).toBe('Курс на 2 ноября, покупка / продажа:\n$1 = ₴45.25 / ₴45.95\n$1 = MDL 17.85 / MDL 18.15\n€1 = ₴50.30 / ₴51.30\n€1 = MDL 20.03 / MDL 20.28\nГривна — ПриватБанк, лей — maib')
   })
   it('switched off by one person: the other still gets it; off for both: nothing is fetched or sent', async () => {
     const f = fake()
@@ -193,12 +199,14 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     expect(await runMorningRates(g, opts(EIGHT))).toBe(false)
     expect(g.sent).toEqual([])
   })
-  it('the Moldovan bank down: the leu by the NBU, and the message says so', async () => {
+  it('maib down: the leu falls back to the official rate, marked, the hryvnia keeps two rates', async () => {
     const f = fake()
-    f.fetchBnm = async () => { throw new Error('down') }
+    f.bank.USD.mdl = null
+    f.bank.EUR.mdl = null
     await runMorningRates(f, opts(EIGHT))
-    expect(f.sent[0].text).toContain('$1 = ₴42 · MDL 17.50')
-    expect(f.sent[0].text).toContain('Гривна и лей — НБУ')
+    expect(f.sent[0].text).toContain('$1 = ₴45.25 / ₴45.95')
+    expect(f.sent[0].text).toContain('$1 = MDL 18.04 (НБМ)')
+    expect(f.sent[0].text).toContain('Гривна — ПриватБанк')
   })
   it('any other hour: nothing is sent or fetched', async () => {
     const f = fake()
@@ -210,6 +218,7 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     const f = fake()
     f.fetchNbu = async () => { throw new Error('down') }
     f.fetchBnm = async () => { throw new Error('down') }
+    f.bank = noBankRates()
     await runMorningRates(f, opts(EIGHT))
     expect(f.sent[0].text).toContain('Курс на 21 октября:')
   })

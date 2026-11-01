@@ -1,4 +1,5 @@
 // In-memory BotStore and helpers for the bot tests (not shipped to Deno: nothing imports it but *.test.ts).
+import { noBankRates, type BankRates } from '../bankRates.ts'
 import { alive } from '../alive.ts'
 import { handleUpdate } from '../bot.ts'
 import type { Chats } from '../bot.ts'
@@ -71,7 +72,9 @@ export class MemStore implements BotStore {
     return (this.table(table).get() as Row[]).filter((r) => !r.deleted && (r.deleted_at ?? null) !== null) as never[]
   }
   async binnedTransactions() { return this.txRows.filter((t) => !t.deleted && t.deleted_at !== null) }
+  bankRows: BankRates = noBankRates()
   async rates() { return this.rateRows }
+  async bankRates() { return this.bankRows }
   async insertTx(t: Transaction) { this.txRows.push({ ...t, rev: ++this.rev }) }
   async updateTx(id: string, patch: Partial<Transaction>) { await this.update('transactions', id, patch) }
   async insertGoalMove(m: GoalMove) { this.moveRows.push(m) }

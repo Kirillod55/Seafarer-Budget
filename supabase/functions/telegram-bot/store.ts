@@ -4,6 +4,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BotStore } from '../_shared/bot.ts'
 import { localDate } from '../_shared/dates.ts'
+import { loadBankRates } from '../_shared/bankRates.ts'
 import { BNM_PREFIX, bnmUrl, nbuUrl, parseNbu, parseBnm } from '../_shared/fx.ts'
 import { SOFT_TABLES } from '../_shared/types.ts'
 import type { Category, FxRate, GoalMove, Settings, Transaction } from '../_shared/types.ts'
@@ -150,6 +151,8 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
       }
       return rows
     },
+
+    bankRates: () => loadBankRates(),
 
     async insertTx(t: Transaction) {
       const { error } = await db.from('transactions').insert({ ...clean(t), user_id: ownerUserId })

@@ -101,10 +101,10 @@ export function daysToLanding(ctx: Ctx): BotReply[] {
   return [send(ctx, n === 0 ? `Посадка сегодня, ${dayMonth(d)}` : `До посадки ${n} дн — ${dayMonth(d)}`)]
 }
 
-/** /currency: the dollar and the euro in hryvnias and lei by the NBU. */
+/** /currency: the dollar and the euro in hryvnias and lei, buy and sell. */
 export async function currency(ctx: Ctx): Promise<BotReply[]> {
-  const snap = await load(ctx)
-  return [send(ctx, ratesText(snap.rates, ctx.today, dayMonth))]
+  const [snap, bank] = await Promise.all([load(ctx), ctx.store.bankRates()])
+  return [send(ctx, ratesText(snap.rates, ctx.today, dayMonth, bank))]
 }
 
 /** /balance: per active account by currency (≈ $), total, set aside for goals, free. */

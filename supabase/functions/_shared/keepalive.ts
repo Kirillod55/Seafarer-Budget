@@ -8,6 +8,7 @@ import { toCsv } from './csv.ts'
 import { addDays, localDate } from './dates.ts'
 import { money } from './format.ts'
 import { round2, usdRate } from './fx.ts'
+import type { BankRates } from './bankRates.ts'
 import { dayMonth } from './bot/ctx.ts'
 import { ratesText } from './ratesText.ts'
 import { purgeDue, RESTORE_MS } from './wipe.ts'
@@ -40,6 +41,8 @@ export interface KeepaliveDeps {
   fetchNbu(date: string, currencies: string[]): Promise<FxRate[]>
   /** the Moldovan bank's rates for a date, as fx_rates rows */
   fetchBnm(date: string): Promise<FxRate[]>
+  /** buy / sell from the banks; a source that is down stays empty */
+  bankRates(): Promise<BankRates>
   /** the token pg_cron sends for the morning rates (public.cron_tokens, service role only) */
   cronToken(): Promise<string | null>
   writeRates(rows: FxRate[]): Promise<void>
@@ -235,7 +238,7 @@ export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions):
       console.error('morning rates:', e instanceof Error ? e.message : String(e))
     }
   }
-  const text = ratesText(await deps.rates(), today, dayMonth)
+  const text = ratesText(await deps.rates(), today, dayMonth, await deps.bankRates())
   for (const c of chats) await deps.send(c, text)
   return true
 }

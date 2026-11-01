@@ -1,4 +1,5 @@
 // Storage and transport contracts of the bot. No npm imports.
+import type { BankRates } from '../bankRates.ts'
 import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, Transaction } from '../types.ts'
 
 export interface BotStore {
@@ -14,6 +15,8 @@ export interface BotStore {
   transactions(): Promise<Transaction[]>
   /** known rates; fetches today's rate first when it is missing */
   rates(): Promise<FxRate[]>
+  /** buy / sell for /currency, asked when the command comes */
+  bankRates(): Promise<BankRates>
   insertTx(t: Transaction): Promise<void>
   updateTx(id: string, patch: Partial<Transaction>): Promise<void>
   insertGoalMove(m: GoalMove): Promise<void>

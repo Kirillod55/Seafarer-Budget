@@ -5,6 +5,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { handleKeepalive } from '../_shared/keepalive.ts'
 import type { KeepaliveDeps } from '../_shared/keepalive.ts'
+import { loadBankRates } from '../_shared/bankRates.ts'
 import { bnmUrl, nbuUrl, parseBnm, parseNbu } from '../_shared/fx.ts'
 import { redact } from '../_shared/redact.ts'
 import type { FxRate, Settings, SoftTable, Transaction } from '../_shared/types.ts'
@@ -93,6 +94,7 @@ const deps: KeepaliveDeps = {
     if (!res.ok) throw new Error(`BNM ${res.status}`)
     return parseBnm(await res.text(), date)
   },
+  bankRates: () => loadBankRates(),
   async cronToken() {
     const { data, error } = await db.from('cron_tokens').select('value').eq('name', 'rates').maybeSingle()
     check('read cron token', error)
