@@ -2,7 +2,7 @@
 import { alive, liveRows } from '../alive.ts'
 import { dailyBudget, reservedUsd, reservingGoalMoves } from '../calc.ts'
 import { addDays } from '../dates.ts'
-import { money } from '../format.ts'
+import { money, plural } from '../format.ts'
 import { round2, usdRate } from '../fx.ts'
 import type { Account, Author, Category, FxRate, Goal, GoalMove, Limit, Settings, Transaction } from '../types.ts'
 import type { BotReply, BotStore } from './types.ts'
@@ -123,13 +123,6 @@ export function dateWord(date: string, today: string): string {
   return dayMonth(date)
 }
 
-export function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
-  return many
-}
 export const records = (n: number) => `${n} ${plural(n, 'запись', 'записи', 'записей')}`
 
 /** `☕ Кафе и рестораны · ₴80 ($1.94) · Основной · вчера` (account only in «Несколько счетов»). */

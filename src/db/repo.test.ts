@@ -597,11 +597,25 @@ describe('removeEmptyAccount', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('a binned record does not count', async () => {
+  it('a record in the bin keeps the account: its «Вернуть» must not land on a deleted one', async () => {
     const a = await account()
     const t = await repo.addTransaction({ ...baseTx, account_id: a.id, currency: 'USD', amount: 3 })
     await repo.remove('transactions', t.id)
-    expect(await repo.removeEmptyAccount(a.id)).toBe(true)
+    expect(await repo.removeEmptyAccount(a.id)).toBe(false)
+  })
+})
+
+describe('updateTransaction: the stored rate', () => {
+  it('a note edited with no rate for that date on the device keeps the sum in dollars', async () => {
+    const t = await repo.addTransaction({ ...baseTx, currency: 'USD', amount: 3 })
+    await db.transactions.put({ ...(await db.transactions.get(t.id))!, currency: 'EUR', date: '2001-01-01', rate_usd: 1.1, amount_usd: 3.3, rate_pending: false })
+    const edited = await repo.updateTransaction(t.id, { note: 'другая заметка' })
+    expect(edited).toMatchObject({ note: 'другая заметка', rate_usd: 1.1, amount_usd: 3.3, rate_pending: false })
+  })
+
+  it('a new amount is counted again', async () => {
+    const t = await repo.addTransaction({ ...baseTx, currency: 'USD', amount: 3 })
+    expect((await repo.updateTransaction(t.id, { amount: 5 })).amount_usd).toBe(5)
   })
 })
 

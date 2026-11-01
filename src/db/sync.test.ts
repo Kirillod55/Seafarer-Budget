@@ -90,6 +90,9 @@ class FakeRemote implements Remote {
     this.fxCurrencies.push(currencies)
     return this.fx[date] ?? []
   }
+  async fxRatesBatch(dates: string[], currencies: string[]) {
+    return (await Promise.all(dates.map((d) => this.fxRates(d, currencies)))).flat()
+  }
   // like update(...).eq('id', id).eq('rate_pending', true).is('deleted_at', null): only the rate columns,
   // only while still pending and not in the bin
   async patchRates(rows: RatePatch[]) {

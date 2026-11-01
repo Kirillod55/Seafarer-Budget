@@ -81,8 +81,7 @@ export function createSupabaseRemote(client: SupabaseClient): SupabaseRemote {
     async fxRates(date: string, currencies: string[]) {
       const { data, error } = await client.functions.invoke('fx-rates', { body: { date, currencies } })
       if (error) throw new Error(error.message)
-      const list: unknown = Array.isArray(data) ? data : (data as { rates?: unknown } | null)?.rates
-      return Array.isArray(list) ? (list as FxRate[]) : []
+      return Array.isArray(data) ? (data as FxRate[]) : []
     },
 
     async bankRates() {

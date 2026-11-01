@@ -2,7 +2,7 @@
 // deleted_batch, «Вернуть»), carry the minute they were made and stop working after an hour; a category with
 // records is never deleted.
 import { describe, expect, it } from 'vitest'
-import { asMessage, buttons, cb, MemStore, msg, NOW, OWNER, run, SETTINGS, textOf } from './testkit.ts'
+import { asMessage, buttons, cb, MemStore, msg, NOW, OWNER, run, seedTx, SETTINGS, textOf } from './testkit.ts'
 import { minuteOf } from './ctx.ts'
 
 const TIMEOUT = 'Время вышло — удали через /clear или в приложении'
@@ -38,6 +38,26 @@ describe('«Отменить» goes through the bin', () => {
     // within the hour it works
     await press(s, data, asMessage(r[0]), later(59))
     expect(binned(s.txRows[0])).toBe(true)
+  })
+
+  it('«Вернуть» of a batch is one set-based write', async () => {
+    const s = new MemStore()
+    s.txRows = [
+      seedTx({ id: 'a', rev: 5, deleted_at: '2026-10-21T09:00:00.000Z', deleted_batch: 'b1' }),
+      seedTx({ id: 'b', rev: 9, deleted_at: '2026-10-21T09:00:00.000Z', deleted_batch: 'b1' }),
+    ]
+    await press(s, 'rs:b1')
+    expect(s.manyWrites).toEqual([{ table: 'transactions', count: 2 }])
+    expect(s.txRows.map((t) => t.deleted_at)).toEqual([null, null])
+  })
+
+  it('an account with a record in the bin is not deleted: its «Вернуть» would land on nothing', async () => {
+    const s = new MemStore()
+    s.settingsRow = { ...s.settingsRow!, accounts_mode: 'multi' }
+    s.accountRows = [...s.accountRows, { ...s.accountRows[0], id: 'mono', name: 'Монобанк', is_default: false, sort: 1 }]
+    s.txRows = [seedTx({ account_id: 'mono', amount: 3, deleted_at: '2026-10-21T09:00:00.000Z', deleted_batch: 'b1' })]
+    expect(textOf(await run(s, msg('удали счёт Монобанк')))).toContain('есть записи в корзине')
+    expect(s.accountRows.find((a) => a.id === 'mono')!.deleted).toBe(false)
   })
 
   it('«Отменить все»: one batch for all, «Вернуть» restores all; expires after an hour', async () => {

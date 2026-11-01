@@ -59,7 +59,7 @@ const groq: GroqPort | null = GROQ_API_KEY
     },
     async transcribe(audio, filename, prompt) {
       const form = new FormData()
-      form.append('file', new Blob([audio]), filename)
+      form.append('file', new Blob([audio as BlobPart]), filename)
       form.append('model', WHISPER_MODEL)
       form.append('prompt', prompt)
       form.append('response_format', 'json')

@@ -1,5 +1,7 @@
 // Dates in words for the interface (Russian): «21 октября», «вс, 20 декабря». Dates are 'YYYY-MM-DD' strings.
 
+import { plural as wordForm } from '@shared/format.ts'
+
 export const MONTHS_GEN = [
   'января',
   'февраля',
@@ -91,8 +93,5 @@ export function monthTitle(month: string): string {
 
 /** «1 запись», «2 записи», «5 записей» — and any other noun: plural(n, 'день', 'дня', 'дней'). */
 export function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10
-  const m100 = n % 100
-  const word = m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many
-  return `${n} ${word}`
+  return `${n} ${wordForm(n, one, few, many)}`
 }

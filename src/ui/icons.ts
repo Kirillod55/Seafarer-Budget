@@ -34,33 +34,27 @@ export {
   ChartPie,
   Check,
   Copy,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
   CreditCard,
-  CircleAlert,
   Ellipsis,
   Eye,
   EyeOff,
   Gauge,
   House,
   Info,
-  Landmark,
   LogOut,
   MonitorSmartphone,
   Pencil,
   Plus,
   RefreshCw,
-  RotateCcw,
-  Search,
   Tag,
   Scale,
   Settings,
   Sun,
   Target,
   Trash2,
-  Upload,
   UserRound,
   UsersRound,
   Download,
@@ -91,9 +85,4 @@ export const CATEGORY_GLYPHS: Record<string, LucideIcon> = {
   wallet: Wallet,
   box: Package,
   tag: Tag,
-}
-
-/** The glyph for a key; an unknown key (e.g. from a newer app version) falls back to the tag. */
-export function categoryGlyph(key: string): LucideIcon {
-  return CATEGORY_GLYPHS[key] ?? Tag
 }

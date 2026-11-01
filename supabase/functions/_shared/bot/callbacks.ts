@@ -1,8 +1,8 @@
 // Inline buttons of record replies: u (undo one), uall (undo every record of the message), ug (undo a
 // goal move), c (category picker / pick), a (move to another account), ow (where the word without an amount goes).
-import { binPatch, byShort, categoryOf, describeTx, idsInKeyboard, load, partnerName, restoreButton, send, toOwner, UNDO_TIMEOUT, undoExpired } from './ctx.ts'
+import { binPatch, byShort, describeTx, idsInKeyboard, load, partnerName, restoreButton, send, toOwner, UNDO_TIMEOUT, undoExpired } from './ctx.ts'
 import type { Ctx, Keyboard } from './ctx.ts'
-import { categoryKeyboard, manyKeyboard, recordKeyboard, singleText, writeRecords } from './records.ts'
+import { categoryKeyboard, recordKeyboard, singleText, writeRecords } from './records.ts'
 import type { BotReply } from './types.ts'
 import type { Transaction } from '../types.ts'
 
@@ -150,5 +150,3 @@ export async function recordCallback(ctx: Ctx, q: Query, data: string): Promise<
   if (multiMessage) return [answer(q, `Перенёс на «${acc.name}»`)]
   return [answer(q, `Перенёс на «${acc.name}»`), edit(ctx, q, singleText(ctx, snap, moved), recordKeyboard(ctx, snap, moved))]
 }
-
-export { categoryOf, manyKeyboard }

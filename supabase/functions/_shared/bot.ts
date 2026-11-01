@@ -6,7 +6,6 @@ import { answer, edit, recordCallback, sourceText } from './bot/callbacks.ts'
 import type { Query } from './bot/callbacks.ts'
 import { categoryCallback } from './bot/categories.ts'
 import { clearCallback } from './bot/clear.ts'
-import { send } from './bot/ctx.ts'
 import type { Ctx, Keyboard } from './bot/ctx.ts'
 import { confirmDraft, DRAFT_EXPIRED, voice } from './bot/ai.ts'
 import { fallback, route, runCommand } from './bot/intent.ts'
@@ -123,5 +122,3 @@ async function handleCallback(ctx: Ctx, q: Query): Promise<BotReply[]> {
   if (data.startsWith('se:')) return [answer(q, 'Ответь на сообщение с номером: «2 90», «2 вчера», «2 наличные»')]
   return [answer(q)]
 }
-
-export { send }

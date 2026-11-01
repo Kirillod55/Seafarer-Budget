@@ -60,8 +60,8 @@ export interface Repo {
   /**
    * «Удалить» an account in «Архив» (spec §4), or an active one from its dialog (`active`): `deleted = true`, final
    * (accounts have no undo bin). Checked when it is written, not when it was asked for: only an alive, non-default
-   * account, archived unless `active`, whose balance is zero in every currency (live records, archived ones included;
-   * binned ones not). false = refused, nothing written.
+   * account, archived unless `active`, whose balance is zero in every currency (live records, archived ones included)
+   * and with no record in the bin (its «Вернуть» would land on a deleted account). false = refused, nothing written.
    */
   removeEmptyAccount(id: string, active?: boolean): Promise<boolean>
   /** Hide a record from the lists (it still counts in the balance and reports). */
@@ -86,7 +86,7 @@ export interface Repo {
   /** Puts the live rows of a batch into the bin (undo of an import). Returns rows marked. */
   markBatchDeleted(batch: string): Promise<number>
   addTransaction(input: NewTransaction): Promise<Transaction>
-  /** Edit a transaction; rate_usd / amount_usd / rate_pending are recomputed from the merged row. */
+  /** Edit a transaction; rate_usd / amount_usd / rate_pending are recomputed only when the amount, currency or date change. */
   updateTransaction(id: string, patch: Partial<NewTransaction>): Promise<Transaction>
   initDefaults(
     mode: 'single' | 'multi',
@@ -219,7 +219,8 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     await db.transaction('rw', db.accounts, db.transactions, async () => {
       const account = await db.accounts.get(id)
       if (!account || !alive(account) || (!active && !account.archived) || account.is_default) return
-      const txs = await db.transactions.filter((t) => alive(t) && (t.account_id === id || t.to_account_id === id)).toArray()
+      const txs = await db.transactions.filter((t) => !t.deleted && (t.account_id === id || t.to_account_id === id)).toArray()
+      if (txs.some((t) => !alive(t))) return
       // cents: a balance this close to zero is zero
       if (Object.values(balances(txs, id)).some((v) => Math.abs(v) >= EMPTY_BALANCE)) return
       await db.accounts.put({ ...account, deleted: true, dirty: 1 })
@@ -496,11 +497,13 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
 
   async function updateTransaction(id: string, patch: Partial<NewTransaction>): Promise<Transaction> {
     const existing = await db.transactions.get(id)
-    if (!existing) throw new Error(`Transaction  not found`)
+    if (!existing) throw new Error(`Transaction ${id} not found`)
     const merged = { ...existing, ...patch }
+    // offline the device may have no rate for that date: a note edited at sea must not turn the sum into $0
+    const moved = merged.amount !== existing.amount || merged.currency !== existing.currency || merged.date !== existing.date
     const updated: Row<Transaction> = {
       ...merged,
-      ...(await usdFields(merged.amount, merged.currency, merged.date)),
+      ...(moved ? await usdFields(merged.amount, merged.currency, merged.date) : {}),
       dirty: 1,
     }
     await db.transactions.put(updated)

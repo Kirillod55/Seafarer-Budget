@@ -30,6 +30,12 @@ const voiceMsg = (duration = 5) => ({ update_id: Math.floor(Math.random() * 1e9)
 
 beforeEach(() => resetAiCount())
 
+it('an income under an expense category stays an income, without that category', async () => {
+  const s = new MemStore()
+  await withAi(s, groq([answer({ records: [rec({ kind: 'income', category: 'Прочее', note: 'премия' })] })]), msg('какие-то деньги 100'))
+  expect(s.txRows[0]).toMatchObject({ kind: 'income', category_id: null })
+})
+
 describe('a plan: several actions, «Выполнить» first', () => {
   const multi = () => { const s = new MemStore(); s.settingsRow = { ...s.settingsRow!, accounts_mode: 'multi' } as never; return s }
   const plan = (over: Partial<AiAnswer>) => answer({ records: [], ...over })

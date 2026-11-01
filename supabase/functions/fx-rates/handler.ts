@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from '../_shared/defaults.ts'
 import { BNM_PREFIX, bnmUrl, nbuUrl, parseBnm, parseNbu } from '../_shared/fx.ts'
 import type { BankRates } from '../_shared/bankRates.ts'
 import type { FxRate } from '../_shared/types.ts'
@@ -17,8 +18,6 @@ const CORS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
-
-const BASE_CURRENCIES = ['UAH', 'USD', 'EUR', 'MDL']
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -45,7 +44,7 @@ export async function handleFxRequest(req: Request, deps: FxDeps): Promise<Respo
   }
   if ((body as { bank?: unknown } | null)?.bank === true) return json(await deps.bankRates())
   const { date, dates, currencies } = (body ?? {}) as { date?: unknown; dates?: unknown; currencies?: unknown }
-  const wanted = [...BASE_CURRENCIES]
+  const wanted = [...DEFAULT_SETTINGS.currencies]
   if (Array.isArray(currencies)) {
     for (const c of currencies) {
       if (typeof c === 'string' && /^[A-Z]{3}$/.test(c) && !wanted.includes(c)) wanted.push(c)

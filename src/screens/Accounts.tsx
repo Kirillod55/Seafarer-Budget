@@ -158,7 +158,7 @@ function AccountForm({ account, accounts, blocked, onClose }: {
   const remove = (id: string) =>
     sheet.current?.close(() => {
       repo.removeEmptyAccount(id, true).then(
-        (done) => toast(done ? 'Счёт удалён' : 'Не удалён: на счёте появились записи'),
+        (done) => toast(done ? 'Счёт удалён' : 'Не удалён: на счёте есть записи, проверь и корзину'),
         () => toast(FAILED),
       )
     })

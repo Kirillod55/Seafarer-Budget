@@ -8,8 +8,8 @@ import { parseRecords } from '../multi.ts'
 import type { ParseContext, TxParsed } from '../parser.ts'
 import type { Category, GoalMove, Transaction } from '../types.ts'
 import {
-  activeAccounts, activeCategories, amountText, budgetOf, categoryOf, defaultAccount, describeTx, isMulti, load, minuteOf,
-  partnerName, records, send, short, toOwner, todayLine, undoTxData, usd,
+  activeAccounts, activeCategories, budgetOf, categoryOf, defaultAccount, describeTx, isMulti, load, minuteOf,
+  partnerName, send, short, toOwner, todayLine, undoTxData, usd,
 } from './ctx.ts'
 import type { Ctx, Keyboard, Snapshot } from './ctx.ts'
 import type { BotReply } from './types.ts'
@@ -235,5 +235,3 @@ export async function runGoal(ctx: Ctx, p: { goalName: string; amount: number; c
     ...toOwner(ctx, notice),
   ]
 }
-
-export { amountText, records }

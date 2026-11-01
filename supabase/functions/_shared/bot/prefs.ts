@@ -3,13 +3,12 @@
 // «Отменить». The daily summary and /settings buttons change at once.
 import { balances } from '../calc.ts'
 import { dailyBudget, reservedUsd, reservingGoalMoves } from '../calc.ts'
-import { addDays } from '../dates.ts'
 import { CURRENCY_SYMBOL } from '../defaults.ts'
 import { money } from '../format.ts'
 import { round2, usdRate } from '../fx.ts'
 import { accountKey } from '../fuzzy.ts'
 import { aliasMap, amountAt, extractAccount, fuzzyAccount, fuzzyCurrency, matchCategory, matchDictionary, normalize, stripPunct } from '../parser.ts'
-import type { Account, Goal, Limit, Settings } from '../types.ts'
+import type { Account, Goal, Limit, Settings, Transaction } from '../types.ts'
 import { answer, edit } from './callbacks.ts'
 import type { Query } from './callbacks.ts'
 import {
@@ -278,8 +277,9 @@ function findAccount(words: string[], snap: Snapshot): Account | undefined {
  * Spec §5 group 5 (ruling 2026-10-26): only an empty account that is not the main one is deleted, after
  * «Да»; deleting is final (accounts have no 24 h bin), so there is no «Отменить». Otherwise the bot explains.
  */
-function deleteBlocker(acc: Account, snap: Snapshot, today: string): string | null {
+function deleteBlocker(acc: Account, snap: Snapshot, today: string, bin: Transaction[]): string | null {
   if (acc.id === defaultAccount(snap.accounts)?.id) return 'Основной счёт удалить нельзя — сначала сделай основным другой счёт в приложении'
+  if (bin.some((t) => t.account_id === acc.id || t.to_account_id === acc.id)) return `На счёте «${acc.name}» есть записи в корзине — их ещё можно вернуть. Удалить счёт можно через сутки`
   const bal = Object.entries(balances(snap.txs, acc.id)).filter(([, v]) => Math.abs(v) >= 0.005)
   if (bal.length === 0) return null
   const usdTotal = bal.reduce((s, [c, v]) => s + (toUsd(snap, v, c, today) ?? 0), 0)
@@ -295,7 +295,7 @@ export async function accountDelete(ctx: Ctx, text: string): Promise<BotReply[]>
   const snap = await load(ctx)
   const acc = findAccount(t.split(' ').slice(2), snap)
   if (!acc) return [send(ctx, 'Не нашёл такой счёт')]
-  const blocker = deleteBlocker(acc, snap, ctx.today)
+  const blocker = deleteBlocker(acc, snap, ctx.today, await ctx.store.binnedTransactions())
   if (blocker) return [send(ctx, blocker)]
   return [send(ctx, `Удалить счёт «${acc.name}»? Старые записи сохранятся, счёт пропадёт из списков. Вернуть нельзя.`, [
     [{ text: 'Да', callback_data: `acd:${short(acc.id)}` }, { text: 'Нет', callback_data: 'no' }],
@@ -421,9 +421,8 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
   }
   // acd: «Да» — checked again, deleted for good (owner only)
   if (ctx.author !== 'owner') return [answer(q), edit(ctx, q, ONLY_OWNER_ACCOUNTS)]
-  const blocker = deleteBlocker(acc, snap, ctx.today)
+  const blocker = deleteBlocker(acc, snap, ctx.today, await ctx.store.binnedTransactions())
   if (blocker) return [answer(q), edit(ctx, q, blocker)]
   await ctx.store.update('accounts', acc.id, { deleted: true })
   return [answer(q, 'Удалено'), edit(ctx, q, `Удалил счёт «${acc.name}»`), ...toOwner(ctx, `${who} удалила счёт «${acc.name}»`)]
 }
-export { addDays }

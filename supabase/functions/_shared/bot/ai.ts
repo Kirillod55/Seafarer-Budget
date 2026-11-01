@@ -45,10 +45,10 @@ export async function rulesUnsure(ctx: Ctx, text: string): Promise<boolean> {
 
 function toParsed(snap: Snapshot, res: AiResult): TxParsed[] {
   return res.records.map((r) => {
-    const cat = snap.categories.find((c) => c.name === r.category && c.kind === r.kind) ?? snap.categories.find((c) => c.name === r.category)
+    const cat = snap.categories.find((c) => c.name === r.category && c.kind === r.kind)
     const acc = r.account ? snap.accounts.find((a) => a.name === r.account) : undefined
     return {
-      type: 'tx', kind: cat?.kind ?? r.kind, amount: r.amount, currency: r.currency, categoryId: cat?.id ?? null, accountId: acc?.id ?? null,
+      type: 'tx', kind: r.kind, amount: r.amount, currency: r.currency, categoryId: cat?.id ?? null, accountId: acc?.id ?? null,
       date: r.date, note: r.note, firstWord: r.note.split(' ')[0] || null, dateGiven: true,
     }
   })

@@ -2,6 +2,15 @@
 // Pure TypeScript, no imports from npm.
 import { CURRENCY_SYMBOL } from './defaults.ts'
 
+/** The Russian word form for a count: plural(5, 'запись', 'записи', 'записей') = «записей». */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return one
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
+  return many
+}
+
 /**
  * English format, no settings:
  * currencies with a sign: `$4,963.32`, `₴1,200`, `€12.50`, `zł5`, `-$12.50`  (sign first, glued)

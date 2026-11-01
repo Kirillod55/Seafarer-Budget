@@ -4,7 +4,7 @@ import { money } from '../format.ts'
 import { round2, usdRate } from '../fx.ts'
 import { aliasMap, amountAt, extractAccount, fuzzyAccount, fuzzyCurrency, normalize, stripPunct } from '../parser.ts'
 import type { Account, Transaction } from '../types.ts'
-import { activeAccounts, dayMonth, defaultAccount, isMulti, load, partnerName, send, toOwner, undoTxData, usd } from './ctx.ts'
+import { activeAccounts, dayMonth, defaultAccount, isMulti, load, partnerName, send, toOwner, undoTxData } from './ctx.ts'
 import type { Ctx, Snapshot } from './ctx.ts'
 import { accountKey } from '../fuzzy.ts'
 import type { BotReply } from './types.ts'
@@ -209,5 +209,3 @@ export async function convert(ctx: Ctx, text: string): Promise<BotReply[] | null
   if (!r) return [send(ctx, 'Нет курса для этой валюты')]
   return [send(ctx, `${money(a.value, a.currency)} = ${money(round2(a.value * r), target)} (курс НБУ на ${dayMonth(ctx.today)})`)]
 }
-
-export { usd }

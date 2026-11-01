@@ -1,6 +1,6 @@
 // Storage and transport contracts of the bot. No npm imports.
 import type { BankRates } from '../bankRates.ts'
-import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, Transaction } from '../types.ts'
+import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, SoftTable, Transaction } from '../types.ts'
 
 export interface BotStore {
   /** true if this update was already processed; otherwise remembers it and returns false */
@@ -37,8 +37,8 @@ export interface BotStore {
   takeDraft(updateId: number): Promise<unknown>
   /** The same patch on many rows of the owner, set-based (the store chunks it), e.g. /clear «всё время». */
   updateMany(table: WriteTable, ids: string[], patch: object): Promise<void>
-  /** Rows of a soft table other than transactions in the 24 h undo bin (for «Вернуть»). */
-  binned(table: 'categories' | 'goals' | 'limits'): Promise<BinnedRow[]>
+  /** Rows of a soft table in the 24 h undo bin (for «Вернуть» and the final purge). */
+  binned(table: SoftTable): Promise<BinnedRow[]>
   /** Transactions in the 24 h undo bin (`deleted_at` set, not deleted for good). */
   binnedTransactions(): Promise<Transaction[]>
 }
@@ -47,8 +47,8 @@ export interface BinnedRow {
   id: string
   rev?: number
   deleted: boolean
-  deleted_at?: string | null
-  deleted_batch?: string | null
+  deleted_at: string | null
+  deleted_batch: string | null
 }
 
 export type WriteTable = 'settings' | 'accounts' | 'categories' | 'transactions' | 'goals' | 'goal_moves' | 'limits'

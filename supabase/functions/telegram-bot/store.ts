@@ -5,19 +5,14 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BotStore } from '../_shared/bot.ts'
 import { localDate } from '../_shared/dates.ts'
 import { loadBankRates } from '../_shared/bankRates.ts'
+import { DEFAULT_SETTINGS } from '../_shared/defaults.ts'
 import { BNM_PREFIX, bnmUrl, nbuUrl, parseNbu, parseBnm } from '../_shared/fx.ts'
 import { SOFT_TABLES } from '../_shared/types.ts'
 import type { Category, FxRate, GoalMove, Settings, Transaction } from '../_shared/types.ts'
 
 const PAGE = 1000
 const RATE_ROWS = 600 // ~150 days of UAH/USD/EUR/MDL, plenty for "nearest earlier rate"
-const NBU_TIMEOUT_MS = 10_000 // a hung NBU must not hang the webhook
-
-export interface StoreOptions {
-  /** injectable for tests; defaults to global fetch */
-  fetchJson?: (url: string) => Promise<unknown>
-  now?: () => Date
-}
+const FX_TIMEOUT_MS = 10_000 // a hung bank must not hang the webhook
 
 function fail(what: string, error: { message: string }): never {
   throw new Error(`${what}: ${error.message}`)
@@ -29,15 +24,8 @@ function clean<T extends Record<string, any>>(row: T): Omit<T, 'rev' | 'user_id'
   return rest
 }
 
-export function createStore(db: SupabaseClient, ownerUserId: string, opts: StoreOptions = {}): BotStore {
-  const fetchJson =
-    opts.fetchJson ??
-    (async (url: string) => {
-      const res = await fetch(url, { signal: AbortSignal.timeout(NBU_TIMEOUT_MS) })
-      if (!res.ok) throw new Error(`NBU responded ${res.status}`)
-      return await res.json()
-    })
-  const now = opts.now ?? (() => new Date())
+export function createStore(db: SupabaseClient, ownerUserId: string): BotStore {
+  const get = (url: string) => fetch(url, { signal: AbortSignal.timeout(FX_TIMEOUT_MS) })
 
   /**
    * All live rows of an owner's table, paged past the 1000-row API limit. Live = not deleted for good
@@ -118,37 +106,31 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
       if (error) fail('read fx_rates', error)
       const rows = ((data ?? []) as FxRate[]).map((r) => ({ ...r, uah_per_unit: Number(r.uah_per_unit) }))
 
-      // Make sure today's rate is there (the daily job may not have run yet). Never fatal.
-      try {
-        const s = await this.settings()
-        const today = localDate(now(), s?.timezone ?? 'Europe/Kyiv')
-        if (!rows.some((r) => r.currency === 'USD' && r.date === today)) {
-          const fetched = parseNbu(await fetchJson(nbuUrl(today)), s?.currencies ?? ['UAH', 'USD', 'EUR', 'MDL'])
-          if (fetched.length > 0) {
-            const { error: upErr } = await db.from('fx_rates').upsert(fetched, { onConflict: 'date,currency' })
-            if (upErr) console.error('fx_rates upsert failed:', upErr.message)
-            rows.push(...fetched)
-          }
+      // Make sure today's rates are there (the daily job may not have run yet): the NBU's for money, the Moldovan
+      // bank's only for /currency. Never fatal.
+      const s = await this.settings().catch(() => null)
+      const today = localDate(new Date(), s?.timezone ?? DEFAULT_SETTINGS.timezone)
+      const fill = async (what: string, has: (currency: string) => boolean, load: () => Promise<FxRate[]>) => {
+        if (rows.some((r) => r.date === today && has(r.currency))) return
+        try {
+          const fetched = await load()
+          if (fetched.length === 0) return
+          const { error: upErr } = await db.from('fx_rates').upsert(fetched, { onConflict: 'date,currency' })
+          if (upErr) console.error('fx_rates upsert failed:', upErr.message)
+          rows.push(...fetched)
+        } catch (e) {
+          console.error(`could not fetch ${what} rates:`, e instanceof Error ? e.message : String(e))
         }
-      } catch (e) {
-        console.error('could not fetch today rates:', e instanceof Error ? e.message : String(e))
       }
-      // the same for the Moldovan bank's leu rates (only shown in /currency); never fatal
-      try {
-        const s = await this.settings()
-        const today = localDate(now(), s?.timezone ?? 'Europe/Kyiv')
-        if (!rows.some((r) => r.currency.startsWith(BNM_PREFIX) && r.date === today)) {
-          const res = await fetch(bnmUrl(today), { signal: AbortSignal.timeout(10_000) })
-          const fetched = res.ok ? parseBnm(await res.text(), today) : []
-          if (fetched.length > 0) {
-            const { error: upErr } = await db.from('fx_rates').upsert(fetched, { onConflict: 'date,currency' })
-            if (upErr) console.error('fx_rates upsert failed:', upErr.message)
-            rows.push(...fetched)
-          }
-        }
-      } catch (e) {
-        console.error('could not fetch BNM rates:', e instanceof Error ? e.message : String(e))
-      }
+      await fill('NBU', (c) => c === 'USD', async () => {
+        const res = await get(nbuUrl(today))
+        if (!res.ok) throw new Error(`NBU responded ${res.status}`)
+        return parseNbu(await res.json(), s?.currencies ?? DEFAULT_SETTINGS.currencies)
+      })
+      await fill('BNM', (c) => c.startsWith(BNM_PREFIX), async () => {
+        const res = await get(bnmUrl(today))
+        return res.ok ? parseBnm(await res.text(), today) : []
+      })
       return rows
     },
 
@@ -170,7 +152,7 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
       const { error } = await db.from(table).insert({ ...clean(row), user_id: ownerUserId })
       if (error) fail(`insert ${table}`, error)
     },
-    update: (table, id, patch) => update(table, id, patch),
+    update: (table, id, patch) => update(table, id, patch as Record<string, unknown>),
     binnedTransactions: () => all<Transaction>('transactions', true),
     binned: (table) => all(table, true),
 

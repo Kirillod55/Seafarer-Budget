@@ -105,7 +105,8 @@ export async function restoreBatch(ctx: Ctx, batch: string | null): Promise<BotR
   }
   if (rows.length === 0 && others.length === 0) return [send(ctx, 'Вернуть уже нельзя — прошло больше 24 часов или всё возвращено')]
   for (const o of others) await ctx.store.update(o.table, o.row.id, restorePatch(o.row))
-  for (const t of rows) await ctx.store.update('transactions', t.id, restorePatch(t))
+  // set-based, as bin() is: the newest rev of the batch is at or past every row's deletion
+  if (rows.length) await ctx.store.updateMany('transactions', rows.map((t) => t.id), restorePatch({ rev: rows.reduce((m, t) => Math.max(m, t.rev ?? 0), 0) }))
   return [send(ctx, rows.length ? `Вернул ${records(rows.length)}` : 'Вернул как было')]
 }
 

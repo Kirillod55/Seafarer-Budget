@@ -36,6 +36,7 @@ class Fake implements KeepaliveDeps {
   async transactions() { return this.txs }
   async goalMoves() { return [] }
   async goals() { return [] }
+  async limits() { return [] }
   async categories(): Promise<Category[]> { return DEFAULT_CATEGORIES.map((c, i) => ({ ...c, id: `c${i}`, deleted: false })) }
   async accounts(): Promise<Account[]> { return [{ id: 'a1', deleted: false, name: 'Основной', aliases: [], is_default: true, archived: false, sort: 0 }] }
   async rates() { return this.fx }
@@ -158,7 +159,9 @@ describe('runKeepalive', () => {
     f.settingsRow = { ...f.settingsRow, remind_after_days: 0 }
     f.txs = [tx({ created_at: '2026-10-25T06:00:00.000Z', date: '2026-10-25' }), tx({ date: '2026-10-24' }), tx({ date: '2026-10-23' })]
     await runKeepalive(f, opts(SUNDAY))
-    expect(f.docs).toHaveLength(1)
+    expect(f.docs).toHaveLength(2)
+    expect(f.docs[1]).toMatchObject({ chat: OWNER, filename: 'seafarer-budget-2026-10-25.json' })
+    expect(Object.keys(JSON.parse(f.docs[1].content))).toEqual(['settings', 'accounts', 'categories', 'transactions', 'goals', 'goal_moves', 'limits'])
     expect(f.docs[0]).toMatchObject({ chat: OWNER, filename: 'seafarer-budget-2026-10-25.csv', caption: 'Резервная копия · 3 записи · открыть в Excel' })
     expect(f.docs[0].content.split('\r\n').filter(Boolean)).toHaveLength(4)
     const weekday = new Fake()

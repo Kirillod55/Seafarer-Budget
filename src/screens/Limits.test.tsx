@@ -225,6 +225,7 @@ describe('Лимиты', () => {
       },
       pushColumns: async () => [],
       pull: async () => [],
+      fxRatesBatch: async () => [],
       fxRates: async () => [],
       patchRates: async () => {},
     }

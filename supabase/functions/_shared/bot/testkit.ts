@@ -4,7 +4,7 @@ import { alive } from '../alive.ts'
 import { handleUpdate } from '../bot.ts'
 import type { Chats } from '../bot.ts'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from '../defaults.ts'
-import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, Transaction } from '../types.ts'
+import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, SoftTable, Transaction } from '../types.ts'
 import type { BotReply, BotStore, WriteTable } from './types.ts'
 
 export const OWNER = 777
@@ -68,7 +68,7 @@ export class MemStore implements BotStore {
     const t = this.table(table)
     t.set(t.get().map((r) => (set.has(r.id) ? { ...r, ...(patch as Record<string, unknown>), rev: ++this.rev } : r)))
   }
-  async binned(table: 'categories' | 'goals' | 'limits') {
+  async binned(table: SoftTable) {
     return (this.table(table).get() as Row[]).filter((r) => !r.deleted && (r.deleted_at ?? null) !== null) as never[]
   }
   async binnedTransactions() { return this.txRows.filter((t) => !t.deleted && t.deleted_at !== null) }

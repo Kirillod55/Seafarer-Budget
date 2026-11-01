@@ -6,7 +6,8 @@ import { alive } from './alive.ts'
 import { dailyBudget, reservedUsd, reservingGoalMoves } from './calc.ts'
 import { toCsv } from './csv.ts'
 import { addDays, localDate } from './dates.ts'
-import { money } from './format.ts'
+import { DEFAULT_SETTINGS } from './defaults.ts'
+import { money, plural } from './format.ts'
 import { round2, usdRate } from './fx.ts'
 import type { BankRates } from './bankRates.ts'
 import { dayMonth } from './bot/ctx.ts'
@@ -14,7 +15,8 @@ import { ratesText } from './ratesText.ts'
 import { purgeDue, RESTORE_MS } from './wipe.ts'
 import { safeEqual } from './secret.ts'
 import { SOFT_TABLES } from './types.ts'
-import type { Account, Category, FxRate, Goal, GoalMove, Settings, SoftTable, Transaction } from './types.ts'
+import type { BinnedRow } from './bot/types.ts'
+import type { Account, Category, FxRate, Goal, GoalMove, Limit, Settings, SoftTable, Transaction } from './types.ts'
 
 const DAY_MS = 86_400_000
 const BOT_UPDATES_DAYS = 30
@@ -33,9 +35,10 @@ export interface KeepaliveDeps {
   goals(): Promise<Goal[]>
   categories(): Promise<Category[]>
   accounts(): Promise<Account[]>
+  limits(): Promise<Limit[]>
   rates(): Promise<FxRate[]>
   /** rows of a soft table that sit in the bin (deleted_at set, deleted = false) */
-  binned(table: SoftTable): Promise<{ id: string; deleted: boolean; deleted_at: string | null; deleted_batch: string | null }[]>
+  binned(table: SoftTable): Promise<BinnedRow[]>
   /** deleted = true for these bin rows, guarded at write time: only rows still binned with deleted_at < olderThan */
   markDeleted(table: SoftTable, ids: string[], olderThan: string): Promise<void>
   fetchNbu(date: string, currencies: string[]): Promise<FxRate[]>
@@ -63,13 +66,6 @@ export interface KeepaliveOptions {
   clock?: () => number
 }
 
-const plural = (n: number, one: string, few: string, many: string) => {
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return one
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
-  return many
-}
 const usd = (n: number) => money(n, 'USD')
 
 /** One reminder per gap: ≥ N days since the last record, and not yet reminded for this gap (or N more days passed). */
@@ -188,11 +184,15 @@ export async function runKeepalive(deps: KeepaliveDeps, o: KeepaliveOptions): Pr
   const [y, m, d] = today.split('-').map(Number)
   if (new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 0) {
     await job('backup', async () => {
-      const [categories, accounts] = await Promise.all([deps.categories(), deps.accounts()])
+      const [categories, accounts, goals, limits] = await Promise.all([deps.categories(), deps.accounts(), deps.goals(), deps.limits()])
       const rows = txs.filter(alive).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
       const n = rows.length
       await deps.sendDocument(o.ownerChatId, `seafarer-budget-${today}.csv`, toCsv(rows, categories, accounts, s.partner_name),
         `Резервная копия · ${n} ${plural(n, 'запись', 'записи', 'записей')} · открыть в Excel`)
+      // the CSV is records only: the book comes back from this one, with goals, limits and settings
+      await deps.sendDocument(o.ownerChatId, `seafarer-budget-${today}.json`,
+        JSON.stringify({ settings: [s], accounts, categories, transactions: rows, goals, goal_moves: moves, limits }),
+        'Полная копия: счета, цели, лимиты, настройки')
     })
   }
   await job('webhook', async () => {
@@ -212,7 +212,6 @@ export async function runKeepalive(deps: KeepaliveDeps, o: KeepaliveOptions): Pr
 
 const RATES_HOUR = 8
 const OWNER_NAME = 'Кирилл' // settings keep only the second person's name
-const RATE_CURRENCIES = ['UAH', 'USD', 'EUR', 'MDL']
 
 const localHour = (now: Date, timeZone: string) =>
   Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(now))
@@ -232,7 +231,7 @@ export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions, 
   ]
   if (chats.length === 0) return false
   const today = localDate(o.now, s.timezone)
-  for (const fetch of [() => deps.fetchNbu(today, RATE_CURRENCIES), () => deps.fetchBnm(today)]) {
+  for (const fetch of [() => deps.fetchNbu(today, DEFAULT_SETTINGS.currencies), () => deps.fetchBnm(today)]) {
     try {
       const fresh = await fetch()
       if (fresh.length) await deps.writeRates(fresh)
