@@ -930,8 +930,10 @@ html.desk.desk-s .dgrid {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  font-size: 15px;
   font-weight: 600;
   text-align: right;
+  white-space: nowrap;
 }
 
 .orates-src {
