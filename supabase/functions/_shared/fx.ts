@@ -50,18 +50,45 @@ export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 
+/**
+ * The National Bank of Moldova's lei per unit live in fx_rates next to the NBU rows, as currency «BNM:USD» / «BNM:EUR»
+ * (uah_per_unit then holds lei). They are for showing the rate only: money is converted by the NBU rates as before,
+ * and nothing asks usdRate() for these codes.
+ */
+export const BNM_PREFIX = 'BNM:'
+
+export function bnmUrl(date: string): string {
+  const [y, m, d] = date.split('-')
+  return `https://www.bnm.md/en/official_exchange_rates?get_xml=1&date=${d}.${m}.${y}`
+}
+
+export function parseBnm(xml: string, date: string): FxRate[] {
+  const out: FxRate[] = []
+  for (const unit of ['USD', 'EUR']) {
+    const m = new RegExp(`<CharCode>${unit}</CharCode>\\s*<Nominal>(\\d+)</Nominal>[\\s\\S]*?<Value>([\\d.]+)</Value>`).exec(xml)
+    if (!m) continue
+    const rate = Number(m[2]) / Number(m[1])
+    if (rate > 0) out.push({ date, currency: BNM_PREFIX + unit, uah_per_unit: rate })
+  }
+  return out
+}
+
 export interface RatePair {
   unit: 'USD' | 'EUR'
   uah: number | null
   mdl: number | null
+  /** whose leu rate it is: the Moldovan bank's, or the NBU cross when that one is missing */
+  mdlBank: 'BNM' | 'NBU' | null
 }
 
-/** The dollar and the euro in hryvnias and lei by the NBU, the latest rates on or before `date`. */
+/** The dollar and the euro in hryvnias (NBU) and lei (BNM), the latest rates on or before `date`. */
 export function currentRates(rates: FxRate[], date: string): { date: string | null; pairs: RatePair[] } {
-  const mdl = latestOnOrBefore(rates, 'MDL', date)
+  const nbuMdl = latestOnOrBefore(rates, 'MDL', date)
   const pairs = (['USD', 'EUR'] as const).map((unit): RatePair => {
     const r = latestOnOrBefore(rates, unit, date)
-    return { unit, uah: r ? r.uah_per_unit : null, mdl: r && mdl ? r.uah_per_unit / mdl.uah_per_unit : null }
+    const bnm = latestOnOrBefore(rates, BNM_PREFIX + unit, date)
+    const cross = r && nbuMdl ? r.uah_per_unit / nbuMdl.uah_per_unit : null
+    return { unit, uah: r ? r.uah_per_unit : null, mdl: bnm ? bnm.uah_per_unit : cross, mdlBank: bnm ? 'BNM' : cross !== null ? 'NBU' : null }
   })
   return { date: latestOnOrBefore(rates, 'USD', date)?.date ?? null, pairs }
 }

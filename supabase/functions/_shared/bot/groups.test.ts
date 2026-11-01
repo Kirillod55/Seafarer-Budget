@@ -272,6 +272,14 @@ describe('/currency', () => {
     expect(text).toContain('€1 = ₴49 · MDL 20.42')
     expect(textOf(await run(s, msg('курсы валют')))).toBe(text)
   })
+  it('each person switches the morning message off for themselves, in words and in /settings', async () => {
+    const s = new MemStore()
+    expect(textOf(await run(s, msg('отключи курсы')))).toContain('выключены')
+    expect(s.settingsRow!.rates_daily_owner).toBe(false)
+    expect(s.settingsRow!.rates_daily_partner).toBeUndefined()
+    await run(s, cb('st:x'))
+    expect(s.settingsRow!.rates_daily_owner).toBe(true)
+  })
 })
 
 describe('/help and commands in words', () => {

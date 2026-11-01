@@ -38,6 +38,8 @@ export interface KeepaliveDeps {
   /** deleted = true for these bin rows, guarded at write time: only rows still binned with deleted_at < olderThan */
   markDeleted(table: SoftTable, ids: string[], olderThan: string): Promise<void>
   fetchNbu(date: string, currencies: string[]): Promise<FxRate[]>
+  /** the Moldovan bank's rates for a date, as fx_rates rows */
+  fetchBnm(date: string): Promise<FxRate[]>
   /** the token pg_cron sends for the morning rates (public.cron_tokens, service role only) */
   cronToken(): Promise<string | null>
   writeRates(rows: FxRate[]): Promise<void>
@@ -212,20 +214,29 @@ const localHour = (now: Date, timeZone: string) =>
   Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(now))
 
 /**
- * The hourly call from pg_cron: at 08:00 in settings.timezone today's NBU rates go to Kirill; every other hour
- * nothing happens. If the NBU does not answer, the message carries the latest rates with their own date.
+ * The hourly call from pg_cron: at 08:00 in settings.timezone today's rates go to Kirill and Masha, to each unless
+ * they switched it off in /settings (the columns are absent before the migration: then it is on); every other hour
+ * nothing happens. If a bank does not answer, the message carries the latest rates with their own date.
  */
 export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions): Promise<boolean> {
   const s = await deps.settings()
   if (!s || localHour(o.now, s.timezone) !== RATES_HOUR) return false
+  const chats = [
+    ...(s.rates_daily_owner !== false ? [o.ownerChatId] : []),
+    ...(o.partnerChatId !== null && s.rates_daily_partner !== false ? [o.partnerChatId] : []),
+  ]
+  if (chats.length === 0) return false
   const today = localDate(o.now, s.timezone)
-  try {
-    const fresh = await deps.fetchNbu(today, RATE_CURRENCIES)
-    if (fresh.length) await deps.writeRates(fresh)
-  } catch (e) {
-    console.error('morning rates:', e instanceof Error ? e.message : String(e))
+  for (const fetch of [() => deps.fetchNbu(today, RATE_CURRENCIES), () => deps.fetchBnm(today)]) {
+    try {
+      const fresh = await fetch()
+      if (fresh.length) await deps.writeRates(fresh)
+    } catch (e) {
+      console.error('morning rates:', e instanceof Error ? e.message : String(e))
+    }
   }
-  await deps.send(o.ownerChatId, ratesText(await deps.rates(), today, dayMonth))
+  const text = ratesText(await deps.rates(), today, dayMonth)
+  for (const c of chats) await deps.send(c, text)
   return true
 }
 

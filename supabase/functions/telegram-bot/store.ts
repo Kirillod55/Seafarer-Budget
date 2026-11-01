@@ -4,7 +4,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import type { BotStore } from '../_shared/bot.ts'
 import { localDate } from '../_shared/dates.ts'
-import { nbuUrl, parseNbu } from '../_shared/fx.ts'
+import { BNM_PREFIX, bnmUrl, nbuUrl, parseNbu, parseBnm } from '../_shared/fx.ts'
 import { SOFT_TABLES } from '../_shared/types.ts'
 import type { Category, FxRate, GoalMove, Settings, Transaction } from '../_shared/types.ts'
 
@@ -131,6 +131,22 @@ export function createStore(db: SupabaseClient, ownerUserId: string, opts: Store
         }
       } catch (e) {
         console.error('could not fetch today rates:', e instanceof Error ? e.message : String(e))
+      }
+      // the same for the Moldovan bank's leu rates (only shown in /currency); never fatal
+      try {
+        const s = await this.settings()
+        const today = localDate(now(), s?.timezone ?? 'Europe/Kyiv')
+        if (!rows.some((r) => r.currency.startsWith(BNM_PREFIX) && r.date === today)) {
+          const res = await fetch(bnmUrl(today), { signal: AbortSignal.timeout(10_000) })
+          const fetched = res.ok ? parseBnm(await res.text(), today) : []
+          if (fetched.length > 0) {
+            const { error: upErr } = await db.from('fx_rates').upsert(fetched, { onConflict: 'date,currency' })
+            if (upErr) console.error('fx_rates upsert failed:', upErr.message)
+            rows.push(...fetched)
+          }
+        }
+      } catch (e) {
+        console.error('could not fetch BNM rates:', e instanceof Error ? e.message : String(e))
       }
       return rows
     },

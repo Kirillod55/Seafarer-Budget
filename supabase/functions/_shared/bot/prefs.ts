@@ -277,12 +277,24 @@ export async function summaryToggle(ctx: Ctx, text: string): Promise<BotReply[]>
   return [send(ctx, on ? '🔔 Итог дня включён — пришлю вечером' : '🔕 Итог дня выключен')]
 }
 
+export const RATES_TOGGLE_RE = /^(присылай|включи|выключи|не присылай|отключи) (утренние |утром )?курсы/
+const ratesField = (ctx: Ctx) => (ctx.author === 'owner' ? 'rates_daily_owner' : 'rates_daily_partner')
+
+/** «отключи курсы»: the 08:00 message for whoever writes; the other person keeps theirs. */
+export async function ratesToggle(ctx: Ctx, text: string): Promise<BotReply[]> {
+  const on = /^(присылай|включи)/.test(normalize(text))
+  await setSettings(ctx, { [ratesField(ctx)]: on } as Partial<Settings>)
+  return [send(ctx, on ? '🔔 Курсы включены — пришлю в 8 утра' : '🔕 Курсы по утрам выключены')]
+}
+
 function settingsView(ctx: Ctx): { text: string; kb: Keyboard } {
   const s = ctx.settings
+  const rates = s[ratesField(ctx)] !== false
   const mine = ctx.author === 'owner' ? s.daily_summary_owner : s.daily_summary_partner
   const mark = (on: boolean, label: string) => (on ? `✓ ${label}` : label)
   const kb: Keyboard = [
     [{ text: mine ? 'Итог дня: 🔔 Вкл' : 'Итог дня: 🔕 Выкл', callback_data: 'st:s' }],
+    [{ text: rates ? 'Курсы в 8 утра: 🔔 Вкл' : 'Курсы в 8 утра: 🔕 Выкл', callback_data: 'st:x' }],
     [0, 2, 3, 5, 7].map((n) => ({ text: mark(s.remind_after_days === n, n ? `${n} дн.` : 'Выкл'), callback_data: `st:r:${n}` })),
     s.currencies.slice(0, 6).map((c) => ({ text: mark(s.default_currency === c, CURRENCY_SYMBOL[c] ?? (c === 'MDL' ? 'L' : c)), callback_data: `st:c:${c}` })),
     [{ text: 'Готово', callback_data: 'st:d' }],
@@ -290,6 +302,7 @@ function settingsView(ctx: Ctx): { text: string; kb: Keyboard } {
   const text = [
     '⚙️ Настройки бота',
     `Итог дня (твой): ${mine ? '🔔 Вкл' : '🔕 Выкл'}`,
+    `Курсы в 8 утра (твои): ${rates ? '🔔 Вкл' : '🔕 Выкл'}`,
     `Напоминание без записей: ${s.remind_after_days ? `${s.remind_after_days} дн.` : 'Выкл'}`,
     `Валюта по умолчанию: ${s.default_currency}`,
   ].join('\n')
@@ -311,6 +324,7 @@ export async function prefCallback(ctx: Ctx, q: Query, data: string): Promise<Bo
       const field = ctx.author === 'owner' ? 'daily_summary_owner' : 'daily_summary_partner'
       await setSettings(ctx, { [field]: !s[field] } as Partial<Settings>)
     }
+    if (a === 'x') await setSettings(ctx, { [ratesField(ctx)]: s[ratesField(ctx)] === false } as Partial<Settings>)
     if (a === 'r' && [0, 2, 3, 5, 7].includes(Number(b))) await setSettings(ctx, { remind_after_days: Number(b) as Settings['remind_after_days'] })
     if (a === 'c' && s.currencies.includes(b)) await setSettings(ctx, { default_currency: b })
     const v = settingsView(ctx)

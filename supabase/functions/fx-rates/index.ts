@@ -16,6 +16,11 @@ Deno.serve((req: Request) =>
       if (!res.ok) throw new Error(`NBU responded ${res.status}`)
       return await res.json()
     },
+    async fetchBnm(url: string) {
+      const res = await fetch(url, { signal: AbortSignal.timeout(NBU_TIMEOUT_MS) })
+      if (!res.ok) throw new Error(`BNM responded ${res.status}`)
+      return await res.text()
+    },
     async readRates(date: string) {
       const { data, error } = await admin.from('fx_rates').select('date,currency,uah_per_unit').eq('date', date)
       if (error) throw new Error(error.message)

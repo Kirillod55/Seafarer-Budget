@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nbuUrl, parseNbu, round2, usdRate } from './fx.ts'
+import { bnmUrl, currentRates, nbuUrl, parseBnm, parseNbu, round2, usdRate } from './fx.ts'
 import type { FxRate } from './types.ts'
 
 const CURRENCIES = ['UAH', 'USD', 'EUR', 'MDL']
@@ -76,5 +76,32 @@ describe('round2', () => {
   it('rounds float error away', () => {
     expect(round2(0.1 + 0.2)).toBe(0.3)
     expect(round2(1.005)).toBe(1.01)
+  })
+})
+
+describe('the National Bank of Moldova', () => {
+  const XML = `<ValCurs Date="01.11.2026"><Valute ID="47"><NumCode>978</NumCode><CharCode>EUR</CharCode><Nominal>1</Nominal><Name>Euro</Name><Value>20.0954</Value></Valute>
+    <Valute ID="44"><NumCode>840</NumCode><CharCode>USD</CharCode><Nominal>10</Nominal><Name>US Dollar</Name><Value>180.365</Value></Valute></ValCurs>`
+  it('bnmUrl takes the date as DD.MM.YYYY', () => {
+    expect(bnmUrl('2026-11-01')).toBe('https://www.bnm.md/en/official_exchange_rates?get_xml=1&date=01.11.2026')
+  })
+  it('parseBnm: lei per one unit, by the nominal; garbage gives nothing', () => {
+    expect(parseBnm(XML, '2026-11-01')).toEqual([
+      { date: '2026-11-01', currency: 'BNM:USD', uah_per_unit: 18.0365 },
+      { date: '2026-11-01', currency: 'BNM:EUR', uah_per_unit: 20.0954 },
+    ])
+    expect(parseBnm('<html>503</html>', '2026-11-01')).toEqual([])
+  })
+  it('currentRates prefers the Moldovan rate; without it the NBU cross', () => {
+    const rows: FxRate[] = [
+      { date: '2026-11-01', currency: 'USD', uah_per_unit: 42 },
+      { date: '2026-11-01', currency: 'EUR', uah_per_unit: 49 },
+      { date: '2026-11-01', currency: 'MDL', uah_per_unit: 2.4 },
+      { date: '2026-11-01', currency: 'BNM:USD', uah_per_unit: 18.0365 },
+    ]
+    const { pairs } = currentRates(rows, '2026-11-01')
+    expect(pairs[0]).toMatchObject({ unit: 'USD', mdl: 18.0365, mdlBank: 'BNM' })
+    expect(pairs[1]).toMatchObject({ unit: 'EUR', mdlBank: 'NBU' })
+    expect(usdRate(rows, 'USD', '2026-11-01')).toEqual({ rate: 1, exact: true })
   })
 })

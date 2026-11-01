@@ -10,7 +10,7 @@ import { send } from './ctx.ts'
 import { ping } from './ping.ts'
 import type { Ctx } from './ctx.ts'
 import { convert, CONVERT_RE, exchange, EXCHANGE_RE, rate, RATE_RE, reconcile, RECONCILE_RE, transfer, TRANSFER_RE } from './money.ts'
-import { accountDelete, ACCOUNT_DELETE_RE, PREF_RE, prefPhrase, settingsMenu, SUMMARY_RE, summaryToggle } from './prefs.ts'
+import { accountDelete, ACCOUNT_DELETE_RE, PREF_RE, prefPhrase, RATES_TOGGLE_RE, ratesToggle, settingsMenu, SUMMARY_RE, summaryToggle } from './prefs.ts'
 import { writeRecords } from './records.ts'
 import { report, REPORT_RE, search, SEARCH_RE } from './reports.ts'
 import { helpText, IN_APP, ONLY_OWNER_CATEGORIES, SHORT_HELP } from './texts.ts'
@@ -90,6 +90,7 @@ export async function route(ctx: Ctx, text: string, confirmed = false): Promise<
   // «убери лимит на кафе» is a settings phrase (group 5), not a record to delete
   if (/^(удали|убери|сотри)\s/.test(t) && !/^(удали|убери) лимит/.test(t)) return deleteByDescription(ctx, text)
   if (SUMMARY_RE.test(t)) return summaryToggle(ctx, text)
+  if (RATES_TOGGLE_RE.test(t)) return ratesToggle(ctx, text)
   if (/^сколько (дней )?до посадки/.test(t)) return cmd.daysToLanding(ctx)
   if (PREF_RE.test(t)) return prefPhrase(ctx, text, confirmed)
   if (TRANSFER_RE.test(t + ' ')) return transfer(ctx, text)

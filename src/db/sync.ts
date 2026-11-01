@@ -1,6 +1,6 @@
 import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
-import { round2, usdRate } from '@shared/fx.ts'
+import { BNM_PREFIX, round2, usdRate } from '@shared/fx.ts'
 import { SYNC_TABLES, type FxRate, type Settings, type SyncTable } from '@shared/types.ts'
 import type { LocalDb } from './local.ts'
 
@@ -271,13 +271,18 @@ export function createSync(
     return (await db.settings.toCollection().filter(alive).first()) as Settings | undefined
   }
 
+  let bnmAsked: string | null = null
+
   // Make sure there is an exact rate set for today for every currency in settings.
   async function ensureTodayRates(settings: Settings | undefined): Promise<void> {
     if (!settings) return
     const today = localDate(new Date(), settings.timezone ?? 'Europe/Kyiv')
     const rates = await db.fx_rates.toArray()
     const missing = settings.currencies.some((c) => c !== 'USD' && usdRate(rates, c, today)?.exact !== true)
-    if (!missing) return
+    // the Moldovan bank's rates are only shown: when its site is down, one try a day per run, not one per sync
+    const noBnm = bnmAsked !== today && !rates.some((r) => r.date === today && r.currency.startsWith(BNM_PREFIX))
+    if (!missing && !noBnm) return
+    bnmAsked = today
     const fetched = await remote.fxRates(today, settings.currencies)
     if (fetched.length) await db.fx_rates.bulkPut(fetched)
   }

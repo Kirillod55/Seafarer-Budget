@@ -1,8 +1,10 @@
-import { nbuUrl, parseNbu } from '../_shared/fx.ts'
+import { BNM_PREFIX, bnmUrl, nbuUrl, parseBnm, parseNbu } from '../_shared/fx.ts'
 import type { FxRate } from '../_shared/types.ts'
 
 export interface FxDeps {
   fetchNbu(url: string): Promise<unknown>
+  /** the National Bank of Moldova's XML */
+  fetchBnm(url: string): Promise<string>
   readRates(date: string): Promise<FxRate[]>
   writeRates(rows: FxRate[]): Promise<void>
 }
@@ -64,10 +66,23 @@ export async function handleFxRequest(req: Request, deps: FxDeps): Promise<Respo
     return json({ error: 'Body must be { date: "YYYY-MM-DD" }' }, 400)
   }
   const r = await ratesFor(date, wanted, deps)
-  return 'rows' in r ? json(r.rows) : json({ error: r.error }, 502)
+  if (!('rows' in r)) return json({ error: r.error }, 502)
+  return json([...r.rows, ...(await bnmFor(date, r.rows, deps))])
 }
 
 const MAX_DATES = 60
+
+/** The Moldovan bank's rows for a date, unless they are already in `have`. Never fatal: the leu falls back to the NBU. */
+async function bnmFor(date: string, have: FxRate[], deps: FxDeps): Promise<FxRate[]> {
+  if (have.some((r) => r.currency.startsWith(BNM_PREFIX))) return []
+  try {
+    const rows = parseBnm(await deps.fetchBnm(bnmUrl(date)), date)
+    if (rows.length) await deps.writeRates(rows)
+    return rows
+  } catch {
+    return []
+  }
+}
 
 async function ratesFor(date: string, wanted: string[], deps: FxDeps): Promise<{ rows: FxRate[] } | { error: string }> {
   try {

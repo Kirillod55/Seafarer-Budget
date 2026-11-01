@@ -42,6 +42,9 @@ export interface Settings extends Base {
   keepalive_at: string | null
   daily_summary_owner: boolean
   daily_summary_partner: boolean
+  /** the 08:00 rates message; absent or true = on */
+  rates_daily_owner?: boolean
+  rates_daily_partner?: boolean
 }
 
 export interface Account extends Base {

@@ -16,6 +16,7 @@ function makeDeps(over: Partial<FxDeps> = {}): FxDeps & {
 } {
   return {
     fetchNbu: vi.fn(async () => NBU),
+    fetchBnm: vi.fn(async () => ''),
     readRates: vi.fn(async () => [] as FxRate[]),
     writeRates: vi.fn(async () => {}),
     ...over,

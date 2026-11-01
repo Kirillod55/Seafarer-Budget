@@ -1,7 +1,12 @@
--- Kirill's morning rates (2026-11-01): pg_cron calls the keepalive function every hour on the hour, and the function
+-- The morning rates (2026-11-01): pg_cron calls the keepalive function every hour on the hour, and the function
 -- answers only at 08:00 in settings.timezone, so the time follows him across time zones and summer time. GitHub's
 -- schedule runs up to an hour late, this one does not. The token is generated here and never leaves the database:
 -- cron reads it from the table, the function reads it with the service role, clients cannot.
+-- Each person switches the message off in /settings.
+alter table public.settings
+  add column rates_daily_owner   boolean not null default true,
+  add column rates_daily_partner boolean not null default true;
+
 create table public.cron_tokens (
   name  text primary key,
   value text not null

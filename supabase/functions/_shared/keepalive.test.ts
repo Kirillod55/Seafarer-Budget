@@ -48,6 +48,7 @@ class Fake implements KeepaliveDeps {
     this.nbuCalls.push(date)
     return [{ date, currency: 'USD', uah_per_unit: 40 }, { date, currency: 'UAH', uah_per_unit: 1 }, { date, currency: 'EUR', uah_per_unit: 44 }]
   }
+  async fetchBnm(date: string) { return [{ date, currency: 'BNM:USD', uah_per_unit: 18.0365 }, { date, currency: 'BNM:EUR', uah_per_unit: 20.0954 }] }
   async cronToken() { return 'cr0n' }
   async writeRates(rows: FxRate[]) { this.fx.push(...rows) }
   async patchTx(id: string, p: Partial<Transaction>) { this.patched[id] = p }
@@ -173,13 +174,31 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     ]
     return f
   }
-  it('at 08:00 local: the rates go to Kirill only, in hryvnias and lei', async () => {
+  it('at 08:00 local: the rates go to both, hryvnias by the NBU and lei by the Moldovan bank', async () => {
     const f = fake()
     const res = await handleKeepalive(cron('cr0n'), f, opts(EIGHT), 's3cret')
     expect(await res.json()).toEqual({ ok: true, sent: true })
-    expect(f.sent).toHaveLength(1)
-    expect(f.sent[0].chat).toBe(opts(EIGHT).ownerChatId)
-    expect(f.sent[0].text).toBe('Курс НБУ на 2 ноября:\n$1 = ₴42 · MDL 17.50\n€1 = ₴49 · MDL 20.42')
+    const o = opts(EIGHT)
+    expect(f.sent.map((m) => m.chat)).toEqual([o.ownerChatId, o.partnerChatId])
+    expect(f.sent[0].text).toBe('Курс на 2 ноября:\n$1 = ₴42 · MDL 18.04\n€1 = ₴49 · MDL 20.10\nГривна — НБУ, лей — НБМ')
+  })
+  it('switched off by one person: the other still gets it; off for both: nothing is fetched or sent', async () => {
+    const f = fake()
+    f.settingsRow.rates_daily_partner = false
+    await runMorningRates(f, opts(EIGHT))
+    expect(f.sent.map((m) => m.chat)).toEqual([opts(EIGHT).ownerChatId])
+    const g = fake()
+    g.settingsRow.rates_daily_owner = false
+    g.settingsRow.rates_daily_partner = false
+    expect(await runMorningRates(g, opts(EIGHT))).toBe(false)
+    expect(g.sent).toEqual([])
+  })
+  it('the Moldovan bank down: the leu by the NBU, and the message says so', async () => {
+    const f = fake()
+    f.fetchBnm = async () => { throw new Error('down') }
+    await runMorningRates(f, opts(EIGHT))
+    expect(f.sent[0].text).toContain('$1 = ₴42 · MDL 17.50')
+    expect(f.sent[0].text).toContain('Гривна и лей — НБУ')
   })
   it('any other hour: nothing is sent or fetched', async () => {
     const f = fake()
@@ -190,8 +209,9 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
   it('the NBU down: the latest rates with their own date', async () => {
     const f = fake()
     f.fetchNbu = async () => { throw new Error('down') }
+    f.fetchBnm = async () => { throw new Error('down') }
     await runMorningRates(f, opts(EIGHT))
-    expect(f.sent[0].text).toContain('Курс НБУ на 21 октября:')
+    expect(f.sent[0].text).toContain('Курс на 21 октября:')
   })
   it('401 without the token or with a wrong one; the keepalive secret does not open it', async () => {
     const f = fake()
