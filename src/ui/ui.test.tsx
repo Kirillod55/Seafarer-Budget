@@ -648,7 +648,7 @@ describe('Morph', () => {
     )
   })
 
-  it('with dir the swap is sideways: old leaves towards −dir in 0.17 s, new rides in from +dir in 0.32 s', () => {
+  it('with fade only the opacity changes: nothing moves, the block does not animate its height', () => {
     const calls: { el: Element; frames: Keyframe[]; opts: KeyframeAnimationOptions }[] = []
     reducedMotion(false)
     withAnimate(
@@ -658,22 +658,17 @@ describe('Morph', () => {
       },
       () => {
         const { rerender } = render(
-          <Morph k="2026-10-21" dir={1}>
+          <Morph k="2026-10-21" fade>
             <p>Сегодня</p>
           </Morph>,
         )
         rerender(
-          <Morph k="2026-10-05" dir={-1}>
+          <Morph k="2026-10-05" fade>
             <p>5 октября</p>
           </Morph>,
         )
-        const old = calls.find((c) => c.el.classList.contains('mOld'))!
-        const cur = calls.find((c) => c.el.classList.contains('mIn') && !c.el.classList.contains('mOld'))!
-        expect(old.opts.duration).toBe(170)
-        expect(old.frames[1].transform).toBe('translateX(18px)')
-        expect(cur.opts.duration).toBe(320)
-        expect(cur.frames[0].transform).toBe('translateX(-22px)')
-        expect(calls.some((c) => c.el.classList.contains('morph'))).toBe(false) // no frame lays the page out
+        expect(calls).toHaveLength(2)
+        expect(calls.every((c) => c.opts.duration === 180 && c.frames.every((f) => f.transform === undefined && f.height === undefined))).toBe(true)
       },
     )
   })

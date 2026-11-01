@@ -46,8 +46,8 @@ function monthCells(month: string): (string | null)[] {
 /*
  * «Календарь трат» (spec §3; prototype calendar(), dayBlock(), pickDay()): the month Monday to Sunday with ‹ ›,
  * «За месяц $X», each day's spending in whole dollars; today outlined in lime, the picked day filled, the landing
- * day ⚓, future days off. Picking a day touches only the fill and the card under the grid (Morph sideways, by the
- * date's direction) — the title, the grid and the scroll stay. Archived records count in the sums (the money is
+ * day ⚓, future days off. Picking a day touches only the fill and the card under the grid (a cross-fade in place)
+ * — the title, the grid and the scroll stay. Archived records count in the sums (the money is
  * spent) but are not listed.
  */
 export function Calendar() {
@@ -70,7 +70,6 @@ export function Calendar() {
   const startDay = route.screen === 'calendar' ? (route.day ?? null) : null
   const [month, setMonth] = useState<string | null>(startDay && monthOf(startDay))
   const [picked, setPicked] = useState<string | null>(startDay)
-  const [dir, setDir] = useState(1)
   const gridRef = useRef<HTMLDivElement>(null)
   const pickAnim = useRef<Animation | null>(null)
 
@@ -99,7 +98,6 @@ export function Calendar() {
   // nearest to today (the last day of a past month, the 1st of a future one)
   const pageMonth = (k: number) => {
     slideFrom(k)
-    setDir(k) // the day card rides the same way as the grid
     const next = shiftMonth(shown, k)
     setMonth(next)
     const current = monthOf(today)
@@ -116,7 +114,6 @@ export function Calendar() {
         easing: 'cubic-bezier(.2,.8,.2,1)',
       })
     }
-    setDir(day > sel ? 1 : -1)
     setPicked(day)
   }
 
@@ -174,7 +171,7 @@ export function Calendar() {
       </div>
 
       <div className="calday" aria-live="polite">
-        <Morph k={cardDay} dir={dir}>
+        <Morph k={cardDay} fade>
           <DayCard
             day={cardDay}
             today={today}
