@@ -215,7 +215,10 @@ describe('More: «Режим счетов»', () => {
     fireEvent.click(within(mode).getByRole('button', { name: 'Несколько счетов' }))
     await waitFor(async () => expect((await settingsRow()).accounts_mode).toBe('multi'))
     expect((await changed())._changed).toEqual(['accounts_mode'])
-    fireEvent.click(within(mode).getByRole('button', { name: 'Один баланс' }))
+    // the row is written before the screen shows it, and a press on the current choice does nothing
+    const one = within(mode).getByRole('button', { name: 'Один баланс' })
+    await waitFor(() => expect(one.getAttribute('aria-pressed')).toBe('false'))
+    fireEvent.click(one)
     await waitFor(async () => expect((await settingsRow()).accounts_mode).toBe('single'))
     expect(await env.db.accounts.filter((a) => !a.deleted).count()).toBe(2)
     expect(await env.db.transactions.filter((t) => !t.deleted).count()).toBe(2)
