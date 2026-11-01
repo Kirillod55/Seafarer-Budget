@@ -116,6 +116,35 @@ const NBU_CODES = new Set(['USD', 'EUR', 'MDL', 'PLN', 'GBP', 'CHF', 'CZK', 'TRY
 
 export const PREF_RE = /^(посадка|дата посадки|запас|по умолчанию|валюта по умолчанию|добавь валюту|создай сч[её]т|добавь сч[её]т|новый сч[её]т|напоминай|выключи напоминания|не напоминай|новая цель|создай цель|лимит на|убери лимит|удали лимит|цель .+ к \S+)/
 
+export const ACCOUNTS_RE = /^(создай|создать|добавь|добавить|заведи|сделай|открой)\s+(мне\s+)?(новые\s+|несколько\s+)?сч[её]та(?![\p{L}\d])/u
+
+/** The names in «создай новые счета: 1) Наличка 2) ProCredit», one per line or separated by commas. */
+export function accountNames(text: string): string[] {
+  const body = text.trim().replace(/^.*?сч[её]та\s*:?/iu, '')
+  return body
+    .split(/[\n,;]+|\s+(?=\d+[.)])/)
+    .map((n) => n.replace(/^\s*(\d+[.)]|[-•*])\s*/, '').replace(/["«»]/g, '').trim().slice(0, 30))
+    .filter(Boolean)
+}
+
+/** Several accounts in one message: asks once, then creates all; new accounts start at zero. */
+export async function createAccounts(ctx: Ctx, text: string, confirmed: boolean): Promise<BotReply[]> {
+  if (!isMulti(ctx.settings)) return [send(ctx, 'Счета — в режиме «Несколько счетов» (включается в приложении)')]
+  const names = [...new Set(accountNames(text).map((n) => n[0].toUpperCase() + n.slice(1)))]
+  if (names.length === 0) return [send(ctx, 'Как назвать счета? Например: создай счета Наличка, Монобанк')]
+  const snap = await load(ctx)
+  const taken = (n: string) => snap.accounts.some((a) => a.name.toLowerCase() === n.toLowerCase())
+  const fresh = names.filter((n) => !taken(n))
+  if (fresh.length === 0) return [send(ctx, `Такие счета уже есть: ${names.join(', ')}`)]
+  if (!confirmed) return ask(ctx, `Создать счета: ${fresh.join(', ')}?\nОстаток на новых счетах — 0`)
+  let sort = Math.max(0, ...snap.accounts.map((a) => a.sort))
+  for (const name of fresh) {
+    sort += 1
+    await ctx.store.insert('accounts', { id: ctx.uuid(), deleted: false, name, aliases: [], is_default: false, archived: false, sort } as Account)
+  }
+  return [send(ctx, `Создал счета: ${fresh.join(', ')}. Остаток на каждом — 0`)]
+}
+
 /** The settings phrases (groups 4–5). Returns null when the text is not one. */
 export async function prefPhrase(ctx: Ctx, text: string, confirmed: boolean): Promise<BotReply[] | null> {
   const t = normalize(text)

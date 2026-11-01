@@ -10,7 +10,7 @@ import { send } from './ctx.ts'
 import { ping } from './ping.ts'
 import type { Ctx } from './ctx.ts'
 import { convert, CONVERT_RE, exchange, EXCHANGE_RE, rate, RATE_RE, reconcile, RECONCILE_RE, transfer, TRANSFER_RE } from './money.ts'
-import { accountDelete, ACCOUNT_DELETE_RE, PREF_RE, prefPhrase, RATES_TOGGLE_RE, ratesToggle, settingsMenu, SUMMARY_RE, summaryToggle } from './prefs.ts'
+import { accountDelete, ACCOUNT_DELETE_RE, PREF_RE, prefPhrase, ACCOUNTS_RE, createAccounts, RATES_TOGGLE_RE, ratesToggle, settingsMenu, SUMMARY_RE, summaryToggle } from './prefs.ts'
 import { writeRecords } from './records.ts'
 import { report, REPORT_RE, search, SEARCH_RE } from './reports.ts'
 import { helpText, IN_APP, ONLY_OWNER_CATEGORIES, SHORT_HELP } from './texts.ts'
@@ -77,10 +77,16 @@ export async function runCommand(ctx: Ctx, c: Command): Promise<BotReply[]> {
  * Route one text. `confirmed` is true when a «Сохранить» button re-reads the text.
  * Returns null when nothing understood it (stage 5 then asks the AI).
  */
+const POLITE = /^\s*(ты\s+)?(можешь|сможешь|можно|пожалуйста|будь добр|будь добра|прошу)[,\s]+(ли\s+)?/iu
+
 export async function route(ctx: Ctx, text: string, confirmed = false): Promise<BotReply[] | null> {
+  // «можешь создать…», «пожалуйста, добавь…» mean the same as the plain request
+  text = text.replace(POLITE, '')
   const c = commandOf(text)
   if (c) return runCommand(ctx, c)
   const t = normalize(text).replace(/[?!]+$/, '')
+  if (ACCOUNTS_RE.test(t)) return createAccounts(ctx, text, confirmed)
+  if (/^(вс[её]|остатки?|баланс)( на них)? (по нулям|на нуле|ноль|нулевой|нулевые)$/.test(t)) return [send(ctx, 'Хорошо, новые счета начинаются с нуля')]
 
   if (CREATE_RE.test(t)) return createCategory(ctx, text)
   if (/^(удали|убери)\s+категорию(?![\p{L}\d])/u.test(t) && ctx.author !== 'owner') return [send(ctx, ONLY_OWNER_CATEGORIES)]

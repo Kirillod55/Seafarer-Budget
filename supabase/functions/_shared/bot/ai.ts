@@ -14,7 +14,7 @@ import type { Command } from './intent.ts'
 import { buildTx, OTHER_EXPENSE, parseCtx, saveMany, saveOne } from './records.ts'
 import type { BotReply } from './types.ts'
 
-export const AI_FAILED = 'Не понял — напиши проще, например: кофе 80'
+export const AI_FAILED = 'Не понял. Можно так:\n• кофе 80\n• создай счёт Монобанк\n• создай категорию Спорт\n• какой курс валют\nВсё остальное — в /help'
 const COMMAND_BUTTONS: Keyboard = [
   [{ text: 'Проверить связь', callback_data: 'cmd:ping' }, { text: 'Траты за сегодня', callback_data: 'cmd:today' }],
   [{ text: 'Сколько осталось', callback_data: 'cmd:left' }, { text: 'Помощь', callback_data: 'cmd:help' }],

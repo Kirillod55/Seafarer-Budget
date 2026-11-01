@@ -260,6 +260,35 @@ describe('goals, limits, settings (groups 4, 5, 7)', () => {
   })
 })
 
+describe('plain requests (Kirill, 2026-11-01)', () => {
+  const multi = () => { const s = new MemStore(); s.settingsRow = { ...s.settingsRow!, accounts_mode: 'multi' } as never; return s }
+  it('several accounts in one message: asks once, creates all at zero', async () => {
+    const s = multi()
+    const before = s.accountRows.length
+    const q = msg('Создай новые счета:\n1) Наличка\n2) ProCredit\n3) MarTrust')
+    const ask = await run(s, q)
+    expect(textOf(ask)).toContain('Создать счета: Наличка, ProCredit, MarTrust?')
+    expect(s.accountRows).toHaveLength(before)
+    const made = await run(s, cb('ok', { message_id: 9, reply_to_message: { text: 'Создай новые счета:\n1) Наличка\n2) ProCredit\n3) MarTrust' } }))
+    expect(textOf(made)).toContain('Создал счета: Наличка, ProCredit, MarTrust')
+    expect(s.accountRows).toHaveLength(before + 3)
+  })
+  it('without a colon and with commas too', async () => {
+    const s = multi()
+    expect(textOf(await run(s, msg('добавь счета Наличка, Монобанк')))).toContain('Создать счета: Наличка, Монобанк?')
+  })
+  it('«Все по нулям» is an answer, not a record', async () => {
+    const s = multi()
+    expect(textOf(await run(s, msg('Все по нулям')))).toContain('с нуля')
+    expect(s.txRows).toHaveLength(0)
+  })
+  it('a polite question works like the request; no name: asks for one', async () => {
+    const s = new MemStore()
+    expect(textOf(await run(s, msg('Можешь создать новую категорию?')))).toContain('Как назвать категорию?')
+    expect(textOf(await run(s, msg('Можешь создать категорию Спорт?')))).toContain('Спорт')
+  })
+})
+
 describe('/currency', () => {
   it('the dollar and the euro in hryvnias and lei, by command and in words', async () => {
     const s = new MemStore()

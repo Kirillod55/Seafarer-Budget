@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { AI_FAILED } from './ai.ts'
 import { resetAiCount } from '../groq.ts'
 import type { AiAnswer, GroqPort } from '../groq.ts'
 import { asMessage, buttons, cat, cb, MemStore, msg, OWNER, run, textOf } from './testkit.ts'
@@ -103,9 +104,9 @@ describe('AI after the rules (spec §5)', () => {
     expect(s.txRows).toHaveLength(0)
   })
 
-  it('a timeout: «Не понял — напиши проще»; an unsure rules record falls back to «Прочее»', async () => {
+  it('a timeout: the examples; an unsure rules record falls back to «Прочее»', async () => {
     const s = new MemStore()
-    expect(textOf(await withAi(s, groq(['timeout']), msg('ну это самое')))).toBe('Не понял — напиши проще, например: кофе 80')
+    expect(textOf(await withAi(s, groq(['timeout']), msg('ну это самое')))).toBe(AI_FAILED)
     await withAi(s, groq(['timeout']), msg('непонятное 50'))
     expect(s.txRows[0].category_id).toBe(cat('Прочее').id)
   })

@@ -65,7 +65,7 @@ function styleFor(name: string, cats: Category[]): { glyph: string; color: strin
 
 export async function createCategory(ctx: Ctx, text: string): Promise<BotReply[] | null> {
   const p = parseCreate(text)
-  if (!p) return null
+  if (!p) return [send(ctx, 'Как назвать категорию? Например: создай категорию Спорт')]
   const snap = await load(ctx)
   const same = snap.categories.find((c) => c.name.toLowerCase() === p.name.toLowerCase())
   if (same && same.archived) {
