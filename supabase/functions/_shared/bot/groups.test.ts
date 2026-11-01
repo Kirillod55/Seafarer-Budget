@@ -271,9 +271,16 @@ describe('/currency', () => {
     expect(text).toContain('🇺🇦 ₴42 (НБУ)')
     expect(text).toContain('🇲🇩 MDL 20.42 (НБУ)')
     s.bankRows.USD.uah = { buy: 45.25, sell: 45.95 }
-    expect(textOf(await run(s, msg('/currency')))).toContain('🇺🇦 ₴45.25 / ₴45.95')
+    expect(textOf(await run(s, msg('/currency')))).toContain('🇺🇦 ₴45.25 → ₴45.95')
     s.bankRows.USD.uah = null
     expect(textOf(await run(s, msg('курсы валют')))).toBe(text)
+  })
+  it('understands the rates question in plain words, as typed or as a voice message gives it', async () => {
+    const s = new MemStore()
+    for (const q of ['Какой сейчас курс валют?', 'какой курс валют на сейчас', 'Скажи, какой курс доллара сегодня.', 'курс на сегодня', 'что с курсом', 'Покажи курсы', 'сколько сейчас стоит доллар', 'почём евро сегодня']) {
+      expect(textOf(await run(s, msg(q))), q).toContain('Курс')
+      expect(s.txRows, q).toHaveLength(0)
+    }
   })
   it('each person switches the morning message off for themselves, in words and in /settings', async () => {
     const s = new MemStore()

@@ -14,7 +14,7 @@ export const FALLBACK_MODEL = 'openai/gpt-oss-20b'
 export const WHISPER_MODEL = 'whisper-large-v3-turbo'
 export const AI_DAILY_LIMIT = 300
 export const MAX_AI_RECORDS = 20
-export const AI_COMMANDS = ['none', 'ping', 'today', 'month', 'left', 'undo', 'help'] as const
+export const AI_COMMANDS = ['none', 'ping', 'today', 'month', 'left', 'undo', 'help', 'currency'] as const
 export type AiCommand = typeof AI_COMMANDS[number]
 
 export interface AiLists {
@@ -76,7 +76,7 @@ function systemPrompt(l: AiLists): string {
     'records — записи: kind (expense — трата, income — доход: зарплата, «получил», «+»), amount > 0, currency, category строго из списка, account из списка или null, days_ago (0 — сегодня, 1 — вчера, 2 — позавчера), note — короткая заметка словами пользователя.',
     'Сленг: сотка/сотня/стольник = 100, полтос/полтинник = 50, пятихатка = 500, косарь/штука/тыща = 1000, 2к = 2000, пол косаря = 500, полторы штуки = 1500. «2 кофе по 50» — одна запись на 100. Несколько трат в одном сообщении — несколько записей.',
     'Сигареты, стики, картриджи, жидкости для вейпа и прочее для курения → Продукты.',
-    'Если записи нет, а человек просит действие: command = ping (проверка связи), today, month, left (сколько можно тратить), undo, help; иначе none. Просьба создать категорию → create_category {name, kind}.',
+    'Если записи нет, а человек просит действие: command = ping (проверка связи), today, month, left (сколько можно тратить), undo, help, currency (какой курс валют, почём доллар или евро); иначе none. Просьба создать категорию → create_category {name, kind}.',
     'Если сомневаешься в сумме, категории или смысле — unsure = true и коротко объясни в reason.',
     `Категории: ${l.categories.join(', ')}.`,
     `Счета: ${l.accounts.length ? l.accounts.join(', ') : 'нет'}.`,

@@ -5,7 +5,7 @@ import { money } from './format.ts'
 import { currentRates } from './fx.ts'
 import type { FxRate } from './types.ts'
 
-const two = (v: BuySell, cur: string) => `${money(v.buy, cur)} / ${money(v.sell, cur)}`
+const two = (v: BuySell, cur: string) => `${money(v.buy, cur)} → ${money(v.sell, cur)}`
 const TITLE = { USD: '💵 Доллар', EUR: '💶 Евро' }
 
 export function ratesText(rates: FxRate[], today: string, dayLabel: (date: string) => string, bank: BankRates = noBankRates()): string {
@@ -22,6 +22,6 @@ export function ratesText(rates: FxRate[], today: string, dayLabel: (date: strin
     return lines.join('\n')
   })
   const banks = [pairs.some((p) => bank[p.unit].uah) && 'ПриватБанк', pairs.some((p) => bank[p.unit].mdl) && 'maib'].filter(Boolean)
-  const head = `💱 Курс на ${dayLabel(live ? today : (date as string))}`
-  return [head, ...blocks, ...(banks.length ? [`Покупка / продажа · ${banks.join(', ')}`] : [])].join('\n\n')
+  const head = `💱 Курс на ${dayLabel(live ? today : (date as string))}${banks.length ? '\nпокупка → продажа' : ''}`
+  return [head, ...blocks, ...(banks.length ? [`🏦 ${banks.join(' · ')}`] : [])].join('\n\n')
 }
