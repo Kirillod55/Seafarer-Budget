@@ -137,12 +137,20 @@ export async function createAccounts(ctx: Ctx, text: string, confirmed: boolean)
   const fresh = names.filter((n) => !taken(n))
   if (fresh.length === 0) return [send(ctx, `Такие счета уже есть: ${names.join(', ')}`)]
   if (!confirmed) return ask(ctx, `Создать счета: ${fresh.join(', ')}?\nОстаток на новых счетах — 0`)
-  let sort = Math.max(0, ...snap.accounts.map((a) => a.sort))
-  for (const name of fresh) {
-    sort += 1
-    await ctx.store.insert('accounts', { id: ctx.uuid(), deleted: false, name, aliases: [], is_default: false, archived: false, sort } as Account)
-  }
+  await insertAccounts(ctx, snap, fresh)
   return [send(ctx, `Создал счета: ${fresh.join(', ')}. Остаток на каждом — 0`)]
+}
+
+export async function insertAccounts(ctx: Ctx, snap: Snapshot, names: string[]): Promise<Account[]> {
+  let sort = Math.max(0, ...snap.accounts.map((a) => a.sort))
+  const made: Account[] = []
+  for (const name of names) {
+    sort += 1
+    const acc = { id: ctx.uuid(), deleted: false, name, aliases: [], is_default: false, archived: false, sort } as Account
+    await ctx.store.insert('accounts', acc)
+    made.push(acc)
+  }
+  return made
 }
 
 /** The settings phrases (groups 4–5). Returns null when the text is not one. */

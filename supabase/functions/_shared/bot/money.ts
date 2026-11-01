@@ -94,9 +94,13 @@ export async function transfer(ctx: Ctx, text: string): Promise<BotReply[]> {
   from ??= defaultAccount(snap.accounts)
   if (!from || !to) return [send(ctx, 'Не понял, на какой счёт. Например: перевод 500 грн на прокредит')]
   if (from.id === to.id) return [send(ctx, 'Счёт «откуда» и «куда» один и тот же')]
-  const tx = baseTx(ctx, { kind: 'transfer', amount: m.value, currency: m.currency, account_id: from.id, to_account_id: to.id, ...usdOf(snap, m.value, m.currency, ctx.today) })
+  return saveTransfer(ctx, snap, from, to, m.value, m.currency)
+}
+
+export async function saveTransfer(ctx: Ctx, snap: Snapshot, from: Account, to: Account, amount: number, currency: string): Promise<BotReply[]> {
+  const tx = baseTx(ctx, { kind: 'transfer', amount, currency, account_id: from.id, to_account_id: to.id, ...usdOf(snap, amount, currency, ctx.today) })
   await ctx.store.insertTx(tx)
-  const line = `🔁 ${from.name} → ${to.name} · ${money(m.value, m.currency)}`
+  const line = `🔁 ${from.name} → ${to.name} · ${money(amount, currency)}`
   return [send(ctx, line, undoKb(tx)), ...toOwner(ctx, `${partnerName(ctx.settings)}: ${line}`)]
 }
 

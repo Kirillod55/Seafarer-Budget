@@ -30,6 +30,52 @@ const voiceMsg = (duration = 5) => ({ update_id: Math.floor(Math.random() * 1e9)
 
 beforeEach(() => resetAiCount())
 
+describe('a plan: several actions, «Выполнить» first', () => {
+  const multi = () => { const s = new MemStore(); s.settingsRow = { ...s.settingsRow!, accounts_mode: 'multi' } as never; return s }
+  const plan = (over: Partial<AiAnswer>) => answer({ records: [], ...over })
+  const say = 'создай новый счет - кэш и закинь 300 баксов на монобанк'
+  const move = { amount: 300, currency: 'USD', from: null, to: 'монобанк' }
+  const press = (update_id: number) => cb(`ai:ok:${update_id}`, { message_id: 9 })
+
+  it('shows the actions and changes nothing; «Выполнить» runs them once, the missing target created too', async () => {
+    const s = multi()
+    const before = s.accountRows.length
+    const q = msg(say)
+    const shown = textOf(await withAi(s, groq([plan({ new_accounts: ['кэш'], transfers: [move] })]), q))
+    expect(shown).toContain('1) Создать счёт «Кэш» с нулевым остатком')
+    expect(shown).toContain('2) Создать счёт «Монобанк» с нулевым остатком')
+    expect(shown).toContain('3) Перевод: Основной → Монобанк · $300')
+    expect(s.accountRows).toHaveLength(before)
+    expect(s.txRows).toHaveLength(0)
+    const g = groq([])
+    await withAi(s, g, press((q as { update_id: number }).update_id))
+    expect(g.calls).toBe(0)
+    expect(s.accountRows).toHaveLength(before + 2)
+    expect(s.txRows).toHaveLength(1)
+    expect(s.txRows[0]).toMatchObject({ kind: 'transfer', amount: 300, currency: 'USD' })
+    await withAi(s, g, press((q as { update_id: number }).update_id))
+    expect(s.txRows).toHaveLength(1)
+  })
+  it('an account phrase with a second action goes to the AI, not into the account name', async () => {
+    const s = multi()
+    const g = groq([plan({ new_accounts: ['Кэш'], transfers: [{ ...move, to: 'Кэш' }] })])
+    expect(textOf(await withAi(s, g, msg('создай счёт Кэш и закинь на него 300 баксов')))).toContain('Перевод: Основной → Кэш · $300')
+    expect(g.calls).toBe(1)
+  })
+  it('one account mode: says so, nothing is prepared', async () => {
+    const s = new MemStore()
+    expect(textOf(await withAi(s, groq([plan({ transfers: [move] })]), msg(say)))).toContain('Несколько счетов')
+    expect(s.txRows).toHaveLength(0)
+  })
+  it('a transfer with a bad amount is dropped and named as such', async () => {
+    const s = multi()
+    const text = textOf(await withAi(s, groq([plan({ new_accounts: ['Кэш'], transfers: [{ ...move, amount: -5 }] })]), msg(say)))
+    expect(text).toContain('Создать счёт «Кэш»')
+    expect(text).not.toContain('Перевод')
+    expect(text).toContain('Часть не разобрал')
+  })
+})
+
 describe('AI after the rules (spec §5)', () => {
   it('«кофе 80» never calls the AI', async () => {
     const s = new MemStore()

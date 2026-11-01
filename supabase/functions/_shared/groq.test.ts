@@ -31,7 +31,7 @@ describe('aiSchema', () => {
   it('is strict: every property required, no extra properties, categories/currencies as enums', () => {
     const s = aiSchema(lists) as { additionalProperties: boolean; required: string[]; properties: Record<string, unknown> }
     expect(s.additionalProperties).toBe(false)
-    expect(s.required.sort()).toEqual(['command', 'create_category', 'reason', 'records', 'unsure'])
+    expect(s.required.sort()).toEqual(['command', 'create_category', 'new_accounts', 'reason', 'records', 'transfers', 'unsure'])
     expect(JSON.stringify(s)).toContain('"enum":["Продукты","Кафе и рестораны","Транспорт и такси","Зарплата"]')
   })
 })

@@ -79,12 +79,19 @@ export async function runCommand(ctx: Ctx, c: Command): Promise<BotReply[]> {
  */
 const POLITE = /^\s*(ты\s+)?(можешь|сможешь|можно|пожалуйста|будь добр|будь добра|прошу)[,\s]+(ли\s+)?/iu
 
+const ACCOUNT_AND_MORE = /^\S+\s+(мне\s+)?(новый\s+|новые\s+)?сч[её]т.*(?<!\p{L})(и|потом|затем)\s.*\d/u
+
 export async function route(ctx: Ctx, text: string, confirmed = false): Promise<BotReply[] | null> {
   // «можешь создать…», «пожалуйста, добавь…» mean the same as the plain request
   text = text.replace(POLITE, '')
   const c = commandOf(text)
   if (c) return runCommand(ctx, c)
   const t = normalize(text).replace(/[?!]+$/, '')
+  // «создай счёт Кэш и закинь 300 на Монобанк» is two actions, not an account with a long name
+  if (ctx.ai && !confirmed && ACCOUNT_AND_MORE.test(t)) {
+    const r = await aiAnswer(ctx, text)
+    if (r) return r
+  }
   if (ACCOUNTS_RE.test(t)) return createAccounts(ctx, text, confirmed)
   if (/^(вс[её]|остатки?|баланс)( на них)? (по нулям|на нуле|ноль|нулевой|нулевые)$/.test(t)) return [send(ctx, 'Хорошо, новые счета начинаются с нуля')]
 

@@ -14,6 +14,7 @@ export const FALLBACK_MODEL = 'openai/gpt-oss-20b'
 export const WHISPER_MODEL = 'whisper-large-v3-turbo'
 export const AI_DAILY_LIMIT = 300
 export const MAX_AI_RECORDS = 20
+export const MAX_AI_ACTIONS = 10
 export const AI_COMMANDS = ['none', 'ping', 'today', 'month', 'left', 'undo', 'help', 'currency'] as const
 export type AiCommand = typeof AI_COMMANDS[number]
 
@@ -27,12 +28,17 @@ export interface AiAnswer {
   records: { kind: 'expense' | 'income'; amount: number; currency: string; category: string; account: string | null; days_ago: number; note: string }[]
   command: AiCommand
   create_category: { name: string; kind: 'expense' | 'income' } | null
+  new_accounts?: string[]
+  transfers?: AiTransfer[]
   unsure: boolean
   reason: string
 }
 
+/** Money between accounts; `to` may be an account that does not exist yet. */
+export interface AiTransfer { amount: number; currency: string; from: string | null; to: string }
+
 export interface AiRecord { kind: 'expense' | 'income'; amount: number; currency: string; category: string; account: string | null; date: string; note: string }
-export interface AiResult { records: AiRecord[]; dropped: number; command: AiCommand; createCategory: AiAnswer['create_category']; unsure: boolean; reason: string }
+export interface AiResult { records: AiRecord[]; dropped: number; command: AiCommand; createCategory: AiAnswer['create_category']; newAccounts: string[]; transfers: AiTransfer[]; unsure: boolean; reason: string }
 
 /** The strict JSON schema of the answer (`response_format: json_schema`, `strict: true`). */
 export function aiSchema(l: AiLists): object {
@@ -40,7 +46,7 @@ export function aiSchema(l: AiLists): object {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['records', 'command', 'create_category', 'unsure', 'reason'],
+    required: ['records', 'command', 'create_category', 'new_accounts', 'transfers', 'unsure', 'reason'],
     properties: {
       records: {
         type: 'array',
@@ -64,6 +70,21 @@ export function aiSchema(l: AiLists): object {
         type: 'object', additionalProperties: false, required: ['name', 'kind'],
         properties: { name: { type: 'string' }, kind: { type: 'string', enum: ['expense', 'income'] } },
       }),
+      new_accounts: { type: 'array', items: { type: 'string' } },
+      transfers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['amount', 'currency', 'from', 'to'],
+          properties: {
+            amount: { type: 'number' },
+            currency: { type: 'string', enum: l.currencies },
+            from: nullable({ type: 'string' }),
+            to: { type: 'string' },
+          },
+        },
+      },
       unsure: { type: 'boolean' },
       reason: { type: 'string' },
     },
@@ -77,6 +98,7 @@ function systemPrompt(l: AiLists): string {
     'Сленг: сотка/сотня/стольник = 100, полтос/полтинник = 50, пятихатка = 500, косарь/штука/тыща = 1000, 2к = 2000, пол косаря = 500, полторы штуки = 1500. «2 кофе по 50» — одна запись на 100. Несколько трат в одном сообщении — несколько записей.',
     'Сигареты, стики, картриджи, жидкости для вейпа и прочее для курения → Продукты.',
     'Если записи нет, а человек просит действие: command = ping (проверка связи), today, month, left (сколько можно тратить), undo, help, currency (какой курс валют, почём доллар или евро); иначе none. Просьба создать категорию → create_category {name, kind}.',
+    'Просьба создать счёт → new_accounts: только названия. Деньги со счёта на счёт («закинь», «перекинь», «переведи», «положи на счёт») → transfers {amount, currency, from — откуда или null, если не сказано, to — куда; to может быть счётом, которого ещё нет}. Одно сообщение может просить несколько действий: «создай счёт Кэш и закинь 300 баксов на Монобанк» → new_accounts [Кэш] и transfers [{300, USD, null, Монобанк}]. Если этого нет, new_accounts и transfers пустые.',
     'Если сомневаешься в сумме, категории или смысле — unsure = true и коротко объясни в reason.',
     `Категории: ${l.categories.join(', ')}.`,
     `Счета: ${l.accounts.length ? l.accounts.join(', ') : 'нет'}.`,
@@ -111,7 +133,22 @@ export function validateAi(a: AiAnswer, l: AiLists, today: string): AiResult | n
   const cc = a.create_category && typeof a.create_category.name === 'string' && a.create_category.name.trim()
     ? { name: a.create_category.name.trim().slice(0, 30), kind: a.create_category.kind === 'income' ? 'income' as const : 'expense' as const }
     : null
-  return { records, dropped, command, createCategory: cc, unsure: a.unsure, reason: String(a.reason ?? '') }
+  const accountName = (n: unknown) => {
+    const s = String(n ?? '').replace(/["«»]/g, '').trim().slice(0, 30)
+    return s && s[0].toUpperCase() + s.slice(1)
+  }
+  const newAccounts = [...new Set((Array.isArray(a.new_accounts) ? a.new_accounts : []).map(accountName).filter(Boolean))].slice(0, MAX_AI_ACTIONS)
+  const transfers: AiTransfer[] = []
+  for (const t of Array.isArray(a.transfers) ? a.transfers : []) {
+    const good = t && typeof t.amount === 'number' && t.amount > 0 && t.amount < 1_000_000 && l.currencies.includes(t.currency) && accountName(t.to) &&
+      transfers.length < MAX_AI_ACTIONS
+    if (!good) {
+      dropped++
+      continue
+    }
+    transfers.push({ amount: Math.round(t.amount * 100) / 100, currency: t.currency, from: accountName(t.from) || null, to: accountName(t.to) })
+  }
+  return { records, dropped, command, createCategory: cc, newAccounts, transfers, unsure: a.unsure, reason: String(a.reason ?? '') }
 }
 
 // Best effort per Edge Function instance: the cap protects the free Groq quota from a loop, not an exact count.
