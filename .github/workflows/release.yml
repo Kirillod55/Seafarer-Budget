@@ -89,3 +89,21 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'installer upload failed' }
           }
           gh release view $env:TAG --json assets --jq '.assets[].name'
+
+      # tauri-action writes api.github.com links into latest.json; that host allows 60 anonymous requests an hour per
+      # address, and over the limit the app's update fails with 403. The public download link has no such limit.
+      - name: Point the updater at the public download link
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          gh release download $env:TAG --pattern latest.json --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'latest.json download failed' }
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG/Seafarer-Budget-$env:VERSION-setup.exe"
+          $json = Get-Content latest.json -Raw | ConvertFrom-Json
+          foreach ($p in $json.platforms.PSObject.Properties) { $p.Value.url = $url }
+          $json | ConvertTo-Json -Depth 5 | Set-Content latest.json -Encoding utf8NoBOM
+          gh release upload $env:TAG latest.json --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'latest.json upload failed' }
