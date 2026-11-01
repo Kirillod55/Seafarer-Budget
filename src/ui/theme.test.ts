@@ -1,3 +1,4 @@
+import { applyLayout } from '../desk/layout.ts'
 import { readFileSync } from 'node:fs'
 import { act, renderHook } from '@testing-library/react'
 import { createElement, type ReactNode } from 'react'
@@ -101,7 +102,26 @@ describe('useTheme', () => {
     expect(await loadTheme(env.db)).toBe('light')
   })
 
-  it('a browser with view transitions cross-fades the whole screen: the theme changes inside the transition', async () => {
+  it('the PC cross-fades the whole screen: the theme changes inside the transition', async () => {
+    applyLayout('full')
+    const env = makeEnv()
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(AppProvider, { value: env, children })
+    const { result } = renderHook(() => useTheme(), { wrapper })
+    const start = vi.fn((update: () => void) => update())
+    Object.assign(document, { startViewTransition: start })
+    try {
+      await act(async () => result.current[1]('dark'))
+    } finally {
+      delete (document as { startViewTransition?: unknown }).startViewTransition
+      applyLayout('phone')
+    }
+    expect(start).toHaveBeenCalledOnce()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(document.documentElement.classList.contains('theme-fade')).toBe(false)
+  })
+
+  it('the phone never takes the picture: the band under the iPhone status bar stayed behind it', async () => {
+    applyLayout('phone')
     const env = makeEnv()
     const wrapper = ({ children }: { children: ReactNode }) => createElement(AppProvider, { value: env, children })
     const { result } = renderHook(() => useTheme(), { wrapper })
@@ -112,9 +132,9 @@ describe('useTheme', () => {
     } finally {
       delete (document as { startViewTransition?: unknown }).startViewTransition
     }
-    expect(start).toHaveBeenCalledOnce()
+    expect(start).not.toHaveBeenCalled()
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(document.documentElement.classList.contains('theme-fade')).toBe(false)
+    expect(document.documentElement.classList.contains('theme-fade')).toBe(true)
   })
 
   it('inherited text never transitions on every element: the colour is on <body> only', () => {
