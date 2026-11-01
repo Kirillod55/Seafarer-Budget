@@ -49,6 +49,14 @@ const splitAliases = (text: string) =>
     .map((a) => a.trim())
     .filter(Boolean)
 
+/** Why an account cannot be deleted, as the bot says it: the main one, or money still on it. null: it can. */
+function deleteBlock(a: Account, txs: Transaction[]): string | null {
+  if (a.is_default) return 'Основной счёт удалить нельзя.'
+  const left = Object.entries(balances(txs, a.id)).filter(([, v]) => Math.abs(v) >= 0.005)
+  if (!left.length) return null
+  return `На счёте ${left.map(([c, v]) => money(v, c)).join(' + ')}. Удалить можно только пустой счёт: сначала переведи остаток.`
+}
+
 /* ---------- the account cards ---------- */
 
 function AccountCard({
@@ -129,14 +137,31 @@ function AccountCard({
 /**
  * «Новый счёт» / «Счёт» (the 1.0 «Управление счетами» lives here now): the name and the aliases the bot knows the
  * account by («кофе 80 прокредит», spec §5). An empty name and a repeated one (any case, archived ones too) are refused.
+ * An empty account that is not the main one can be deleted here, after a second press: final, as in the bot.
  */
-function AccountForm({ account, accounts, onClose }: { account?: Account; accounts: Account[]; onClose(): void }) {
+function AccountForm({ account, accounts, blocked, onClose }: {
+  account?: Account
+  accounts: Account[]
+  /** an edited account that cannot be deleted: why */
+  blocked?: string | null
+  onClose(): void
+}) {
   const { repo } = useApp()
   const toast = useToast()
   const sheet = useRef<SheetHandle>(null)
   const [name, setName] = useState(account?.name ?? '')
   const [aliases, setAliases] = useState(account?.aliases.join(', ') ?? '')
   const [error, setError] = useState('')
+  const [sure, setSure] = useState(false)
+
+  /** final: the repo checks again when it writes (a record may have come in meanwhile) */
+  const remove = (id: string) =>
+    sheet.current?.close(() => {
+      repo.removeEmptyAccount(id, true).then(
+        (done) => toast(done ? 'Счёт удалён' : 'Не удалён: на счёте появились записи'),
+        () => toast(FAILED),
+      )
+    })
 
   /** false keeps the dialog open */
   async function save(): Promise<boolean> {
@@ -210,6 +235,29 @@ function AccountForm({ account, accounts, onClose }: { account?: Account; accoun
           <p className="gerr" role="alert">
             {error}
           </p>
+        )}
+        {account && (
+          <div className="acdel">
+            {blocked ? (
+              <p className="label">{blocked}</p>
+            ) : sure ? (
+              <>
+                <p className="label">{`Удалить счёт «${account.name}»? Старые записи останутся, вернуть счёт нельзя.`}</p>
+                <div className="gacts">
+                  <button type="button" className="btn-gray danger" onClick={() => remove(account.id)}>
+                    Да, удалить
+                  </button>
+                  <button type="button" className="btn-gray" onClick={() => setSure(false)}>
+                    Нет
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button type="button" className="btn-gray danger" onClick={() => setSure(true)}>
+                Удалить счёт
+              </button>
+            )}
+          </div>
         )}
       </div>
     </Sheet>
@@ -808,7 +856,7 @@ export function Accounts() {
     <div ref={screenRef} className="accs">
       {bar}
       {panel?.kind === 'new' && <AccountForm accounts={accounts} onClose={() => setPanel(null)} />}
-      {editing && <AccountForm key={editing.id} account={editing} accounts={accounts} onClose={() => setPanel(null)} />}
+      {editing && <AccountForm key={editing.id} account={editing} accounts={accounts} blocked={deleteBlock(editing, txs)} onClose={() => setPanel(null)} />}
 
       <div className="accs-main">
         <div className="accsum" role="group" aria-label="Сводка" data-flip-key="sum">

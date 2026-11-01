@@ -158,6 +158,35 @@ describe('Счета: cards', () => {
   })
 })
 
+describe('Счета: удаление счёта', () => {
+  const edit = async (name: string) => fireEvent.click(await screen.findByRole('button', { name: `Изменить «${name}»` }))
+
+  it('an empty account: a second press deletes it for good, the card goes', async () => {
+    await seed()
+    renderAccounts()
+    await edit('Наличные')
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить счёт' }))
+    expect((await env.db.accounts.get(cash.id))!.deleted).toBe(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'Да, удалить' }))
+    await waitFor(async () => expect((await env.db.accounts.get(cash.id))!.deleted).toBe(true))
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Наличные' })).toBeNull())
+    expect(await screen.findByText('Счёт удалён')).toBeTruthy()
+  })
+
+  it('money on it: says what is left, no button; the main account: not offered', async () => {
+    await seed()
+    await env.repo.addTransaction({ kind: 'income', amount: 100, currency: 'USD', account_id: cash.id, to_account_id: null, to_amount: null, to_currency: null, category_id: null, date: TEST_TODAY, note: '', source: 'app', author: 'owner', archived: false })
+    renderAccounts()
+    await edit('Наличные')
+    expect(await screen.findByText(/На счёте \$100.*только пустой счёт/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Удалить счёт' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await edit(main.name)
+    expect(await screen.findByText('Основной счёт удалить нельзя.')).toBeTruthy()
+  })
+})
+
 describe('Счета: последние операции', () => {
   const list = () => within(document.querySelector<HTMLElement>('.accrecent .oppane.on')!)
   const filter = () => within(screen.getByRole('group', { name: 'Счёт' }))

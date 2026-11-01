@@ -58,11 +58,12 @@ export interface Repo {
    */
   removeCategory(id: string): Promise<string | null>
   /**
-   * «Удалить» an archived account in «Архив» (spec §4): `deleted = true`, final (accounts have no undo bin). Checked
-   * when it is written, not when it was asked for: only an alive, archived, non-default account whose balance is zero
-   * in every currency (live records, archived ones included; binned ones not). false = refused, nothing written.
+   * «Удалить» an account in «Архив» (spec §4), or an active one from its dialog (`active`): `deleted = true`, final
+   * (accounts have no undo bin). Checked when it is written, not when it was asked for: only an alive, non-default
+   * account, archived unless `active`, whose balance is zero in every currency (live records, archived ones included;
+   * binned ones not). false = refused, nothing written.
    */
-  removeEmptyAccount(id: string): Promise<boolean>
+  removeEmptyAccount(id: string, active?: boolean): Promise<boolean>
   /** Hide a record from the lists (it still counts in the balance and reports). */
   setArchived(id: string, archived: boolean): Promise<void>
   /** «Удалить записи…»: live records of the kind in the period go to the bin as one batch. */
@@ -213,11 +214,11 @@ export function createRepo(db: LocalDb, deps: RepoDeps): Repo {
     return batch
   }
 
-  async function removeEmptyAccount(id: string): Promise<boolean> {
+  async function removeEmptyAccount(id: string, active = false): Promise<boolean> {
     let done = false
     await db.transaction('rw', db.accounts, db.transactions, async () => {
       const account = await db.accounts.get(id)
-      if (!account || !alive(account) || !account.archived || account.is_default) return
+      if (!account || !alive(account) || (!active && !account.archived) || account.is_default) return
       const txs = await db.transactions.filter((t) => alive(t) && (t.account_id === id || t.to_account_id === id)).toArray()
       // cents: a balance this close to zero is zero
       if (Object.values(balances(txs, id)).some((v) => Math.abs(v) >= EMPTY_BALANCE)) return
