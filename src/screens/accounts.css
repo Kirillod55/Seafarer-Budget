@@ -24,6 +24,11 @@
   height: 18px;
 }
 
+/* the summary and the cards; a column of its own on the PC */
+.accs-main {
+  display: contents;
+}
+
 /* ---------- summary ---------- */
 
 .accsum {
@@ -258,17 +263,42 @@
   margin-top: 2px;
 }
 
-.opform {
-  gap: 14px;
+/* every form in one cell: the card keeps the height of the tallest, a switch only cross-fades */
+.opstack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 
-/* «Откуда / Куда»: two equal columns */
-.opform .grid2.even {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.oppane {
+  position: relative;
+  grid-area: 1 / 1;
+  min-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.14s ease-in,
+    visibility 0s linear 0.14s;
+}
+
+.oppane.on {
+  z-index: 1;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.24s ease-out 0.06s;
+}
+
+.opform {
+  gap: 14px;
+  height: 100%;
 }
 
 .opform > .btn-acc {
   align-self: stretch;
+  margin-top: auto;
+}
+
+.acform {
+  gap: 14px;
 }
 
 .ophint {
@@ -289,12 +319,15 @@
 }
 
 .accfoot {
+  order: 1;
   margin: 0;
   line-height: 1.45;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .acard-btn svg {
+  .acard-btn svg,
+  .oppane,
+  .oppane.on {
     transition: none;
   }
 }

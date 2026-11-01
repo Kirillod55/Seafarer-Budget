@@ -12,9 +12,9 @@ import { NavBar } from '../nav/NavBar.tsx'
 import { curOptions } from '../ui/currencies.ts'
 import { Archive, CreditCard, Pencil, Plus, Wallet } from '../ui/icons.ts'
 import { onEnter as enterRuns } from '../ui/keys.ts'
-import { Morph } from '../ui/Morph.tsx'
 import { Picker } from '../ui/Picker.tsx'
 import { Segmented } from '../ui/Segmented.tsx'
+import { Sheet, type SheetHandle } from '../ui/Sheet.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import { useFlip } from '../ui/useFlip.ts'
 import { useDayTick } from '../ui/useDayTick.ts'
@@ -29,7 +29,7 @@ const ACC_COLORS = 6
 const usdWhole = (n: number) => money(n, 'USD', { whole: true })
 
 type Op = 'transfer' | 'exchange' | 'reconcile'
-/** The card on top: «Новый счёт» or «Счёт» (edit); one at a time. */
+/** The dialog: «Новый счёт» or «Счёт» (edit). */
 type Panel = { kind: 'new' } | { kind: 'edit'; id: string } | null
 
 /** «карта, visa ,» → ['карта', 'visa'] */
@@ -123,19 +123,23 @@ function AccountCard({
 function AccountForm({ account, accounts, onClose }: { account?: Account; accounts: Account[]; onClose(): void }) {
   const { repo } = useApp()
   const toast = useToast()
-  const titleId = useId()
+  const sheet = useRef<SheetHandle>(null)
   const [name, setName] = useState(account?.name ?? '')
   const [aliases, setAliases] = useState(account?.aliases.join(', ') ?? '')
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
 
-  async function save() {
-    if (busy) return
+  /** false keeps the dialog open */
+  async function save(): Promise<boolean> {
     const n = name.trim()
-    if (!n) return setError('Введите название')
+    if (!n) {
+      setError('Введите название')
+      return false
+    }
     const taken = accounts.some((a) => a.id !== account?.id && a.name.trim().toLowerCase() === n.toLowerCase())
-    if (taken) return setError('Такой счёт уже есть')
-    setBusy(true)
+    if (taken) {
+      setError('Такой счёт уже есть')
+      return false
+    }
     try {
       if (account) await repo.put<Account>('accounts', { id: account.id, name: n, aliases: splitAliases(aliases) })
       else
@@ -146,67 +150,59 @@ function AccountForm({ account, accounts, onClose }: { account?: Account; accoun
           archived: false,
           sort: accounts.reduce((max, a) => Math.max(max, a.sort), -1) + 1,
         })
-      onClose()
+      return true
     } catch {
       toast(FAILED)
-    } finally {
-      setBusy(false)
+      return false
     }
   }
 
-  const submit = enterRuns(() => void save())
+  const submit = enterRuns(() => sheet.current?.submit())
   return (
-    <section className="card gcard rec reveal" data-flip-key="acc-form" aria-labelledby={titleId}>
-      <h3 id={titleId}>{account ? 'Счёт' : 'Новый счёт'}</h3>
-      <div className="fld">
-        <label htmlFor="acc-name">Название</label>
-        <input
-          id="acc-name"
-          className="inp"
-          type="text"
-          placeholder="Например, Наличные"
-          autoComplete="off"
-          maxLength={40}
-          aria-invalid={!!error}
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value)
-            if (error) setError('')
-          }}
-          onKeyDown={submit}
-        />
+    <Sheet ref={sheet} onClose={onClose} title={account ? 'Счёт' : 'Новый счёт'} trailing={{ label: account ? 'Сохранить' : 'Создать', run: save }}>
+      <div className="rec acform">
+        <div className="fld">
+          <label htmlFor="acc-name">Название</label>
+          <input
+            id="acc-name"
+            className="inp"
+            type="text"
+            placeholder="Например, Наличные"
+            autoComplete="off"
+            maxLength={40}
+            aria-invalid={!!error}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (error) setError('')
+            }}
+            onKeyDown={submit}
+          />
+        </div>
+        <div className="fld">
+          <label htmlFor="acc-aliases">Псевдонимы для бота</label>
+          <input
+            id="acc-aliases"
+            className="inp"
+            type="text"
+            placeholder="Через запятую: нал, кэш"
+            autoComplete="off"
+            aria-describedby="acc-aliases-hint"
+            value={aliases}
+            onChange={(e) => setAliases(e.target.value)}
+            onKeyDown={submit}
+          />
+          <p id="acc-aliases-hint" className="label">
+            Бот узнаёт счёт по названию и этим словам: «кофе 80 нал».
+          </p>
+        </div>
+        {error && (
+          <p className="gerr" role="alert">
+            {error}
+          </p>
+        )}
       </div>
-      <div className="fld">
-        <label htmlFor="acc-aliases">Псевдонимы для бота</label>
-        <input
-          id="acc-aliases"
-          className="inp"
-          type="text"
-          placeholder="Через запятую: нал, кэш"
-          autoComplete="off"
-          aria-describedby="acc-aliases-hint"
-          value={aliases}
-          onChange={(e) => setAliases(e.target.value)}
-          onKeyDown={submit}
-        />
-        <p id="acc-aliases-hint" className="label">
-          Бот узнаёт счёт по названию и этим словам: «кофе 80 нал».
-        </p>
-      </div>
-      {error && (
-        <p className="gerr" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="gacts">
-        <button type="button" className="btn-acc" disabled={busy} onClick={() => void save()}>
-          {account ? 'Сохранить' : 'Создать'}
-        </button>
-        <button type="button" className="btn-gray" disabled={busy} onClick={onClose}>
-          Отмена
-        </button>
-      </div>
-    </section>
+    </Sheet>
   )
 }
 
@@ -337,15 +333,13 @@ function TransferForm({ settings, accounts, txs, rates, today }: OpsProps) {
 
   return (
     <div className="rec opform">
-      <div className="grid2 even">
-        <div className="fld">
-          <label htmlFor="tr-from">Откуда</label>
-          <Picker id="tr-from" label="Откуда" value={fromId} options={options} onChange={chooseFrom} />
-        </div>
-        <div className="fld">
-          <label htmlFor="tr-to">Куда</label>
-          <Picker id="tr-to" label="Куда" value={toId} options={options} onChange={chooseTo} />
-        </div>
+      <div className="fld">
+        <label htmlFor="tr-from">Откуда</label>
+        <Picker id="tr-from" label="Откуда" value={fromId} options={options} onChange={chooseFrom} />
+      </div>
+      <div className="fld">
+        <label htmlFor="tr-to">Куда</label>
+        <Picker id="tr-to" label="Куда" value={toId} options={options} onChange={chooseTo} />
       </div>
       <div className="grid2">
         <AmountField id="tr-amount" label="Сумма" placeholder="200" value={amount} invalid={!!error} onChange={setAmount} onEnter={() => void save()} />
@@ -354,7 +348,7 @@ function TransferForm({ settings, accounts, txs, rates, today }: OpsProps) {
           <Picker id="tr-cur" label="Валюта" kind="currency" value={currency} options={currencyOptions(settings, currency)} onChange={setCurrency} />
         </div>
       </div>
-      <ErrorLine text={error} />
+      {error ? <ErrorLine text={error} /> : <p className="label">{`Сейчас на счёте ≈ ${usdWhole(balanceUsd(balances(txs, fromId), rates, today))}`}</p>}
       <button type="button" className="btn-acc" disabled={busy} onClick={() => void save()}>
         Перевести
       </button>
@@ -460,18 +454,21 @@ function ExchangeForm({ settings, accounts, rates, today, multi }: OpsProps) {
           />
         </div>
       </div>
-      <p className="xrate" aria-live="polite">
-        {r ? (
-          <>
-            {r.line}
-            <b className="num">{r.mine}</b>
-            {r.tail}
-          </>
-        ) : (
-          'Курс появится, когда впишешь обе суммы'
-        )}
-      </p>
-      <ErrorLine text={error} />
+      {error ? (
+        <ErrorLine text={error} />
+      ) : (
+        <p className="xrate" aria-live="polite">
+          {r ? (
+            <>
+              {r.line}
+              <b className="num">{r.mine}</b>
+              {r.tail}
+            </>
+          ) : (
+            'Курс появится, когда впишешь обе суммы'
+          )}
+        </p>
+      )}
       <button type="button" className="btn-acc" disabled={busy} onClick={() => void save()}>
         Обменять
       </button>
@@ -581,7 +578,13 @@ function ReconcileForm({ settings, accounts, txs, today, multi, onHand }: OpsPro
 
 const OPS: Record<Op, string> = { transfer: 'Перевод', exchange: 'Обмен', reconcile: 'Сверка' }
 
-/** One card «Операции» with «Перевод · Обмен · Сверка» (spec §11; «Обмен · Сверка» in «Один баланс»). */
+const OP_FORMS = { transfer: TransferForm, exchange: ExchangeForm, reconcile: ReconcileForm }
+
+/**
+ * One card «Операции» with «Перевод · Обмен · Сверка» (spec §11; «Обмен · Сверка» in «Один баланс»). All the forms stay
+ * mounted in one grid cell, so the card is as tall as the tallest one: a switch is a cross-fade only, nothing is laid
+ * out or mounted, nothing on the page moves, and a half-typed sum survives it.
+ */
 function Operations(props: OpsProps) {
   const titleId = useId()
   const tabs: Op[] = props.multi ? ['transfer', 'exchange', 'reconcile'] : ['exchange', 'reconcile']
@@ -591,15 +594,16 @@ function Operations(props: OpsProps) {
     <section className="card gcard accops" data-flip-key="ops" aria-labelledby={titleId}>
       <h3 id={titleId}>Операции</h3>
       <Segmented<Op> label="Операция" options={tabs.map((v) => ({ value: v, label: OPS[v] }))} value={op} onChange={setChosen} />
-      <Morph k={op}>
-        {op === 'transfer' ? (
-          <TransferForm {...props} />
-        ) : op === 'exchange' ? (
-          <ExchangeForm {...props} />
-        ) : (
-          <ReconcileForm {...props} />
-        )}
-      </Morph>
+      <div className="opstack">
+        {tabs.map((t) => {
+          const Form = OP_FORMS[t]
+          return (
+            <div key={t} className={`oppane${t === op ? ' on' : ''}`} inert={t !== op}>
+              <Form {...props} />
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
@@ -608,7 +612,7 @@ function Operations(props: OpsProps) {
  * «Счета» (spec §4 «Счета», §11 «Раздел «Счета» — переделан полностью», phone part; prototype accounts()/accCard()):
  * the summary «Всего ≈ · Свободно · В целях»; the accounts as bank cards (own gradient, «Основной» on the default,
  * ≈ $ and the currency pills; «В архив» on the others, the pencil opens the name and the bot aliases), swiping
- * sideways with snapping, the dashed «＋ Новый счёт» last; then one card «Операции». «Один баланс»: one card with
+ * sideways with snapping, the dashed «＋ Новый счёт» last; then one card «Операции» (on the PC: a column of its own). «Один баланс»: one card with
  * every currency and «Обмен · Сверка». Archiving shows «Счёт в архиве · Отменить»; the archive itself is in «Архив».
  */
 export function Accounts() {
@@ -635,7 +639,7 @@ export function Accounts() {
     .sort((a, b) => Number(b.is_default) - Number(a.is_default) || a.sort - b.sort)
   const multi = data?.settings?.accounts_mode === 'multi'
   const editing = panel?.kind === 'edit' ? data?.accounts.find((a) => a.id === panel.id) : undefined
-  useFlip(screenRef, [active.map((a) => a.id).join(','), panel?.kind === 'new' ? 'new' : (editing?.id ?? ''), multi, !!data])
+  useFlip(screenRef, [active.map((a) => a.id).join(','), multi], !!data)
 
   async function archive(a: Account) {
     if (panel?.kind === 'edit' && panel.id === a.id) setPanel(null)
@@ -652,7 +656,7 @@ export function Accounts() {
       back={{ label: 'Ещё' }}
       title="Счета"
       trailing={
-        multi && !panel ? (
+        multi ? (
           <button type="button" className="navbtn strong" onClick={() => setPanel({ kind: 'new' })}>
             <Plus aria-hidden="true" strokeWidth={2.4} />
             Счёт
@@ -665,7 +669,6 @@ export function Accounts() {
     return (
       <div ref={screenRef} className="accs">
         {bar}
-        <p className="muted">Загрузка…</p>
       </div>
     )
   const { settings, accounts, txs, rates, moves, goals } = data
@@ -690,58 +693,60 @@ export function Accounts() {
       {panel?.kind === 'new' && <AccountForm accounts={accounts} onClose={() => setPanel(null)} />}
       {editing && <AccountForm key={editing.id} account={editing} accounts={accounts} onClose={() => setPanel(null)} />}
 
-      <div className="accsum" role="group" aria-label="Сводка" data-flip-key="sum">
-        <div>
-          <span className="label">Всего ≈</span>
-          <b className="num">{usdWhole(total)}</b>
+      <div className="accs-main">
+        <div className="accsum" role="group" aria-label="Сводка" data-flip-key="sum">
+          <div>
+            <span className="label">Всего ≈</span>
+            <b className="num">{usdWhole(total)}</b>
+          </div>
+          <div>
+            <span className="label">Свободно</span>
+            <b className="num">{usdWhole(free)}</b>
+          </div>
+          <div>
+            <span className="label">В целях</span>
+            <b className="num">{usdWhole(inGoals)}</b>
+          </div>
         </div>
-        <div>
-          <span className="label">Свободно</span>
-          <b className="num">{usdWhole(free)}</b>
-        </div>
-        <div>
-          <span className="label">В целях</span>
-          <b className="num">{usdWhole(inGoals)}</b>
-        </div>
-      </div>
 
-      <div className="acards" data-no-back-swipe="" data-flip-key="cards">
-        {multi ? (
-          <>
-            {active.map((a, i) => {
-              const bal = balances(txs, a.id)
-              return (
-                <AccountCard
-                  key={a.id}
-                  flipKey={a.id}
-                  name={a.name}
-                  bal={bal}
-                  usd={balanceUsd(bal, rates, today)}
-                  index={i}
-                  single={false}
-                  isDefault={a.is_default}
-                  onEdit={() => setPanel({ kind: 'edit', id: a.id })}
-                  onArchive={!a.is_default && canArchive ? () => void archive(a) : undefined}
-                />
-              )
-            })}
-            <button type="button" className="acard add" onClick={() => setPanel({ kind: 'new' })}>
-              <Plus aria-hidden="true" strokeWidth={2} />
-              Новый счёт
-            </button>
-          </>
-        ) : (
-          <AccountCard flipKey="single" name="Один баланс" bal={all} usd={total} index={0} single isDefault={false} />
+        <div className="acards" data-no-back-swipe="" data-flip-key="cards">
+          {multi ? (
+            <>
+              {active.map((a, i) => {
+                const bal = balances(txs, a.id)
+                return (
+                  <AccountCard
+                    key={a.id}
+                    flipKey={a.id}
+                    name={a.name}
+                    bal={bal}
+                    usd={balanceUsd(bal, rates, today)}
+                    index={i}
+                    single={false}
+                    isDefault={a.is_default}
+                    onEdit={() => setPanel({ kind: 'edit', id: a.id })}
+                    onArchive={!a.is_default && canArchive ? () => void archive(a) : undefined}
+                  />
+                )
+              })}
+              <button type="button" className="acard add" onClick={() => setPanel({ kind: 'new' })}>
+                <Plus aria-hidden="true" strokeWidth={2} />
+                Новый счёт
+              </button>
+            </>
+          ) : (
+            <AccountCard flipKey="single" name="Один баланс" bal={all} usd={total} index={0} single isDefault={false} />
+          )}
+        </div>
+
+        {!multi && (
+          <p className="label accfoot" data-flip-key="foot">
+            Сейчас режим «Один баланс». Несколько счетов включаются в «Ещё» → «Режим счетов».
+          </p>
         )}
       </div>
 
       <Operations settings={settings} accounts={active} txs={txs} rates={rates} today={today} multi={multi} onHand={all} />
-
-      {!multi && (
-        <p className="label accfoot" data-flip-key="foot">
-          Сейчас режим «Один баланс». Несколько счетов включаются в «Ещё» → «Режим счетов».
-        </p>
-      )}
     </div>
   )
 }

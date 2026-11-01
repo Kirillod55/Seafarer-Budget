@@ -565,6 +565,11 @@ html.desk .sheet {
   animation: dlgIn 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* the dialog takes the focus itself when it opens: no ring around the whole window */
+html.desk .sheet:focus {
+  outline: none;
+}
+
 html.desk .sheet.closing {
   animation: dlgOut 0.14s ease-in forwards;
 }
@@ -1139,11 +1144,23 @@ html.desk .rtile {
   border-radius: 8px;
 }
 
+/* the summary and the cards on the left, «Операции» beside them from the top */
 html.desk .accs {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 420px;
   align-items: start;
   gap: 20px;
+}
+
+html.desk .accs > :first-child {
+  grid-column: 1 / -1;
+}
+
+html.desk .accs-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
 }
 
 html.desk .acards {
@@ -1157,11 +1174,6 @@ html.desk .acards {
 html.desk .acard {
   min-height: 168px;
   border-radius: 12px;
-}
-
-html.desk .accops {
-  position: sticky;
-  top: 24px;
 }
 
 /* ---------- settings: Windows «Параметры» groups ---------- */

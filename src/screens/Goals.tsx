@@ -337,7 +337,7 @@ export function Goals() {
   const active = data?.goals.filter((g) => !g.archived) ?? []
   const archivedCount = (data?.goals.length ?? 0) - active.length
   const panelKey = panel ? (panel.kind === 'new' ? 'new' : panel.goalId) : ''
-  useFlip(screenRef, [active.map((g) => g.id).join(','), archivedCount, panelKey, !!data])
+  useFlip(screenRef, [active.map((g) => g.id).join(','), archivedCount, panelKey], !!data)
 
   async function archive(goal: Goal) {
     if (panel?.kind === 'move' && panel.goalId === goal.id) setPanel(null)

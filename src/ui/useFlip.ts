@@ -18,6 +18,9 @@ import { prefersReducedMotion } from './motion.ts'
  * so a change that only lives inside a child does not animate. Deps are compared with the last COMMITTED ones:
  * a render React throws away (concurrent rendering) leaves nothing behind — the next render that differs from
  * what is on screen reads the positions again.
+ *
+ * `ready` = false while the screen still loads its data: the first content after that is the page opening (its own
+ * animation), not a change on the page, so it plays nothing.
  */
 
 /** iOS curve (--ios), as the spec asks for the slide */
@@ -128,18 +131,18 @@ function play(box: HTMLElement | null, s: Snap) {
 
 const same = (a: DependencyList, b: DependencyList) => a.length === b.length && a.every((x, i) => Object.is(x, b[i]))
 
-export function useFlip(containerRef: RefObject<HTMLElement | null>, deps: DependencyList): void {
+export function useFlip(containerRef: RefObject<HTMLElement | null>, deps: DependencyList, ready = true): void {
   const committed = useRef<DependencyList | null>(null)
   const pending = useRef<Snap | null>(null)
 
   // Read the old positions while the DOM still shows them: during a render whose deps differ from the screen's.
-  if (committed.current && !same(committed.current, deps)) pending.current = snap(containerRef.current)
+  if (ready && committed.current && !same(committed.current, deps)) pending.current = snap(containerRef.current)
 
   useLayoutEffect(() => {
-    committed.current = deps
+    if (ready) committed.current = deps
     const s = pending.current
     pending.current = null
     if (s) play(containerRef.current, s)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, [...deps, ready])
 }

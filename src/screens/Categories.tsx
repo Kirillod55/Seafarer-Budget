@@ -60,7 +60,7 @@ export function Categories() {
   const ids = shown.map((c) => c.id).join(',')
   const editing = panel?.kind === 'edit' ? shown.find((c) => c.id === panel.id) : undefined
   const panelKey = panel?.kind === 'new' ? 'new' : (editing?.id ?? '')
-  useFlip(screenRef, [ids, panelKey, !!data])
+  useFlip(screenRef, [ids, panelKey], !!data)
 
   // rows that come back (an «Отменить») or are new slide in; the first list does not
   const seen = useRef<Set<string> | null>(null)

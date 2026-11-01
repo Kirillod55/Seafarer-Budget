@@ -35,10 +35,11 @@ function renderAccounts() {
 
 const card = (name: string) => within(screen.getByRole('region', { name }))
 const ops = () => within(screen.getByRole('region', { name: 'Операции' }))
+const pane = () => within(document.querySelector<HTMLElement>('.oppane.on')!)
 const kindCount = (kind: string) => env.db.transactions.filter((t) => t.kind === kind).count()
 
 async function pick(field: string, option: string | RegExp) {
-  fireEvent.click(screen.getByLabelText(field))
+  fireEvent.click(pane().getByLabelText(field))
   fireEvent.click(await screen.findByRole('option', { name: option }))
 }
 
@@ -177,7 +178,7 @@ describe('Счета: operations', () => {
 
     await screen.findByRole('region', { name: 'Операции' })
     fireEvent.change(screen.getByLabelText('Сумма'), { target: { value: '1000' } })
-    expect(screen.getByLabelText('Валюта').getAttribute('aria-label')).toBe('Валюта: UAH')
+    expect(pane().getByLabelText('Валюта').getAttribute('aria-label')).toBe('Валюта: UAH')
     fireEvent.click(screen.getByRole('button', { name: 'Перевести' }))
 
     await waitFor(() => expect(card('Наличные').getByText('₴1,000')).toBeTruthy())
@@ -271,7 +272,7 @@ describe('Счета: operations', () => {
     renderAccounts()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Сверка' }))
-    expect((await screen.findByLabelText('Счёт')).getAttribute('aria-label')).toBe('Счёт: Наличные')
+    expect((await waitFor(() => pane().getByLabelText('Счёт'))).getAttribute('aria-label')).toBe('Счёт: Наличные')
     await pick('Счёт', /Основной/)
     fireEvent.change(screen.getByLabelText('Сколько на самом деле'), { target: { value: '4800' } })
     fireEvent.click(screen.getByRole('button', { name: 'Сверить' }))

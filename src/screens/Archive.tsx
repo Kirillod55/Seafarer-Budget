@@ -69,7 +69,7 @@ export function Archive() {
   const accounts = (data?.accounts ?? []).filter((a) => a.archived && !leaving.has(a.id)).sort((a, b) => a.sort - b.sort)
 
   const ids = [txs, goals, categories, accounts].map((rows) => rows.map((r) => r.id).join(',')).join('|')
-  useFlip(screenRef, [ids, confirm, !!data])
+  useFlip(screenRef, [ids, confirm], !!data)
 
   const catById = new Map((data?.categories ?? []).map((c) => [c.id, c]))
   // every live record counts (archived ones too) — as on «Категории»

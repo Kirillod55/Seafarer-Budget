@@ -219,7 +219,7 @@ export function Limits() {
     return limit ? [{ category: c, limit }] : []
   })
   const free = categories.filter((c) => !limitOf.has(c.id))
-  useFlip(screenRef, [shown.map((r) => r.limit.id).join(','), panel?.kind === 'new' ? 'new' : (panel?.id ?? ''), !!data])
+  useFlip(screenRef, [shown.map((r) => r.limit.id).join(','), panel?.kind === 'new' ? 'new' : (panel?.id ?? '')], !!data)
 
   async function removeLimit(limit: Limit) {
     if (panel?.kind === 'edit' && panel.id === limit.id) setPanel(null)

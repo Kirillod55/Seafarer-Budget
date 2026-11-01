@@ -36,9 +36,9 @@
   transition: color 0.3s var(--ios);
 }
 
+/* the colour only: a heavier weight would shift the letters the moment the pill sets off */
 .seg > button[aria-pressed='true'] {
   color: var(--on-accent);
-  font-weight: 600;
 }
 
 .seg > .thumb {
