@@ -1162,13 +1162,6 @@ html.desk .accops {
   top: 24px;
 }
 
-html.desk .accfilter {
-  flex-wrap: wrap;
-  margin: 0;
-  padding: 0;
-  overflow: visible;
-}
-
 html.desk .accs-main {
   display: flex;
   flex-direction: column;

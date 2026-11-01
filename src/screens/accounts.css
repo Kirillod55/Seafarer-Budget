@@ -340,55 +340,38 @@
   font-weight: 600;
 }
 
-.accfilter {
-  display: flex;
-  gap: 8px;
-  margin: 0 -16px;
-  padding: 0 16px;
+/* the switch with a pill, sized by the names; many accounts scroll sideways */
+.seg.accfilter {
+  gap: 2px;
+  align-self: flex-start;
+  max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
 }
 
-.accfilter::-webkit-scrollbar {
+.seg.accfilter::-webkit-scrollbar {
   display: none;
 }
 
-.accfilter button {
+.seg.accfilter > button {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 7px;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--card);
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.824rem; /* 14 */
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color 0.2s ease-out,
-    border-color 0.2s ease-out,
-    color 0.2s ease-out;
+  padding: 6px 14px;
 }
 
-.accfilter i {
+.seg.accfilter i {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--c);
 }
 
-.accfilter button[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-/* a new choice fades in; nothing slides */
+/* the rows appear after the page has opened */
 .accrecent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   animation: accListIn 0.2s ease-out;
 }
 
@@ -420,9 +403,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .accfilter button,
   .accrecent-list {
-    transition: none;
     animation: none;
   }
 }

@@ -35,7 +35,7 @@ function renderAccounts() {
 
 const card = (name: string) => within(screen.getByRole('region', { name }))
 const ops = () => within(screen.getByRole('region', { name: 'Операции' }))
-const pane = () => within(document.querySelector<HTMLElement>('.oppane.on')!)
+const pane = () => within(document.querySelector<HTMLElement>('.accops .oppane.on')!)
 const kindCount = (kind: string) => env.db.transactions.filter((t) => t.kind === kind).count()
 
 async function pick(field: string, option: string | RegExp) {
@@ -159,7 +159,7 @@ describe('Счета: cards', () => {
 })
 
 describe('Счета: последние операции', () => {
-  const list = () => within(screen.getByRole('region', { name: 'Последние операции' }))
+  const list = () => within(document.querySelector<HTMLElement>('.accrecent .oppane.on')!)
   const filter = () => within(screen.getByRole('group', { name: 'Счёт' }))
   async function records() {
     await seed()
@@ -176,15 +176,16 @@ describe('Счета: последние операции', () => {
   it('«Все»: each record carries its account, a transfer both; a chip leaves one account with its transfers', async () => {
     const { a } = await records()
     renderAccounts()
-    expect(await screen.findByText('Кофе')).toBeTruthy()
-    const tags = (name: string) => [...document.querySelectorAll('.acctag')].filter((t) => t.textContent === name)
+    await waitFor(() => expect(list().getByText('Кофе')).toBeTruthy())
+    const tags = (name: string) => [...document.querySelectorAll('.accrecent .oppane.on .acctag')].filter((t) => t.textContent === name)
     expect(tags('Наличные')).toHaveLength(2)
     expect(tags(a.name).length).toBeGreaterThanOrEqual(2)
     fireEvent.click(filter().getByRole('button', { name: 'Наличные' }))
-    await waitFor(() => expect(list().queryByText('Кофе')).toBeNull())
+    await waitFor(() => expect(list().queryByText('Обед')).toBeTruthy())
+    expect(list().queryByText('Кофе')).toBeNull()
     expect(list().getByText('Обед')).toBeTruthy()
     expect(list().getByText('Перевод')).toBeTruthy()
-    expect(document.querySelector('.acctag')).toBeNull()
+    expect(document.querySelector('.accrecent .oppane.on .acctag')).toBeNull()
   })
 
   it('«Показать ещё» opens the next page', async () => {
@@ -192,8 +193,9 @@ describe('Счета: последние операции', () => {
     const row = await env.db.transactions.get('x1')
     await env.db.transactions.bulkPut(Array.from({ length: 25 }, (_, i) => ({ ...row!, id: `m${i}`, account_id: a.id, note: `Запись ${i}` })))
     renderAccounts()
-    fireEvent.click(await screen.findByRole('button', { name: 'Показать ещё' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Показать ещё' })).toBeNull())
+    await waitFor(() => expect(list().getByRole('button', { name: 'Показать ещё' })).toBeTruthy())
+    fireEvent.click(list().getByRole('button', { name: 'Показать ещё' }))
+    await waitFor(() => expect(list().queryByRole('button', { name: 'Показать ещё' })).toBeNull())
   })
 })
 

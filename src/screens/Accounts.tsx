@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, balances, reservingGoalMoves, reservedUsd } from '@shared/calc.ts'
@@ -32,6 +32,8 @@ const ACC_COLORS = 6
 const accColor = (index: number) => `var(--acc-${index % ACC_COLORS})`
 /** rows in «Последние операции», and how many more each «Показать ещё» adds */
 const RECENT_PAGE = 20
+/** the «Все» item of the filter */
+const ALL = 'all'
 /** vDesk in desk.css: the rows are built after the page has opened, so that building them never holds its start */
 const RECENT_AFTER_MS = 300
 const usdWhole = (n: number) => money(n, 'USD', { whole: true })
@@ -617,85 +619,107 @@ function Operations(props: OpsProps) {
   )
 }
 
-/**
- * «Последние операции»: every record, newest first, as on the home screen. Several accounts: «Все» tags each record with
- * its account in the colour of its card; a chip leaves one account's records, transfers in and out of it included.
- */
-function RecentOps({ txs, categories, accounts, active, multi, partnerName, today }: {
+interface RecentProps {
   txs: Transaction[]
   categories: Category[]
   /** archived ones too: their old records keep their names */
   accounts: Account[]
-  /** the cards, in their order: the colours come from here */
-  active: Account[]
-  multi: boolean
   partnerName: string | null
   today: string
+}
+
+/** The rows of one filter item: ALL, or one account with the transfers in and out of it. */
+const RecentList = memo(function RecentList({ txs, categories, accounts, partnerName, today, id, tagColor }: RecentProps & {
+  id: string
+  tagColor?(a: Account): string
 }) {
   const { openRecord } = useRecordSheet()
-  const [chosen, setChosen] = useState<string | null>(null)
   const [limit, setLimit] = useState(RECENT_PAGE)
-  const [opened, setOpened] = useState(false)
-  useEffect(() => {
-    const t = setTimeout(() => setOpened(true), prefersReducedMotion() ? 0 : RECENT_AFTER_MS)
-    return () => clearTimeout(t)
-  }, [])
-  const account = multi && active.some((a) => a.id === chosen) ? chosen : null
   const rows = useMemo(
     () =>
       txs
-        .filter((t) => !t.archived && (!account || t.account_id === account || t.to_account_id === account))
+        .filter((t) => !t.archived && (id === ALL || t.account_id === id || t.to_account_id === id))
         .sort((a, b) => (a.date === b.date ? b.created_at.localeCompare(a.created_at) : b.date.localeCompare(a.date))),
-    [txs, account],
+    [txs, id],
   )
-  const choose = (id: string | null) => {
-    setChosen(id)
-    setLimit(RECENT_PAGE)
-  }
-  const tagColor = (a: Account) => {
-    const i = active.findIndex((x) => x.id === a.id)
-    return i < 0 ? 'var(--muted)' : accColor(i)
-  }
   return (
-    <section className="accrecent" data-flip-key="recent" aria-label="Последние операции">
-      <h3 className="accrecent-h">Последние операции</h3>
-      {multi && (
-        <div className="accfilter" role="group" aria-label="Счёт">
-          <button type="button" aria-pressed={!account} onClick={() => choose(null)}>
-            Все
-          </button>
-          {active.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              aria-pressed={a.id === account}
-              style={{ '--c': tagColor(a) } as CSSProperties}
-              onClick={() => choose(a.id)}
-            >
-              <i aria-hidden="true" />
-              {a.name}
-            </button>
-          ))}
-        </div>
-      )}
-      {opened && (
-        <div key={account ?? 'all'} className="accrecent-list">
-          <DayGroups
-            txs={rows.slice(0, limit)}
-            categories={categories}
-            accounts={accounts}
-            partnerName={partnerName}
-            onOpen={openRecord}
-            today={today}
-            tagColor={multi && !account ? tagColor : undefined}
-          />
-        </div>
-      )}
-      {opened && rows.length > limit && (
+    <div className="accrecent-list">
+      <DayGroups
+        txs={rows.slice(0, limit)}
+        categories={categories}
+        accounts={accounts}
+        partnerName={partnerName}
+        onOpen={openRecord}
+        today={today}
+        tagColor={tagColor}
+      />
+      {rows.length > limit && (
         <button type="button" className="btn-gray accmore" onClick={() => setLimit(limit + RECENT_PAGE)}>
           Показать ещё
         </button>
       )}
+    </div>
+  )
+})
+
+/**
+ * «Последние операции»: every record, newest first, as on the home screen. Several accounts: «Все» tags each record with
+ * its account in the colour of its card; the filter leaves one account's records, transfers in and out of it included.
+ * Each filter item keeps its built list in one grid cell, as «Операции» does: a switch is the pill's slide and a
+ * cross-fade, no row is built on the click. The lists are built after the page has opened, the chosen one first and
+ * the others one by one when the browser is free.
+ */
+function RecentOps({ active, multi, ...list }: RecentProps & {
+  /** the cards, in their order: the colours come from here */
+  active: Account[]
+  multi: boolean
+}) {
+  const [chosen, setChosen] = useState(ALL)
+  const views = multi ? [ALL, ...active.map((a) => a.id)] : [ALL]
+  const view = views.includes(chosen) ? chosen : ALL
+  const [built, setBuilt] = useState<string[]>([])
+  const left = views.filter((v) => !built.includes(v))
+  const next = view !== ALL && left.includes(view) ? view : left[0]
+  useEffect(() => {
+    if (!next) return
+    const add = () => setBuilt((b) => [...b, next])
+    if (built.length === 0) {
+      const t = setTimeout(add, prefersReducedMotion() ? 0 : RECENT_AFTER_MS)
+      return () => clearTimeout(t)
+    }
+    if (typeof requestIdleCallback !== 'function') {
+      const t = setTimeout(add, 50)
+      return () => clearTimeout(t)
+    }
+    const h = requestIdleCallback(add, { timeout: 500 })
+    return () => cancelIdleCallback(h)
+  }, [next, built.length])
+  const tagColor = useCallback(
+    (a: Account) => {
+      const i = active.findIndex((x) => x.id === a.id)
+      return i < 0 ? 'var(--muted)' : accColor(i)
+    },
+    [active],
+  )
+  return (
+    <section className="accrecent" data-flip-key="recent" aria-label="Последние операции">
+      <h3 className="accrecent-h">Последние операции</h3>
+      {multi && (
+        <Segmented
+          className="accfilter"
+          label="Счёт"
+          options={[{ value: ALL, label: 'Все' }, ...active.map((a) => ({ value: a.id, label: a.name, dot: tagColor(a) }))]}
+          value={view}
+          onChange={setChosen}
+        />
+      )}
+      <div className="opstack">
+        {views.filter((v) => built.includes(v)).map((v) => (
+          <div key={v} className={`oppane${v === view ? ' on' : ''}`} inert={v !== view}>
+            <RecentList {...list} id={v} tagColor={multi && v === ALL ? tagColor : undefined} />
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

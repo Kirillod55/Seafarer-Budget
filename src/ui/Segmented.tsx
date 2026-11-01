@@ -5,6 +5,8 @@ import './ui.css'
 export interface SegmentOption<T extends string> {
   value: T
   label: string
+  /** a colour dot before the label (the account's own colour) */
+  dot?: string
 }
 
 /*
@@ -17,12 +19,14 @@ export function Segmented<T extends string>({
   value,
   onChange,
   label,
+  className,
 }: {
   options: SegmentOption<T>[]
   value: T
   onChange(v: T): void
   /** Accessible name of the group («Тип записи», «Тема»). */
   label: string
+  className?: string
 }) {
   const segRef = useRef<HTMLDivElement>(null)
   const thumbRef = useRef<HTMLSpanElement>(null)
@@ -78,10 +82,11 @@ export function Segmented<T extends string>({
   }, [])
 
   return (
-    <div ref={segRef} className="seg" role="group" aria-label={label}>
+    <div ref={segRef} className={`seg${className ? ` ${className}` : ''}`} role="group" aria-label={label}>
       <span ref={thumbRef} className="thumb" aria-hidden="true" />
       {options.map((o) => (
         <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => o.value !== value && onChange(o.value)}>
+          {o.dot && <i aria-hidden="true" style={{ background: o.dot }} />}
           {o.label}
         </button>
       ))}
