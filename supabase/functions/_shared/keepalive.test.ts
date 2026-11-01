@@ -186,13 +186,23 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     expect(await res.json()).toEqual({ ok: true, sent: true })
     const o = opts(EIGHT)
     expect(f.sent.map((m) => m.chat)).toEqual([o.ownerChatId, o.partnerChatId])
-    expect(f.sent[0].text).toBe('☀️ Утренняя сводка\n\n💱 Курс на 2 ноября:\nПокупка → продажа\n\n💵 Доллар:\n🇺🇦 ₴45.25 → ₴45.95\n🇲🇩 MDL 17.85 → MDL 18.15\n\n💶 Евро:\n🇺🇦 ₴50.30 → ₴51.30\n🇲🇩 MDL 20.03 → MDL 20.28\n\n🏦 ПриватБанк / maib')
+    expect(f.sent[0].text).toBe('☀️ Доброе утро, Кирилл!\nУтренняя сводка\n\n💱 Курс на 2 ноября:\nПокупка → продажа\n\n💵 Доллар:\n🇺🇦 ₴45.25 → ₴45.95\n🇲🇩 MDL 17.85 → MDL 18.15\n\n💶 Евро:\n🇺🇦 ₴50.30 → ₴51.30\n🇲🇩 MDL 20.03 → MDL 20.28\n\n🏦 ПриватБанк / maib')
   })
   it('both banks down: the official NBU and BNM rates, marked, without the buy/sell lines', async () => {
     const f = fake()
     f.bank = noBankRates()
     await runMorningRates(f, opts(EIGHT))
-    expect(f.sent[0].text).toBe('☀️ Утренняя сводка\n\n💱 Курс на 2 ноября:\n\n💵 Доллар:\n🇺🇦 ₴42 (НБУ)\n🇲🇩 MDL 18.04 (НБМ)\n\n💶 Евро:\n🇺🇦 ₴49 (НБУ)\n🇲🇩 MDL 20.10 (НБМ)')
+    expect(f.sent[0].text).toBe('☀️ Доброе утро, Кирилл!\nУтренняя сводка\n\n💱 Курс на 2 ноября:\n\n💵 Доллар:\n🇺🇦 ₴42 (НБУ)\n🇲🇩 MDL 18.04 (НБМ)\n\n💶 Евро:\n🇺🇦 ₴49 (НБУ)\n🇲🇩 MDL 20.10 (НБМ)')
+  })
+  it('greets each person by name; without a partner name, just good morning', async () => {
+    const f = fake()
+    await runMorningRates(f, opts(EIGHT))
+    expect(f.sent[0].text.startsWith('☀️ Доброе утро, Кирилл!\nУтренняя сводка')).toBe(true)
+    expect(f.sent[1].text.startsWith('☀️ Доброе утро, Маша!\nУтренняя сводка')).toBe(true)
+    const g = fake()
+    g.settingsRow.partner_name = null
+    await runMorningRates(g, opts(EIGHT))
+    expect(g.sent[1].text.startsWith('☀️ Доброе утро!\n')).toBe(true)
   })
   it('switched off by one person: the other still gets it; off for both: nothing is fetched or sent', async () => {
     const f = fake()

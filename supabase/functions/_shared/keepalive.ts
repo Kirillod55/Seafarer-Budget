@@ -211,6 +211,7 @@ export async function runKeepalive(deps: KeepaliveDeps, o: KeepaliveOptions): Pr
 }
 
 const RATES_HOUR = 8
+const OWNER_NAME = 'Кирилл' // settings keep only the second person's name
 const RATE_CURRENCIES = ['UAH', 'USD', 'EUR', 'MDL']
 
 const localHour = (now: Date, timeZone: string) =>
@@ -239,9 +240,12 @@ export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions, 
       console.error('morning rates:', e instanceof Error ? e.message : String(e))
     }
   }
-  // the mark tells it from the same rates asked for by /currency or in words
-  const text = `☀️ Утренняя сводка\n\n${ratesText(await deps.rates(), today, dayMonth, await deps.bankRates())}`
-  for (const c of chats) await deps.send(c, text)
+  const body = ratesText(await deps.rates(), today, dayMonth, await deps.bankRates())
+  for (const c of chats) {
+    const name = c === o.ownerChatId ? OWNER_NAME : s.partner_name
+    // the greeting and the mark tell it from the same rates asked for by /currency or in words
+    await deps.send(c, `☀️ Доброе утро${name ? `, ${name}` : ''}!\nУтренняя сводка\n\n${body}`)
+  }
   return true
 }
 
