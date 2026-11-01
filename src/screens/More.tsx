@@ -9,6 +9,7 @@ import { useNav } from '../nav/Navigator.tsx'
 import { Archive, ChevronRight, CreditCard, Gauge, LogOut, Tag, type LucideIcon } from '../ui/icons.ts'
 import { AboutSection } from './more/AboutSection.tsx'
 import { AppearanceSection } from './more/AppearanceSection.tsx'
+import { TrayRow } from './more/TrayRow.tsx'
 import { BudgetSection } from './more/BudgetSection.tsx'
 import { CurrenciesSection } from './more/CurrenciesSection.tsx'
 import { BackupSection, ModeSection, ReconcileSection } from './more/DataSection.tsx'
@@ -84,6 +85,7 @@ export function More({ onSignOut }: { onSignOut(): void }) {
           </SGroup>
           <SGroup title="Оформление и счета">
             <AppearanceSection />
+            <TrayRow />
             <ModeSection settings={settings} />
           </SGroup>
           <SGroup title="Валюты">

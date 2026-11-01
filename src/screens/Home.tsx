@@ -160,7 +160,7 @@ export function Home() {
               )}
             </div>
           </div>
-          <Rates rates={rates} today={today} />
+          {!desk && <Rates rates={rates} today={today} />}
         </section>
 
         <DayCard budget={budget} settings={settings} today={today} onSettings={() => nav.switchTab('more')} />

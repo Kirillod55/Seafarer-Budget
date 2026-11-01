@@ -5,7 +5,7 @@ import { goalProgress, limitStatus, monthReport } from '@shared/calc.ts'
 import { categoryStyle } from '@shared/defaults.ts'
 import { addDays, monthOf } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
-import { round2 } from '@shared/fx.ts'
+import { currentRates, round2 } from '@shared/fx.ts'
 import type { Category, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
 import { byWho, categoryOf, partnerLabel } from '../lib/records.ts'
@@ -42,18 +42,19 @@ export function Overview({ today }: { today: string }) {
   const { db } = useApp()
   const nav = useNav()
   const data = useLiveQuery(async () => {
-    const [settings, txs, categories, goals, moves, limits] = await Promise.all([
+    const [settings, txs, categories, goals, moves, limits, rates] = await Promise.all([
       db.settings.filter(alive).first(),
       db.transactions.filter(alive).toArray(),
       db.categories.toArray(),
       db.goals.filter(alive).toArray(),
       db.goal_moves.filter(alive).toArray(),
       db.limits.filter(alive).toArray(),
+      db.fx_rates.toArray(),
     ])
-    return { settings, txs, categories, goals, moves, limits }
+    return { settings, txs, categories, goals, moves, limits, rates }
   }, [db])
   if (!data) return <aside className="daside" aria-label="Обзор" />
-  const { settings, txs, categories, goals, moves, limits } = data
+  const { settings, txs, categories, goals, moves, limits, rates } = data
 
   const month = monthOf(today)
   const [, m] = month.split('-').map(Number)
@@ -67,6 +68,7 @@ export function Overview({ today }: { today: string }) {
   const byId = new Map<string, Category>(categories.map((c) => [c.id, c]))
   const top = report.byCategory.slice(0, 4).map((c) => ({ ...c, category: categoryOf(c.categoryId, byId) }))
 
+  const fx = currentRates(rates, today)
   const liveGoals = goals.filter((g) => !g.archived)
   const liveLimits = limits
     .map((l) => ({ l, c: byId.get(l.category_id) }))
@@ -144,6 +146,24 @@ export function Overview({ today }: { today: string }) {
           </div>
         ))}
       </section>
+
+      {fx.date && (
+        <section className="card" aria-label="Курс валют">
+          <div className="ahead">
+            <h3>Курс валют</h3>
+            <span className="label">{dayMonth(fx.date)}</span>
+          </div>
+          <div className="orates num">
+            {fx.pairs.map((p) => (
+              <div key={p.unit} className="orate">
+                <span className="nm">{money(1, p.unit, { whole: true })}</span>
+                <span className="v">{p.uah !== null ? money(p.uah, 'UAH') : '—'}</span>
+                <span className="v">{p.mdl !== null ? money(p.mdl, 'MDL') : '—'}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {liveGoals.length > 0 && (
         <section className="card" aria-label="Цели">

@@ -24,6 +24,7 @@ import {
 export type { LucideIcon }
 
 export {
+  MonitorDown,
   Anchor,
   Archive,
   Bell,

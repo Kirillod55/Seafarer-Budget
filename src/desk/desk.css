@@ -906,6 +906,28 @@ html.desk.desk-s .dgrid {
   color: var(--text);
 }
 
+.orates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.orate {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 18px;
+  align-items: baseline;
+}
+
+.orate .nm {
+  color: var(--muted);
+}
+
+.orate .v {
+  font-weight: 600;
+  text-align: right;
+}
+
 .mcal {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1755,7 +1777,7 @@ html.desk .mcard > h3 {
 }
 
 .srow .sctl .seg {
-  min-width: 300px;
+  min-width: 370px; /* «Несколько счетов» fits at the PC text size */
 }
 
 .srow .sctl .picker {
