@@ -239,7 +239,8 @@ export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions, 
       console.error('morning rates:', e instanceof Error ? e.message : String(e))
     }
   }
-  const text = ratesText(await deps.rates(), today, dayMonth, await deps.bankRates())
+  // the mark tells it from the same rates asked for by /currency or in words
+  const text = `☀️ Утренняя сводка\n\n${ratesText(await deps.rates(), today, dayMonth, await deps.bankRates())}`
   for (const c of chats) await deps.send(c, text)
   return true
 }
