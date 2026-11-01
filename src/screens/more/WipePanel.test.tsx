@@ -318,7 +318,8 @@ describe('«Вернуть удалённое» expires', () => {
   it('the row goes away at deleted_at + 24 h', async () => {
     await seed()
     await seedRecords()
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
+    // the row arms one timer for deleted_at + 24 h + 1 s: catch it and fire it by hand, the clock already past that
+    const armed = vi.spyOn(globalThis, 'setTimeout')
     renderMore()
     const panel = await openRecords()
     fireEvent.click(within(panel).getByRole('checkbox', { name: 'Сначала скачать копию (CSV)' }))
@@ -326,13 +327,15 @@ describe('«Вернуть удалённое» expires', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Нажми ещё раз — удалить' }))
     const card = await wipeCard()
     await within(card).findByRole('button', { name: 'Вернуть удалённое' })
+    const call = await waitFor(() => {
+      const c = armed.mock.calls.find(([, delay]) => delay === RESTORE_MS + 1000)
+      expect(c).toBeTruthy()
+      return c!
+    })
 
-    let clock = TEST_NOW.getTime() + RESTORE_MS - 60_000
-    env.now = () => new Date(clock)
-    act(() => vi.advanceTimersByTime(RESTORE_MS - 120_000))
-    expect(within(card).getByRole('button', { name: 'Вернуть удалённое' })).toBeTruthy()
-    clock = TEST_NOW.getTime() + RESTORE_MS + 1000
-    act(() => vi.advanceTimersByTime(125_000))
-    await waitFor(() => expect(within(card).queryByRole('button', { name: 'Вернуть удалённое' })).toBeNull())
+    env.now = () => new Date(TEST_NOW.getTime() + RESTORE_MS + 1000)
+    act(() => (call[0] as () => void)())
+    expect(within(card).queryByRole('button', { name: 'Вернуть удалённое' })).toBeNull()
+    armed.mockRestore()
   })
 })
