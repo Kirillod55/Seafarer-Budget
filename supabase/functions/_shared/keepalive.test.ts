@@ -186,7 +186,7 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     expect(await res.json()).toEqual({ ok: true, sent: true })
     const o = opts(EIGHT)
     expect(f.sent.map((m) => m.chat)).toEqual([o.ownerChatId, o.partnerChatId])
-    expect(f.sent[0].text).toBe('Курс на 2 ноября, покупка / продажа:\n$1 = ₴45.25 / ₴45.95\n$1 = MDL 17.85 / MDL 18.15\n€1 = ₴50.30 / ₴51.30\n€1 = MDL 20.03 / MDL 20.28\nГривна — ПриватБанк, лей — maib')
+    expect(f.sent[0].text).toBe('💱 Курс на 2 ноября\n\n💵 Доллар\n🇺🇦 ₴45.25 / ₴45.95\n🇲🇩 MDL 17.85 / MDL 18.15\n\n💶 Евро\n🇺🇦 ₴50.30 / ₴51.30\n🇲🇩 MDL 20.03 / MDL 20.28\n\nПокупка / продажа · ПриватБанк, maib')
   })
   it('switched off by one person: the other still gets it; off for both: nothing is fetched or sent', async () => {
     const f = fake()
@@ -204,9 +204,9 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     f.bank.USD.mdl = null
     f.bank.EUR.mdl = null
     await runMorningRates(f, opts(EIGHT))
-    expect(f.sent[0].text).toContain('$1 = ₴45.25 / ₴45.95')
-    expect(f.sent[0].text).toContain('$1 = MDL 18.04 (НБМ)')
-    expect(f.sent[0].text).toContain('Гривна — ПриватБанк')
+    expect(f.sent[0].text).toContain('🇺🇦 ₴45.25 / ₴45.95')
+    expect(f.sent[0].text).toContain('🇲🇩 MDL 18.04 (НБМ)')
+    expect(f.sent[0].text).toContain('Покупка / продажа · ПриватБанк')
   })
   it('any other hour: nothing is sent or fetched', async () => {
     const f = fake()
@@ -220,7 +220,7 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     f.fetchBnm = async () => { throw new Error('down') }
     f.bank = noBankRates()
     await runMorningRates(f, opts(EIGHT))
-    expect(f.sent[0].text).toContain('Курс на 21 октября:')
+    expect(f.sent[0].text).toContain('Курс на 21 октября')
   })
   it('401 without the token or with a wrong one; the keepalive secret does not open it', async () => {
     const f = fake()

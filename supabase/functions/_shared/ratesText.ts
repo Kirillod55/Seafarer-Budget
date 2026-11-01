@@ -19,12 +19,9 @@ export function ratesText(rates: FxRate[], today: string, dayLabel: (date: strin
     else if (p.uah !== null) lines.push(`🇺🇦 ${money(p.uah, 'UAH')} (НБУ)`)
     if (b.mdl) lines.push(`🇲🇩 ${two(b.mdl, 'MDL')}`)
     else if (p.mdl !== null) lines.push(`🇲🇩 ${money(p.mdl, 'MDL')} (${p.mdlBank === 'BNM' ? 'НБМ' : 'НБУ'})`)
-    return lines.join('
-')
+    return lines.join('\n')
   })
   const banks = [pairs.some((p) => bank[p.unit].uah) && 'ПриватБанк', pairs.some((p) => bank[p.unit].mdl) && 'maib'].filter(Boolean)
   const head = `💱 Курс на ${dayLabel(live ? today : (date as string))}`
-  return [head, ...blocks, ...(banks.length ? [`Покупка / продажа · ${banks.join(', ')}`] : [])].join('
-
-')
+  return [head, ...blocks, ...(banks.length ? [`Покупка / продажа · ${banks.join(', ')}`] : [])].join('\n\n')
 }
