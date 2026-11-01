@@ -23,5 +23,5 @@ export function ratesText(rates: FxRate[], today: string, dayLabel: (date: strin
   })
   const banks = [pairs.some((p) => bank[p.unit].uah) && 'ПриватБанк', pairs.some((p) => bank[p.unit].mdl) && 'maib'].filter(Boolean)
   const head = `💱 Курс на ${dayLabel(live ? today : (date as string))}:${banks.length ? '\nПокупка → продажа' : ''}`
-  return [head, ...blocks, ...(banks.length ? [`🏦 ${banks.join(' · ')}`] : [])].join('\n\n')
+  return [head, ...blocks, ...(banks.length ? [`🏦 ${banks.join(' / ')}`] : [])].join('\n\n')
 }

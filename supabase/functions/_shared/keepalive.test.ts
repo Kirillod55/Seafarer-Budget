@@ -186,7 +186,7 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     expect(await res.json()).toEqual({ ok: true, sent: true })
     const o = opts(EIGHT)
     expect(f.sent.map((m) => m.chat)).toEqual([o.ownerChatId, o.partnerChatId])
-    expect(f.sent[0].text).toBe('💱 Курс на 2 ноября:\nПокупка → продажа\n\n💵 Доллар:\n🇺🇦 ₴45.25 → ₴45.95\n🇲🇩 MDL 17.85 → MDL 18.15\n\n💶 Евро:\n🇺🇦 ₴50.30 → ₴51.30\n🇲🇩 MDL 20.03 → MDL 20.28\n\n🏦 ПриватБанк · maib')
+    expect(f.sent[0].text).toBe('💱 Курс на 2 ноября:\nПокупка → продажа\n\n💵 Доллар:\n🇺🇦 ₴45.25 → ₴45.95\n🇲🇩 MDL 17.85 → MDL 18.15\n\n💶 Евро:\n🇺🇦 ₴50.30 → ₴51.30\n🇲🇩 MDL 20.03 → MDL 20.28\n\n🏦 ПриватБанк / maib')
   })
   it('both banks down: the official NBU and BNM rates, marked, without the buy/sell lines', async () => {
     const f = fake()
