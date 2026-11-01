@@ -107,6 +107,11 @@
   cursor: default;
 }
 
+/* the empty places hold a full row: six weeks always, the card under the grid never jumps */
+.cal-blank {
+  min-height: 54px;
+}
+
 /* ---------- the day card under the grid ---------- */
 
 .calday {

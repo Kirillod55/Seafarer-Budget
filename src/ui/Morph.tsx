@@ -8,8 +8,10 @@ import './ui.css'
  * else on the page jumps. The old layer is the same React subtree (same key), kept as an inert, hidden copy until
  * the animation ends. Reduce Motion (or no Web Animations): an instant swap.
  * With `dir` (the calendar's day card, spec §3 «Смена дня без перерисовки страницы») the swap is sideways: the old
- * content leaves towards −dir with its opacity (0.17 s), the new one rides in from +dir (0.32 s), the height glides
- * (0.32 s). A swap during a swap starts from what is on screen — animations never pile up.
+ * content leaves towards −dir with its opacity (0.17 s), the new one rides in from +dir (0.32 s). Only transform and
+ * opacity move, which the phone runs off the main thread: the block keeps its old height and takes the new one when
+ * the swap ends, so no frame of it lays the page out.
+ * A swap during a swap starts from what is on screen — animations never pile up.
  */
 export function Morph({
   k,
@@ -50,11 +52,11 @@ export function Morph({
     // the old copy must not clash with the new content (labels, anchors)
     old.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'))
     el.style.overflow = 'clip'
+    if (ghost.dir) el.style.minHeight = `${ghost.h0}px`
     const ease = 'cubic-bezier(.2,.8,.2,1)'
     const d = ghost.dir
     const anims = d
       ? [
-          el.animate([{ height: `${ghost.h0}px` }, { height: `${cur.offsetHeight}px` }], { duration: 320, easing: ease }),
           old.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-d * 18}px)` }], {
             duration: 170,
             easing: 'ease-in',
@@ -83,6 +85,7 @@ export function Morph({
       done = true
       anims.forEach((a) => a.cancel())
       el.style.overflow = ''
+      el.style.minHeight = ''
       setGhost((g) => (g === ghost ? null : g))
     }
     // the last animation is the new content's, the longest one: ending earlier would cut its tail with a visible snap
@@ -94,6 +97,7 @@ export function Morph({
         done = true
         anims.forEach((a) => a.cancel())
         el.style.overflow = ''
+        el.style.minHeight = ''
       }
     }
   }, [ghost])

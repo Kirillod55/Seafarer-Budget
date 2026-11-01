@@ -669,12 +669,11 @@ describe('Morph', () => {
         )
         const old = calls.find((c) => c.el.classList.contains('mOld'))!
         const cur = calls.find((c) => c.el.classList.contains('mIn') && !c.el.classList.contains('mOld'))!
-        const box = calls.find((c) => c.el.classList.contains('morph'))!
         expect(old.opts.duration).toBe(170)
         expect(old.frames[1].transform).toBe('translateX(18px)')
         expect(cur.opts.duration).toBe(320)
         expect(cur.frames[0].transform).toBe('translateX(-22px)')
-        expect(box.opts.duration).toBe(320)
+        expect(calls.some((c) => c.el.classList.contains('morph'))).toBe(false) // no frame lays the page out
       },
     )
   })

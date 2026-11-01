@@ -75,7 +75,7 @@ describe('Calendar: the month grid', () => {
     // Monday-first: 1 October 2026 is a Thursday, three blanks before it
     const grid = document.querySelector('.cal')!
     expect([...grid.querySelectorAll('.wd')].map((w) => w.textContent)).toEqual(['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'])
-    expect(grid.querySelectorAll('.cal-blank').length).toBe(3)
+    expect(grid.querySelectorAll('.day, .cal-blank').length).toBe(42) // always six weeks
     expect(grid.querySelectorAll('.day').length).toBe(31)
   })
 

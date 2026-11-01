@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent } from 'react'
+import { memo, useDeferredValue, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { monthReport } from '@shared/calc.ts'
@@ -29,13 +29,17 @@ function records(n: number): string {
   return `${n} ${word}`
 }
 
-/** The month's days: blanks before the 1st (the week starts on Monday), then 'YYYY-MM-DD' for each day. */
+/**
+ * The month's days: blanks before the 1st (the week starts on Monday), then 'YYYY-MM-DD' for each day, then blanks up
+ * to six weeks, so that the grid keeps its height from month to month and the card under it stays where it is.
+ */
 function monthCells(month: string): (string | null)[] {
   const [y, m] = month.split('-').map(Number)
   const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate()
   const out: (string | null)[] = Array.from({ length: lead }, () => null)
   for (let d = 1; d <= days; d++) out.push(`${month}-${String(d).padStart(2, '0')}`)
+  while (out.length < 42) out.push(null)
   return out
 }
 
@@ -77,8 +81,19 @@ export function Calendar() {
   // ‹ ›: the new month slides in from the side it was paged to (prototype .slide-r / .slide-l)
   const slideFrom = useSlideIn(gridRef, shown)
 
+  // spending per day (USD): archived records included, they are money spent
+  const txsAll = data?.txs
+  const { spent, monthTotal } = useMemo(() => {
+    const byDay = new Map<string, number>()
+    for (const t of txsAll ?? []) if (t.kind === 'expense' && monthOf(t.date) === shown) byDay.set(t.date, (byDay.get(t.date) ?? 0) + t.amount_usd)
+    return { spent: byDay, monthTotal: monthReport(txsAll ?? [], shown).totalUsd }
+  }, [txsAll, shown])
+  // the fill moves at once; the card follows right after, its rows never hold the tap's first frames
+  const cardDay = useDeferredValue(sel)
+  const cardTxs = useMemo(() => (txsAll ?? []).filter((t) => t.date === cardDay), [txsAll, cardDay])
+
   if (!data) return <p className="muted pad">Загрузка…</p>
-  const { settings, txs, categories, accounts } = data
+  const { settings, categories, accounts } = data
 
   // the card never shows a day outside the grid: paging picks today in this month, otherwise the month's day
   // nearest to today (the last day of a past month, the 1st of a future one)
@@ -105,10 +120,6 @@ export function Calendar() {
     setPicked(day)
   }
 
-  // spending per day (USD): archived records included, they are money spent
-  const spent = new Map<string, number>()
-  for (const t of txs) if (t.kind === 'expense' && monthOf(t.date) === shown) spent.set(t.date, (spent.get(t.date) ?? 0) + t.amount_usd)
-  const monthTotal = monthReport(txs, shown).totalUsd
   const landing = settings?.next_contract_date ?? null
   const [y, m] = shown.split('-').map(Number)
   const title = `${MONTHS_NOM[m - 1]} ${y}`
@@ -163,11 +174,11 @@ export function Calendar() {
       </div>
 
       <div className="calday" aria-live="polite">
-        <Morph k={sel} dir={dir}>
+        <Morph k={cardDay} dir={dir}>
           <DayCard
-            day={sel}
+            day={cardDay}
             today={today}
-            txs={txs.filter((t) => t.date === sel)}
+            txs={cardTxs}
             categories={categories}
             accounts={accounts}
             partnerName={settings?.partner_name ?? null}
@@ -180,7 +191,7 @@ export function Calendar() {
 }
 
 /** The picked day under the grid (prototype dayBlock): date and sum, spending by category, the records. */
-function DayCard({
+const DayCard = memo(function DayCard({
   day,
   today,
   txs,
@@ -243,4 +254,4 @@ function DayCard({
       {archived > 0 && <p className="label cd-note">{`${records(archived)} в архиве — в сумме дня учтены`}</p>}
     </div>
   )
-}
+})

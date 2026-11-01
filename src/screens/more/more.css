@@ -203,6 +203,21 @@
 }
 
 .mcard .btn-gray:disabled,
+/* the icon and the word on one line, centred on each other */
+.more .quick > .btn-acc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.more .quick > .btn-acc svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
 .more .quick > button:disabled {
   opacity: 0.55;
 }
