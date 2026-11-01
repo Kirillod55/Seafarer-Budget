@@ -906,40 +906,6 @@ html.desk.desk-s .dgrid {
   color: var(--text);
 }
 
-.orates {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.orates-hint {
-  margin: -6px 0 8px;
-}
-
-.orate {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.orate .nm {
-  color: var(--muted);
-}
-
-.orate .v {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 15px;
-  font-weight: 600;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.orates-src {
-  margin: 10px 0 0;
-}
-
 .mcal {
   display: grid;
   grid-template-columns: repeat(7, 1fr);

@@ -81,7 +81,7 @@ export function Segmented<T extends string>({
     <div ref={segRef} className="seg" role="group" aria-label={label}>
       <span ref={thumbRef} className="thumb" aria-hidden="true" />
       {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => o.value !== value && onChange(o.value)}>
           {o.label}
         </button>
       ))}

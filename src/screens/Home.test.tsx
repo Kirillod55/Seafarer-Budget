@@ -1,5 +1,5 @@
 import { BANK_RATES_KEY } from '../lib/bank-rates.ts'
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from './Home.tsx'
@@ -72,9 +72,11 @@ describe('Home: the rates under the balance (phone)', () => {
       { date: '2026-10-20', currency: 'UAH', uah_per_unit: 1 },
     ])
     renderHome()
-    expect(await screen.findByText('Доллар: ₴42 · MDL 17.50')).toBeTruthy()
-    expect(screen.getByText('Евро: ₴49 · MDL 20.42')).toBeTruthy()
-    expect(screen.getByText('НБУ')).toBeTruthy()
+    const card = await screen.findByRole('region', { name: 'Курс валют' })
+    expect(within(card).getByText('Курс')).toBeTruthy()
+    expect(within(card).getByText('42.00')).toBeTruthy()
+    expect(within(card).getByText('20.42')).toBeTruthy()
+    expect(within(card).getByText('НБУ')).toBeTruthy()
   })
   it('the banks\' buy and sell, as in the bot, with their names', async () => {
     await seed({})
@@ -84,14 +86,17 @@ describe('Home: the rates under the balance (phone)', () => {
       EUR: { uah: { buy: 50.3, sell: 51.3 }, mdl: { buy: 20.03, sell: 20.28 } },
     } } })
     renderHome()
-    expect(await screen.findByText('Доллар: ₴45.25 → ₴45.95 · MDL 17.85 → MDL 18.15')).toBeTruthy()
-    expect(screen.getByText('ПриватБанк / maib')).toBeTruthy()
+    const card = await screen.findByRole('region', { name: 'Курс валют' })
+    expect(within(card).getByText('Покупка')).toBeTruthy()
+    expect(within(card).getByText('45.25')).toBeTruthy()
+    expect(within(card).getByText('18.15')).toBeTruthy()
+    expect(within(card).getByText('ПриватБанк / maib')).toBeTruthy()
   })
   it('no rates yet: no line at all', async () => {
     await seed({})
     renderHome()
     await waitFor(() => expect(card()).toBeTruthy())
-    expect(document.querySelector('.home-rates')).toBeNull()
+    expect(document.querySelector('.ratecard')).toBeNull()
   })
 })
 

@@ -8,6 +8,7 @@ import { money } from '@shared/format.ts'
 import { round2 } from '@shared/fx.ts'
 import { ratesView } from '@shared/ratesText.ts'
 import type { Category, Transaction } from '@shared/types.ts'
+import { RatesCard } from '../components/RatesCard.tsx'
 import { useApp } from '../context.tsx'
 import { BANK_RATES_KEY, freshBankRates } from '../lib/bank-rates.ts'
 import { byWho, categoryOf, partnerLabel } from '../lib/records.ts'
@@ -150,27 +151,7 @@ export function Overview({ today }: { today: string }) {
         ))}
       </section>
 
-      {fx && (
-        <section className="card" aria-label="Курс валют">
-          <div className="ahead">
-            <h3>Курс валют</h3>
-            <span className="label">{dayMonth(fx.date)}</span>
-          </div>
-          {fx.live && <p className="label orates-hint">Покупка → продажа</p>}
-          <div className="orates num">
-            {fx.blocks.map((b) => (
-              <div key={b.unit} className="orate">
-                <span className="nm">{b.title}</span>
-                <span className="v">
-                  {b.uah && <span>{b.uah}</span>}
-                  {b.mdl && <span>{b.mdl}</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="label orates-src">{fx.source}</p>
-        </section>
-      )}
+      {fx && <RatesCard view={fx} />}
 
       {liveGoals.length > 0 && (
         <section className="card" aria-label="Цели">

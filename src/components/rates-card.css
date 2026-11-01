@@ -1,0 +1,96 @@
+/* «Курс валют»: a small table, the same on the phone and in the PC overview column. Colours only from tokens. */
+
+.ratecard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rc-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.rc-date,
+.rc-source,
+.rc-cols {
+  color: var(--muted);
+  font-size: 0.765rem; /* 13 */
+}
+
+.rc-cols,
+.rc-row {
+  display: grid;
+  grid-template-columns: 1fr 72px 72px;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.rc-table.one .rc-cols,
+.rc-table.one .rc-row {
+  grid-template-columns: 1fr 72px;
+}
+
+/* the first grid column of the head row stays empty: its labels sit over the number columns */
+.rc-cols > :first-child {
+  grid-column: 2;
+}
+
+.rc-cols > span,
+.rc-row > span:not(.rc-label) {
+  text-align: right;
+}
+
+.rc-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.rc-block:last-child {
+  padding-bottom: 0;
+}
+
+.rc-cur {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.rc-sign {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--track);
+  font-size: 0.882rem; /* 15 */
+  font-weight: 600;
+}
+
+.rc-label {
+  padding-left: 34px; /* under the name, past the sign */
+  color: var(--muted);
+}
+
+.rc-strong {
+  font-weight: 600;
+}
+
+.rc-source {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}

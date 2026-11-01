@@ -92,6 +92,7 @@ export function Calendar() {
   }
 
   const pick = (day: string, e: MouseEvent<HTMLButtonElement>) => {
+    if (day === sel) return // already open: nothing moves
     const cell = e.currentTarget
     if (!prefersReducedMotion() && typeof cell.animate === 'function') {
       pickAnim.current?.cancel()
@@ -100,7 +101,6 @@ export function Calendar() {
         easing: 'cubic-bezier(.2,.8,.2,1)',
       })
     }
-    if (day === sel) return
     setDir(day > sel ? 1 : -1)
     setPicked(day)
   }

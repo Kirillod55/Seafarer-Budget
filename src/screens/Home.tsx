@@ -4,12 +4,12 @@ import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, dailyBudget, reservingGoalMoves, reservedUsd, type DailyBudget } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
-import type { BankRates } from '@shared/bankRates.ts'
 import { round2, usdRate } from '@shared/fx.ts'
 import { ratesView } from '@shared/ratesText.ts'
-import type { FxRate, Settings } from '@shared/types.ts'
+import type { Settings } from '@shared/types.ts'
 import { DayGroups } from '../components/DayGroups.tsx'
 import { QuickInput } from '../components/QuickInput.tsx'
+import { RatesCard } from '../components/RatesCard.tsx'
 import { SyncCloud, isNetworkError } from '../components/SyncCloud.tsx'
 import { useApp } from '../context.tsx'
 import { BANK_RATES_KEY, freshBankRates } from '../lib/bank-rates.ts'
@@ -42,20 +42,6 @@ function CountUp({ value, className }: { value: number; className: string }) {
  * «＋»; the balance with «Свободно / Запас / Посадка» under it; the day card by the §2 states; the quick input;
  * the latest records. Pull down syncs.
  */
-/** The dollar and the euro in hryvnias and lei by the NBU, under the balance. */
-function Rates({ rates, today, bank }: { rates: FxRate[]; today: string; bank?: BankRates }) {
-  const v = ratesView(rates, today, bank)
-  if (!v) return null
-  return (
-    <div className="home-rates num" aria-label={`Курс на ${dayMonth(v.date)}`}>
-      {v.blocks.map((b) => (
-        <span key={b.unit}>{`${b.title}: ${[b.uah, b.mdl].filter(Boolean).join(' · ')}`}</span>
-      ))}
-      <span className="home-rates-src">{v.source}</span>
-    </div>
-  )
-}
-
 export function Home() {
   const { db, now, scheduler } = useApp()
   const { openRecord } = useRecordSheet()
@@ -103,6 +89,7 @@ export function Home() {
   const reserved = reservedUsd(reservingGoalMoves(moves, goals)) // a goal in the bin or the archive reserves nothing
   const reserve = settings.reserve_usd ?? 0
   const free = Math.max(0, round2(balance - reserved - reserve))
+  const fx = ratesView(rates, today, freshBankRates(data.bankMeta?.value, now().getTime()))
   const noRate = Object.keys(bal).filter((cur) => bal[cur] !== 0 && !usdRate(rates, cur, today))
   const budget = dailyBudget({ txs, rates, accounts, reservedUsd: reserved, settings, today })
   const landing = settings.next_contract_date
@@ -164,12 +151,12 @@ export function Home() {
               )}
             </div>
           </div>
-          {!desk && <Rates rates={rates} today={today} bank={freshBankRates(data.bankMeta?.value, now().getTime())} />}
         </section>
 
         <DayCard budget={budget} settings={settings} today={today} onSettings={() => nav.switchTab('more')} />
 
         <QuickInput />
+        {!desk && fx && <RatesCard view={fx} />}
 
         <DayGroups
           txs={txs.filter((t) => t.date <= today)}

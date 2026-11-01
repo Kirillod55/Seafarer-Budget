@@ -154,7 +154,12 @@ export function Navigator({
   const open = useCallback((route: Route) => {
     navigated.current?.()
     const id = ++seq.current
-    setState((s) => ({ stack: [{ id, route, y: 0 }], transition: 'desk', tabChanges: s.tabChanges }))
+    setState((s) => {
+      // the section that is already open: nothing moves, nothing reloads
+      const cur = s.stack[s.stack.length - 1].route
+      if (s.stack.length === 1 && cur.tab === route.tab && cur.screen === route.screen) return s
+      return { stack: [{ id, route, y: 0 }], transition: 'desk', tabChanges: s.tabChanges }
+    })
   }, [])
 
   const desk = useDesk()

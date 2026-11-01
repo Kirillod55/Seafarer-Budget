@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from './ui/motion.ts'
 import { DeskKeys } from './desk/DeskKeys.tsx'
 import { UpdateToast } from './desk/UpdateToast.tsx'
 import { appUpdater } from './desk/updater.ts'
@@ -81,13 +82,16 @@ function ShellNav({ onSignOut }: { onSignOut(): void }) {
 }
 
 
-/** After opening «Настройки»: bring a group into view once the screen has read its data. */
+/** vDesk in desk.css: the page opens first, the glide to the group starts after it */
+const PAGE_OPEN_MS = 300
+
+/** After opening «Настройки»: bring a group into view smoothly, once the page has opened and read its data. */
 function scrollToCard(title: string) {
   let tries = 0
   const find = () => {
     const h = [...document.querySelectorAll('.screen:not(.below) h2, .screen:not(.below) h3')].find((el) => el.textContent === title)
-    if (h) h.closest('section')?.scrollIntoView?.({ block: 'start' })
+    if (h) h.closest('section')?.scrollIntoView?.({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
     else if (++tries < 40) setTimeout(find, 25)
   }
-  setTimeout(find, 0)
+  setTimeout(find, PAGE_OPEN_MS)
 }

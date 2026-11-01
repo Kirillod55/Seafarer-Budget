@@ -8,6 +8,17 @@ import { activeItem } from './Sidebar.tsx'
 const menu = () => screen.getByRole('complementary', { name: 'Разделы' })
 const item = (name: string) => within(menu()).getByRole('button', { name })
 
+describe('the section that is already open', () => {
+  it('a second click changes nothing: same page, no new opening', async () => {
+    await deskShell()
+    await screen.findByRole('button', { name: 'Новая запись' })
+    fireEvent.click(item('Цели'))
+    const page = await waitFor(() => { const s = document.querySelector<HTMLElement>('section.screen[data-view="goals"]'); expect(s).toBeTruthy(); return s! })
+    fireEvent.click(item('Цели'))
+    expect(document.querySelector('section.screen[data-view="goals"]')).toBe(page)
+  })
+})
+
 describe('PC menu (spec §11 «Меню слева»)', () => {
   it('replaces the tabs: seven sections, a divider and «Настройки»', async () => {
     await deskShell()

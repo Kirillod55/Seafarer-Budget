@@ -14,6 +14,15 @@ export interface RateBlock {
   title: string
   uah: string | null
   mdl: string | null
+  /** the same numbers for the app's table */
+  cells: RateCell[]
+}
+export interface RateCell {
+  label: 'Гривна' | 'Лей'
+  buy: number | null
+  sell: number | null
+  /** the official rate, when the bank has not answered */
+  one: number | null
 }
 export interface RatesView {
   date: string
@@ -35,6 +44,10 @@ export function ratesView(rates: FxRate[], today: string, bank: BankRates = noBa
       title: TITLE[p.unit],
       uah: b.uah ? two(b.uah, 'UAH') : p.uah !== null ? money(p.uah, 'UAH') : null,
       mdl: b.mdl ? two(b.mdl, 'MDL') : p.mdl !== null ? money(p.mdl, 'MDL') : null,
+      cells: [
+        { label: 'Гривна', buy: b.uah?.buy ?? null, sell: b.uah?.sell ?? null, one: b.uah ? null : p.uah },
+        { label: 'Лей', buy: b.mdl?.buy ?? null, sell: b.mdl?.sell ?? null, one: b.mdl ? null : p.mdl },
+      ],
     }
   })
   const uahFrom = pairs.some((p) => bank[p.unit].uah) ? 'ПриватБанк' : 'НБУ'
