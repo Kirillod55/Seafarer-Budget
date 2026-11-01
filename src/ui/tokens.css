@@ -9,6 +9,7 @@
 :root {
   /* light theme (default) */
   --bg: #FFFFFF;
+  --status-band: #14161A; /* the iPhone clock stays white: a dark band in the light theme */
   --card: #FFFFFF;
   --line: #E8E8EC;
   --text: #14161A;
@@ -75,6 +76,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     --bg: #0E0F12;
+    --status-band: #0E0F12;
     --card: #181A1F;
     --line: #262930;
     --text: #F2F3F5;
@@ -107,6 +109,7 @@
 
 html:not(#_)[data-theme="light"] {
   --bg: #FFFFFF;
+  --status-band: #14161A; /* the iPhone clock stays white: a dark band in the light theme */
   --card: #FFFFFF;
   --line: #E8E8EC;
   --text: #14161A;
@@ -138,6 +141,7 @@ html:not(#_)[data-theme="light"] {
 
 html:not(#_)[data-theme="dark"] {
   --bg: #0E0F12;
+  --status-band: #0E0F12;
   --card: #181A1F;
   --line: #262930;
   --text: #F2F3F5;
@@ -182,7 +186,6 @@ html:not(#_)[data-theme="dark"] {
  * Every font size is in rem so it follows the setting.
  */
 html {
-  --theme-fade: 0.2s;
   font-size: calc(17px * var(--ts, 1));
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -192,6 +195,19 @@ html {
 html,
 body {
   overscroll-behavior-y: none;
+}
+
+/* the app runs up to the very top of the iPhone screen (black-translucent): this band sits under the clock and the
+   Dynamic Island, changes with the theme like everything else, and the content scrolls under it */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 16;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--status-band);
 }
 
 body {
@@ -274,27 +290,17 @@ button:focus-visible {
   html.theme-fade *::before,
   html.theme-fade *::after {
     transition:
-      background-color var(--theme-fade) var(--ios),
-      border-color var(--theme-fade) var(--ios),
-      fill var(--theme-fade) var(--ios),
-      stroke var(--theme-fade) var(--ios) !important;
+      background-color 0.4s var(--ios),
+      border-color 0.4s var(--ios),
+      fill 0.4s var(--ios),
+      stroke 0.4s var(--ios) !important;
   }
 
   /* the text colour on <body> alone: on every element, inherited text would restart its transition on each step */
   html.theme-fade body {
     transition:
-      background-color var(--theme-fade) var(--ios),
-      color var(--theme-fade) var(--ios) !important;
-  }
-
-  /* the iPhone paints the band under the status bar itself and cannot fade it: what touches it changes at once */
-  html:not(.desk).theme-fade,
-  html:not(.desk).theme-fade .navbar {
-    transition: none !important;
-  }
-
-  html:not(.desk).theme-fade body {
-    transition: color var(--theme-fade) var(--ios) !important;
+      background-color 0.4s var(--ios),
+      color 0.4s var(--ios) !important;
   }
 }
 

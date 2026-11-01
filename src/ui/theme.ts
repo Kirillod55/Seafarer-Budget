@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../context.tsx'
 import type { LocalDb } from '../db/local.ts'
-import { currentLayout } from '../desk/layout.ts'
 import { prefersReducedMotion } from './motion.ts'
 import { rememberTheme } from './splash.ts'
 
@@ -85,11 +84,10 @@ function fadeTheme(doc: Document): void {
 /**
  * The whole screen cross-fades from a picture of the old theme into the new one, all of it at the same moment
  * (CSS ::view-transition). Transitions on every element cannot do that: a text that inherits its colour restarts its
- * transition on each step of its parent's, so the deeper it sits, the later it arrives. PC only: on the iPhone the
- * band under the status bar lies outside that picture and stayed in the old theme.
+ * transition on each step of its parent's, so the deeper it sits, the later it arrives.
  */
 function switchTheme(t: ThemeChoice, doc: Document): void {
-  if (currentLayout() !== 'phone' && typeof doc.startViewTransition === 'function' && !prefersReducedMotion()) {
+  if (typeof doc.startViewTransition === 'function' && !prefersReducedMotion()) {
     doc.startViewTransition(() => applyTheme(t, doc))
     return
   }
