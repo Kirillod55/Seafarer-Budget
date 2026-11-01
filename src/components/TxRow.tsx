@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
@@ -56,6 +57,7 @@ export function TxRow({
   partnerName,
   onOpen,
   className,
+  tagColor,
 }: {
   tx: Transaction
   category?: Category
@@ -66,6 +68,8 @@ export function TxRow({
   partnerName: string | null
   onOpen(id: string): void
   className?: string
+  /** a list across accounts: each record carries its account as a tag in the account's own colour */
+  tagColor?(a: Account): string
 }) {
   const { repo, db, now } = useApp()
   const toast = useToast()
@@ -74,7 +78,12 @@ export function TxRow({
   const title = category?.name ?? KIND_TITLE[tx.kind]
   const where = account && toAccount ? `${account.name} → ${toAccount.name}` : account?.name
   const moves = tx.kind === 'transfer' || tx.kind === 'exchange'
-  const note = capitalize(tx.note.trim()) || (moves ? where : '') || ''
+  const note = capitalize(tx.note.trim()) || (moves && !tagColor ? where : '') || ''
+  const tag = (a: Account) => (
+    <span className="acctag" style={{ '--c': tagColor?.(a) } as CSSProperties}>
+      {a.name}
+    </span>
+  )
   const amount = amounts(tx)
 
   const archive = async () => {
@@ -141,6 +150,12 @@ export function TxRow({
       <span className="t">
         <span className="t1">{title}</span>
         <span className="t2">
+          {tagColor && account && (
+            <>
+              {tag(account)}
+              {tx.kind === 'transfer' && toAccount && <> → {tag(toAccount)}</>}{' '}
+            </>
+          )}
           {hers ? (
             <>
               <b className="whon">{name}</b>

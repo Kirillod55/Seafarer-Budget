@@ -32,6 +32,7 @@ export function DayGroups({
   maxDays,
   totals = false,
   headings = true,
+  tagColor,
 }: {
   txs: Transaction[]
   categories: Category[]
@@ -47,6 +48,8 @@ export function DayGroups({
   totals?: boolean
   /** false: no day heading over the card (the calendar's day card has its own) */
   headings?: boolean
+  /** a list across accounts: tag each record with its account */
+  tagColor?(a: Account): string
 }) {
   const visible = txs.filter((t) => alive(t) && !t.archived)
   const byDay = new Map<string, Transaction[]>()
@@ -96,6 +99,7 @@ export function DayGroups({
                     toAccount={t.to_account_id ? accById.get(t.to_account_id) : undefined}
                     partnerName={partnerName}
                     onOpen={onOpen}
+                    tagColor={tagColor}
                     className={b > 0 && at - b < FRESH_MS ? 'row-in' : undefined}
                   />
                 )

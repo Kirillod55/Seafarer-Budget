@@ -324,6 +324,109 @@
   line-height: 1.45;
 }
 
+/* ---------- «Последние операции» ---------- */
+
+.accrecent {
+  display: flex;
+  order: 2;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.accrecent-h {
+  margin: 0;
+  font-size: 1.059rem; /* 18 */
+  font-weight: 600;
+}
+
+.accfilter {
+  display: flex;
+  gap: 8px;
+  margin: 0 -16px;
+  padding: 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.accfilter::-webkit-scrollbar {
+  display: none;
+}
+
+.accfilter button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.824rem; /* 14 */
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease-out,
+    border-color 0.2s ease-out,
+    color 0.2s ease-out;
+}
+
+.accfilter i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.accfilter button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* a new choice fades in; nothing slides */
+.accrecent-list {
+  animation: accListIn 0.2s ease-out;
+}
+
+@keyframes accListIn {
+  from {
+    opacity: 0;
+  }
+}
+
+.accmore {
+  align-self: center;
+}
+
+/* the account of a record, in the colour of its card */
+.acctag {
+  display: inline-block;
+  max-width: 11em;
+  padding: 0 7px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c) 20%, transparent);
+  color: color-mix(in srgb, var(--c) 45%, var(--text));
+  font-size: 0.824em;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accfilter button,
+  .accrecent-list {
+    transition: none;
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .acard-btn svg,
   .oppane,

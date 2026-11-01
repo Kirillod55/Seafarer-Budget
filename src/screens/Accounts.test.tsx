@@ -158,6 +158,45 @@ describe('Счета: cards', () => {
   })
 })
 
+describe('Счета: последние операции', () => {
+  const list = () => within(screen.getByRole('region', { name: 'Последние операции' }))
+  const filter = () => within(screen.getByRole('group', { name: 'Счёт' }))
+  async function records() {
+    await seed()
+    const [a, b] = [main, cash]
+    const row = { deleted: false, currency: 'USD', rate_usd: 1, rate_pending: false, to_account_id: null, to_amount: null, to_currency: null, category_id: null, date: '2026-07-01', source: 'app', author: 'owner', archived: false, deleted_at: null, deleted_batch: null, created_at: '2026-07-01T10:00:00Z' }
+    await env.db.transactions.bulkPut([
+      { ...row, id: 'x1', kind: 'expense', amount: 5, amount_usd: 5, account_id: a.id, note: 'Кофе' },
+      { ...row, id: 'x2', kind: 'expense', amount: 7, amount_usd: 7, account_id: b.id, note: 'Обед' },
+      { ...row, id: 'x3', kind: 'transfer', amount: 9, amount_usd: 9, account_id: a.id, to_account_id: b.id, note: '' },
+    ] as never)
+    return { a, b }
+  }
+
+  it('«Все»: each record carries its account, a transfer both; a chip leaves one account with its transfers', async () => {
+    const { a } = await records()
+    renderAccounts()
+    expect(await screen.findByText('Кофе')).toBeTruthy()
+    const tags = (name: string) => [...document.querySelectorAll('.acctag')].filter((t) => t.textContent === name)
+    expect(tags('Наличные')).toHaveLength(2)
+    expect(tags(a.name).length).toBeGreaterThanOrEqual(2)
+    fireEvent.click(filter().getByRole('button', { name: 'Наличные' }))
+    await waitFor(() => expect(list().queryByText('Кофе')).toBeNull())
+    expect(list().getByText('Обед')).toBeTruthy()
+    expect(list().getByText('Перевод')).toBeTruthy()
+    expect(document.querySelector('.acctag')).toBeNull()
+  })
+
+  it('«Показать ещё» opens the next page', async () => {
+    const { a } = await records()
+    const row = await env.db.transactions.get('x1')
+    await env.db.transactions.bulkPut(Array.from({ length: 25 }, (_, i) => ({ ...row!, id: `m${i}`, account_id: a.id, note: `Запись ${i}` })))
+    renderAccounts()
+    fireEvent.click(await screen.findByRole('button', { name: 'Показать ещё' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Показать ещё' })).toBeNull())
+  })
+})
+
 describe('Счета: operations', () => {
   it('choosing in «Куда» the account that stands in «Откуда» swaps them', async () => {
     await seed()

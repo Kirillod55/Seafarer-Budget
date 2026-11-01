@@ -1,23 +1,26 @@
-import { useId, useRef, useState, type CSSProperties } from 'react'
+import { memo, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, balances, reservingGoalMoves, reservedUsd } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
 import { round2, usdRate } from '@shared/fx.ts'
-import type { Account, FxRate, Settings, Transaction } from '@shared/types.ts'
+import type { Account, Category, FxRate, Settings, Transaction } from '@shared/types.ts'
+import { DayGroups } from '../components/DayGroups.tsx'
 import { useApp } from '../context.tsx'
 import { parseAmount } from '../lib/amount.ts'
 import { NavBar } from '../nav/NavBar.tsx'
 import { curOptions } from '../ui/currencies.ts'
 import { Archive, CreditCard, Pencil, Plus, Wallet } from '../ui/icons.ts'
 import { onEnter as enterRuns } from '../ui/keys.ts'
+import { prefersReducedMotion } from '../ui/motion.ts'
 import { Picker } from '../ui/Picker.tsx'
 import { Segmented } from '../ui/Segmented.tsx'
 import { Sheet, type SheetHandle } from '../ui/Sheet.tsx'
 import { useToast } from '../ui/Toast.tsx'
 import { useFlip } from '../ui/useFlip.ts'
 import { useDayTick } from '../ui/useDayTick.ts'
+import { useRecordSheet } from './RecordSheet.tsx'
 import './record.css'
 import './goals.css'
 import './accounts.css'
@@ -26,6 +29,11 @@ const FAILED = 'Не получилось — попробуй ещё раз'
 const RECONCILE_NOTE = 'Сверка'
 /** card colours in turn (tokens --acc-0…5) */
 const ACC_COLORS = 6
+const accColor = (index: number) => `var(--acc-${index % ACC_COLORS})`
+/** rows in «Последние операции», and how many more each «Показать ещё» adds */
+const RECENT_PAGE = 20
+/** vDesk in desk.css: the rows are built after the page has opened, so that building them never holds its start */
+const RECENT_AFTER_MS = 300
 const usdWhole = (n: number) => money(n, 'USD', { whole: true })
 
 type Op = 'transfer' | 'exchange' | 'reconcile'
@@ -69,7 +77,7 @@ function AccountCard({
   return (
     <section
       className="acard"
-      style={{ '--c': `var(--acc-${index % ACC_COLORS})` } as CSSProperties}
+      style={{ '--c': accColor(index) } as CSSProperties}
       aria-label={name}
       data-flip-key={`acc-${flipKey}`}
     >
@@ -578,7 +586,8 @@ function ReconcileForm({ settings, accounts, txs, today, multi, onHand }: OpsPro
 
 const OPS: Record<Op, string> = { transfer: 'Перевод', exchange: 'Обмен', reconcile: 'Сверка' }
 
-const OP_FORMS = { transfer: TransferForm, exchange: ExchangeForm, reconcile: ReconcileForm }
+// memo: a tab switch re-renders «Операции» only, the forms and their balances stay as they are
+const OP_FORMS = { transfer: memo(TransferForm), exchange: memo(ExchangeForm), reconcile: memo(ReconcileForm) }
 
 /**
  * One card «Операции» with «Перевод · Обмен · Сверка» (spec §11; «Обмен · Сверка» in «Один баланс»). All the forms stay
@@ -608,6 +617,89 @@ function Operations(props: OpsProps) {
   )
 }
 
+/**
+ * «Последние операции»: every record, newest first, as on the home screen. Several accounts: «Все» tags each record with
+ * its account in the colour of its card; a chip leaves one account's records, transfers in and out of it included.
+ */
+function RecentOps({ txs, categories, accounts, active, multi, partnerName, today }: {
+  txs: Transaction[]
+  categories: Category[]
+  /** archived ones too: their old records keep their names */
+  accounts: Account[]
+  /** the cards, in their order: the colours come from here */
+  active: Account[]
+  multi: boolean
+  partnerName: string | null
+  today: string
+}) {
+  const { openRecord } = useRecordSheet()
+  const [chosen, setChosen] = useState<string | null>(null)
+  const [limit, setLimit] = useState(RECENT_PAGE)
+  const [opened, setOpened] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setOpened(true), prefersReducedMotion() ? 0 : RECENT_AFTER_MS)
+    return () => clearTimeout(t)
+  }, [])
+  const account = multi && active.some((a) => a.id === chosen) ? chosen : null
+  const rows = useMemo(
+    () =>
+      txs
+        .filter((t) => !t.archived && (!account || t.account_id === account || t.to_account_id === account))
+        .sort((a, b) => (a.date === b.date ? b.created_at.localeCompare(a.created_at) : b.date.localeCompare(a.date))),
+    [txs, account],
+  )
+  const choose = (id: string | null) => {
+    setChosen(id)
+    setLimit(RECENT_PAGE)
+  }
+  const tagColor = (a: Account) => {
+    const i = active.findIndex((x) => x.id === a.id)
+    return i < 0 ? 'var(--muted)' : accColor(i)
+  }
+  return (
+    <section className="accrecent" data-flip-key="recent" aria-label="Последние операции">
+      <h3 className="accrecent-h">Последние операции</h3>
+      {multi && (
+        <div className="accfilter" role="group" aria-label="Счёт">
+          <button type="button" aria-pressed={!account} onClick={() => choose(null)}>
+            Все
+          </button>
+          {active.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              aria-pressed={a.id === account}
+              style={{ '--c': tagColor(a) } as CSSProperties}
+              onClick={() => choose(a.id)}
+            >
+              <i aria-hidden="true" />
+              {a.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {opened && (
+        <div key={account ?? 'all'} className="accrecent-list">
+          <DayGroups
+            txs={rows.slice(0, limit)}
+            categories={categories}
+            accounts={accounts}
+            partnerName={partnerName}
+            onOpen={openRecord}
+            today={today}
+            tagColor={multi && !account ? tagColor : undefined}
+          />
+        </div>
+      )}
+      {opened && rows.length > limit && (
+        <button type="button" className="btn-gray accmore" onClick={() => setLimit(limit + RECENT_PAGE)}>
+          Показать ещё
+        </button>
+      )}
+    </section>
+  )
+}
+
 /*
  * «Счета» (spec §4 «Счета», §11 «Раздел «Счета» — переделан полностью», phone part; prototype accounts()/accCard()):
  * the summary «Всего ≈ · Свободно · В целях»; the accounts as bank cards (own gradient, «Основной» on the default,
@@ -621,15 +713,16 @@ export function Accounts() {
   const [panel, setPanel] = useState<Panel>(null)
   const screenRef = useRef<HTMLDivElement>(null)
   const data = useLiveQuery(async () => {
-    const [settings, accounts, txs, rates, moves, goals] = await Promise.all([
+    const [settings, accounts, txs, rates, moves, goals, categories] = await Promise.all([
       db.settings.filter(alive).first(),
       db.accounts.filter(alive).toArray(),
       db.transactions.filter(alive).toArray(),
       db.fx_rates.toArray(),
       db.goal_moves.filter(alive).toArray(),
       db.goals.filter(alive).toArray(),
+      db.categories.filter(alive).toArray(),
     ])
-    return { settings, accounts, txs, rates, moves, goals }
+    return { settings, accounts, txs, rates, moves, goals, categories }
   }, [db])
   useDayTick(now, data?.settings?.timezone)
 
@@ -671,7 +764,7 @@ export function Accounts() {
         {bar}
       </div>
     )
-  const { settings, accounts, txs, rates, moves, goals } = data
+  const { settings, accounts, txs, rates, moves, goals, categories } = data
   if (!settings)
     return (
       <div ref={screenRef} className="accs">
@@ -744,6 +837,15 @@ export function Accounts() {
             Сейчас режим «Один баланс». Несколько счетов включаются в «Ещё» → «Режим счетов».
           </p>
         )}
+        <RecentOps
+          txs={txs}
+          categories={categories}
+          accounts={accounts}
+          active={active}
+          multi={multi}
+          partnerName={settings.partner_name}
+          today={today}
+        />
       </div>
 
       <Operations settings={settings} accounts={active} txs={txs} rates={rates} today={today} multi={multi} onHand={all} />
