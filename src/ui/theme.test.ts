@@ -57,14 +57,14 @@ describe('applyTheme', () => {
     expect(themeColor()).toBe('#0E0F12')
   })
 
-  it('replaces the theme-color meta, never adds a second one', () => {
+  it('updates an existing theme-color meta instead of adding another', () => {
     const meta = document.createElement('meta')
     meta.name = 'theme-color'
     meta.content = '#1f6feb'
     document.head.append(meta)
     applyTheme('light')
     expect(document.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1)
-    expect(document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')!.content).toBe('#FFFFFF')
+    expect(meta.content).toBe('#FFFFFF')
   })
 })
 
