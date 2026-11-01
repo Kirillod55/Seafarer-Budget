@@ -43,13 +43,26 @@ export function applyTheme(t: ThemeChoice, doc: Document = document): void {
   rememberTheme(t)
 
   const effective = t === 'system' ? (systemDark(doc) ? 'dark' : 'light') : t
-  let meta = doc.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-  if (!meta) {
-    meta = doc.createElement('meta')
-    meta.name = 'theme-color'
-    doc.head.append(meta)
-  }
+  // a new element, not a new value: the iPhone notices a changed one late
+  doc.querySelector('meta[name="theme-color"]')?.remove()
+  const meta = doc.createElement('meta')
+  meta.name = 'theme-color'
   meta.content = THEME_BG[effective]
+  doc.head.append(meta)
+}
+
+/**
+ * The iPhone repaints the band under the status bar only when the page scrolls (at the very top it stays in the old
+ * theme): one pixel down and back, in two frames, too small to see.
+ */
+function refreshStatusBar(doc: Document): void {
+  const win = doc.defaultView
+  if (!win) return
+  const y = win.scrollY
+  win.requestAnimationFrame(() => {
+    win.scrollTo(0, y + 1)
+    win.requestAnimationFrame(() => win.scrollTo(0, y))
+  })
 }
 
 /** The choice currently applied to <html> (applyTheme ran before the first render). */
@@ -95,6 +108,7 @@ function switchTheme(t: ThemeChoice, doc: Document): void {
   }
   fadeTheme(doc)
   applyTheme(t, doc)
+  if (currentLayout() === 'phone') refreshStatusBar(doc)
 }
 
 /**

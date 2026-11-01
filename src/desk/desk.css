@@ -1145,6 +1145,10 @@ html.desk .rtile {
 }
 
 /* the summary and the cards on the left, «Операции» beside them from the top */
+html.desk {
+  --theme-fade: 0.4s;
+}
+
 html.desk .accs {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 420px;

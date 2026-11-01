@@ -57,14 +57,14 @@ describe('applyTheme', () => {
     expect(themeColor()).toBe('#0E0F12')
   })
 
-  it('updates an existing theme-color meta instead of adding another', () => {
+  it('replaces the theme-color meta, never adds a second one', () => {
     const meta = document.createElement('meta')
     meta.name = 'theme-color'
     meta.content = '#1f6feb'
     document.head.append(meta)
     applyTheme('light')
     expect(document.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1)
-    expect(meta.content).toBe('#FFFFFF')
+    expect(document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')!.content).toBe('#FFFFFF')
   })
 })
 
@@ -133,13 +133,14 @@ describe('useTheme', () => {
       delete (document as { startViewTransition?: unknown }).startViewTransition
     }
     expect(start).not.toHaveBeenCalled()
+    expect(document.querySelectorAll('meta[name="theme-color"]')).toHaveLength(1)
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
     expect(document.documentElement.classList.contains('theme-fade')).toBe(true)
   })
 
   it('inherited text never transitions on every element: the colour is on <body> only', () => {
     const everything = css.slice(css.indexOf('html.theme-fade,'), css.indexOf('html.theme-fade body'))
-    expect(everything).not.toMatch(/[^-]color 0\.4s/)
+    expect(everything).not.toMatch(/[^-]color var/)
   })
 
   it('starts from the theme already applied to <html>', () => {
