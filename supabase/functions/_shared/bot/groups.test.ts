@@ -268,8 +268,9 @@ describe('/currency', () => {
       { date: TODAY, currency: 'MDL', uah_per_unit: 2.4 }, { date: TODAY, currency: 'UAH', uah_per_unit: 1 },
     ]
     const text = textOf(await run(s, msg('/currency')))
-    expect(text).toContain('🇺🇦 ₴42 (НБУ)')
-    expect(text).toContain('🇲🇩 MDL 20.42 (НБУ)')
+    expect(text).toContain('🇺🇦 ₴42')
+    expect(text).toContain('🇲🇩 MDL 20.42')
+    expect(text).toContain('🏦 НБУ')
     s.bankRows.USD.uah = { buy: 45.25, sell: 45.95 }
     expect(textOf(await run(s, msg('/currency')))).toContain('🇺🇦 ₴45.25 → ₴45.95')
     s.bankRows.USD.uah = null

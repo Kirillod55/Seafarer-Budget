@@ -1,6 +1,7 @@
 // Supabase Edge Function (Deno). Not imported by vitest or type-checked by the app build.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { handleFxRequest } from './handler.ts'
+import { loadBankRates } from '../_shared/bankRates.ts'
 import type { FxRate } from '../_shared/types.ts'
 
 const NBU_TIMEOUT_MS = 10_000 // a hung NBU must not hang the function
@@ -21,6 +22,7 @@ Deno.serve((req: Request) =>
       if (!res.ok) throw new Error(`BNM responded ${res.status}`)
       return await res.text()
     },
+    bankRates: () => loadBankRates(),
     async readRates(date: string) {
       const { data, error } = await admin.from('fx_rates').select('date,currency,uah_per_unit').eq('date', date)
       if (error) throw new Error(error.message)

@@ -188,11 +188,11 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     expect(f.sent.map((m) => m.chat)).toEqual([o.ownerChatId, o.partnerChatId])
     expect(f.sent[0].text).toBe('☀️ Доброе утро, Кирилл!\nУтренняя сводка\n\n💱 Курс на 2 ноября:\nПокупка → продажа\n\n💵 Доллар:\n🇺🇦 ₴45.25 → ₴45.95\n🇲🇩 MDL 17.85 → MDL 18.15\n\n💶 Евро:\n🇺🇦 ₴50.30 → ₴51.30\n🇲🇩 MDL 20.03 → MDL 20.28\n\n🏦 ПриватБанк / maib')
   })
-  it('both banks down: the official NBU and BNM rates, marked, without the buy/sell lines', async () => {
+  it('both banks down: the official rates, the source line names НБУ and НБМ, no buy/sell line', async () => {
     const f = fake()
     f.bank = noBankRates()
     await runMorningRates(f, opts(EIGHT))
-    expect(f.sent[0].text).toBe('☀️ Доброе утро, Кирилл!\nУтренняя сводка\n\n💱 Курс на 2 ноября:\n\n💵 Доллар:\n🇺🇦 ₴42 (НБУ)\n🇲🇩 MDL 18.04 (НБМ)\n\n💶 Евро:\n🇺🇦 ₴49 (НБУ)\n🇲🇩 MDL 20.10 (НБМ)')
+    expect(f.sent[0].text).toBe('☀️ Доброе утро, Кирилл!\nУтренняя сводка\n\n💱 Курс на 2 ноября:\n\n💵 Доллар:\n🇺🇦 ₴42\n🇲🇩 MDL 18.04\n\n💶 Евро:\n🇺🇦 ₴49\n🇲🇩 MDL 20.10\n\n🏦 НБУ / НБМ')
   })
   it('greets each person by name; without a partner name, just good morning', async () => {
     const f = fake()
@@ -215,14 +215,14 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     expect(await runMorningRates(g, opts(EIGHT))).toBe(false)
     expect(g.sent).toEqual([])
   })
-  it('maib down: the leu falls back to the official rate, marked, the hryvnia keeps two rates', async () => {
+  it('maib down: the leu falls back to the official rate, the source line says so, the hryvnia keeps two rates', async () => {
     const f = fake()
     f.bank.USD.mdl = null
     f.bank.EUR.mdl = null
     await runMorningRates(f, opts(EIGHT))
     expect(f.sent[0].text).toContain('🇺🇦 ₴45.25 → ₴45.95')
-    expect(f.sent[0].text).toContain('🇲🇩 MDL 18.04 (НБМ)')
-    expect(f.sent[0].text).toContain('🏦 ПриватБанк')
+    expect(f.sent[0].text).toContain('🇲🇩 MDL 18.04')
+    expect(f.sent[0].text).toContain('🏦 ПриватБанк / НБМ')
   })
   it('a test run: any hour, to Kirill alone, only with the keepalive secret', async () => {
     const test = (secret?: string) =>

@@ -1,3 +1,4 @@
+import { BANK_RATES_KEY } from '../lib/bank-rates.ts'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,8 +62,8 @@ beforeEach(() => {
   env = makeEnv()
 })
 
-describe('Home: the NBU rates under the balance', () => {
-  it('the dollar and the euro in hryvnias and lei', async () => {
+describe('Home: the rates under the balance (phone)', () => {
+  it('official rates and their source when the banks have not answered', async () => {
     await seed({})
     await env.db.fx_rates.bulkPut([
       { date: '2026-10-20', currency: 'USD', uah_per_unit: 42 },
@@ -71,8 +72,20 @@ describe('Home: the NBU rates under the balance', () => {
       { date: '2026-10-20', currency: 'UAH', uah_per_unit: 1 },
     ])
     renderHome()
-    expect(await screen.findByText('$1 = ₴42 · MDL 17.50')).toBeTruthy()
-    expect(screen.getByText('€1 = ₴49 · MDL 20.42')).toBeTruthy()
+    expect(await screen.findByText('Доллар: ₴42 · MDL 17.50')).toBeTruthy()
+    expect(screen.getByText('Евро: ₴49 · MDL 20.42')).toBeTruthy()
+    expect(screen.getByText('НБУ')).toBeTruthy()
+  })
+  it('the banks\' buy and sell, as in the bot, with their names', async () => {
+    await seed({})
+    await env.db.fx_rates.bulkPut([{ date: '2026-10-20', currency: 'USD', uah_per_unit: 42 }])
+    await env.db.meta.put({ key: BANK_RATES_KEY, value: { at: env.now().toISOString(), rates: {
+      USD: { uah: { buy: 45.25, sell: 45.95 }, mdl: { buy: 17.85, sell: 18.15 } },
+      EUR: { uah: { buy: 50.3, sell: 51.3 }, mdl: { buy: 20.03, sell: 20.28 } },
+    } } })
+    renderHome()
+    expect(await screen.findByText('Доллар: ₴45.25 → ₴45.95 · MDL 17.85 → MDL 18.15')).toBeTruthy()
+    expect(screen.getByText('ПриватБанк / maib')).toBeTruthy()
   })
   it('no rates yet: no line at all', async () => {
     await seed({})

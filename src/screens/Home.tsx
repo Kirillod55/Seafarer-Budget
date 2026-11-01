@@ -4,12 +4,15 @@ import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, dailyBudget, reservingGoalMoves, reservedUsd, type DailyBudget } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
-import { currentRates, round2, usdRate } from '@shared/fx.ts'
+import type { BankRates } from '@shared/bankRates.ts'
+import { round2, usdRate } from '@shared/fx.ts'
+import { ratesView } from '@shared/ratesText.ts'
 import type { FxRate, Settings } from '@shared/types.ts'
 import { DayGroups } from '../components/DayGroups.tsx'
 import { QuickInput } from '../components/QuickInput.tsx'
 import { SyncCloud, isNetworkError } from '../components/SyncCloud.tsx'
 import { useApp } from '../context.tsx'
+import { BANK_RATES_KEY, freshBankRates } from '../lib/bank-rates.ts'
 import { useDesk } from '../desk/layout.ts'
 import { Overview } from '../desk/Overview.tsx'
 import { useNav, useScreenActive } from '../nav/Navigator.tsx'
@@ -40,15 +43,15 @@ function CountUp({ value, className }: { value: number; className: string }) {
  * the latest records. Pull down syncs.
  */
 /** The dollar and the euro in hryvnias and lei by the NBU, under the balance. */
-function Rates({ rates, today }: { rates: FxRate[]; today: string }) {
-  const { date, pairs } = currentRates(rates, today)
-  if (!date) return null
+function Rates({ rates, today, bank }: { rates: FxRate[]; today: string; bank?: BankRates }) {
+  const v = ratesView(rates, today, bank)
+  if (!v) return null
   return (
-    <div className="home-rates num" aria-label={`Курс НБУ на ${dayMonth(date)}`}>
-      {pairs.map((p) => {
-        const parts = [p.uah !== null && money(p.uah, 'UAH'), p.mdl !== null && money(p.mdl, 'MDL')].filter(Boolean)
-        return parts.length > 0 && <span key={p.unit}>{`${money(1, p.unit, { whole: true })} = ${parts.join(' · ')}`}</span>
-      })}
+    <div className="home-rates num" aria-label={`Курс на ${dayMonth(v.date)}`}>
+      {v.blocks.map((b) => (
+        <span key={b.unit}>{`${b.title}: ${[b.uah, b.mdl].filter(Boolean).join(' · ')}`}</span>
+      ))}
+      <span className="home-rates-src">{v.source}</span>
     </div>
   )
 }
@@ -60,7 +63,7 @@ export function Home() {
   const active = useScreenActive()
   const desk = useDesk()
   const data = useLiveQuery(async () => {
-    const [settings, txs, rates, moves, goals, categories, accounts] = await Promise.all([
+    const [settings, txs, rates, moves, goals, categories, accounts, bankMeta] = await Promise.all([
       db.settings.filter(alive).first(),
       db.transactions.filter(alive).toArray(),
       db.fx_rates.toArray(),
@@ -68,8 +71,9 @@ export function Home() {
       db.goals.toArray(),
       db.categories.toArray(),
       db.accounts.toArray(),
+      db.meta.get(BANK_RATES_KEY),
     ])
-    return { settings, txs, rates, moves, goals, categories, accounts }
+    return { settings, txs, rates, moves, goals, categories, accounts, bankMeta }
   }, [db])
   useDayTick(now, data?.settings?.timezone)
 
@@ -160,7 +164,7 @@ export function Home() {
               )}
             </div>
           </div>
-          {!desk && <Rates rates={rates} today={today} />}
+          {!desk && <Rates rates={rates} today={today} bank={freshBankRates(data.bankMeta?.value, now().getTime())} />}
         </section>
 
         <DayCard budget={budget} settings={settings} today={today} onSettings={() => nav.switchTab('more')} />

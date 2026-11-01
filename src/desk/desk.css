@@ -912,11 +912,14 @@ html.desk.desk-s .dgrid {
   gap: 8px;
 }
 
+.orates-hint {
+  margin: -6px 0 8px;
+}
+
 .orate {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+  display: flex;
+  justify-content: space-between;
   gap: 18px;
-  align-items: baseline;
 }
 
 .orate .nm {
@@ -924,8 +927,15 @@ html.desk.desk-s .dgrid {
 }
 
 .orate .v {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-weight: 600;
   text-align: right;
+}
+
+.orates-src {
+  margin: 10px 0 0;
 }
 
 .mcal {

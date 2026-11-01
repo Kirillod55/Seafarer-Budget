@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { noBankRates } from '../_shared/bankRates.ts'
 import type { FxRate } from '../_shared/types.ts'
 import { handleFxRequest, type FxDeps } from './handler.ts'
 
@@ -17,6 +18,7 @@ function makeDeps(over: Partial<FxDeps> = {}): FxDeps & {
   return {
     fetchNbu: vi.fn(async () => NBU),
     fetchBnm: vi.fn(async () => ''),
+    bankRates: vi.fn(async () => noBankRates()),
     readRates: vi.fn(async () => [] as FxRate[]),
     writeRates: vi.fn(async () => {}),
     ...over,
@@ -183,5 +185,16 @@ describe('handleFxRequest: several dates at once (batched resolvePendingRates)',
     const many = Array.from({ length: 61 }, (_, i) => new Date(Date.UTC(2026, 6, 1 + i)).toISOString().slice(0, 10))
     expect((await handleFxRequest(post({ dates: many }), makeDeps())).status).toBe(400)
     expect((await handleFxRequest(post({ dates: ['2026-13-01'] }), makeDeps())).status).toBe(400)
+  })
+})
+
+describe('{ bank: true }', () => {
+  it('answers the banks\' buy and sell, the same source the bot uses', async () => {
+    const bank = noBankRates()
+    bank.USD.uah = { buy: 45.25, sell: 45.95 }
+    const deps = makeDeps({ bankRates: vi.fn(async () => bank) })
+    const res = await handleFxRequest(post({ bank: true }), deps)
+    expect(await res.json()).toEqual(bank)
+    expect(deps.fetchNbu).not.toHaveBeenCalled()
   })
 })

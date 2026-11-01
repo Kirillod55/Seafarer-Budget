@@ -121,6 +121,10 @@
   font-size: 0.882rem; /* 15 */
 }
 
+.home-rates-src {
+  width: 100%;
+}
+
 .stat {
   display: flex;
   flex-direction: column;

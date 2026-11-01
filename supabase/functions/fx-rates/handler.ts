@@ -1,8 +1,11 @@
 import { BNM_PREFIX, bnmUrl, nbuUrl, parseBnm, parseNbu } from '../_shared/fx.ts'
+import type { BankRates } from '../_shared/bankRates.ts'
 import type { FxRate } from '../_shared/types.ts'
 
 export interface FxDeps {
   fetchNbu(url: string): Promise<unknown>
+  /** buy / sell from PrivatBank and maib, the same call the bot makes */
+  bankRates(): Promise<BankRates>
   /** the National Bank of Moldova's XML */
   fetchBnm(url: string): Promise<string>
   readRates(date: string): Promise<FxRate[]>
@@ -40,6 +43,7 @@ export async function handleFxRequest(req: Request, deps: FxDeps): Promise<Respo
   } catch {
     return json({ error: 'Invalid JSON body' }, 400)
   }
+  if ((body as { bank?: unknown } | null)?.bank === true) return json(await deps.bankRates())
   const { date, dates, currencies } = (body ?? {}) as { date?: unknown; dates?: unknown; currencies?: unknown }
   const wanted = [...BASE_CURRENCIES]
   if (Array.isArray(currencies)) {

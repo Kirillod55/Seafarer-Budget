@@ -1,3 +1,5 @@
+import type { BankRates } from '@shared/bankRates.ts'
+import { BANK_RATES_KEY, BANK_REFRESH_MS } from '../lib/bank-rates.ts'
 import { alive } from '@shared/alive.ts'
 import { localDate } from '@shared/dates.ts'
 import { BNM_PREFIX, round2, usdRate } from '@shared/fx.ts'
@@ -48,6 +50,8 @@ export interface Remote {
   fxRates(date: string, currencies: string[]): Promise<FxRate[]>
   /** Several dates in one fx-rates call (`{dates}`, ≤ 60). Optional: without it, one call per date. */
   fxRatesBatch?(dates: string[], currencies: string[]): Promise<FxRate[]>
+  /** buy / sell through the fx-rates function */
+  bankRates?(): Promise<BankRates>
   /** Sets rate_usd / amount_usd / rate_pending=false only on rows that are still rate_pending on the server. */
   patchRates(rows: RatePatch[]): Promise<void>
 }
@@ -272,6 +276,18 @@ export function createSync(
   }
 
   let bnmAsked: string | null = null
+  let bankAskedAt = 0
+
+  // the buy / sell the bot shows; at most every BANK_REFRESH_MS. Never fatal: without them the official rates are shown.
+  async function refreshBankRates(): Promise<void> {
+    if (!remote.bankRates || Date.now() - bankAskedAt < BANK_REFRESH_MS) return
+    bankAskedAt = Date.now()
+    try {
+      await db.meta.put({ key: BANK_RATES_KEY, value: { at: new Date().toISOString(), rates: await remote.bankRates() } })
+    } catch {
+      // the next sync after BANK_REFRESH_MS tries again
+    }
+  }
 
   // Make sure there is an exact rate set for today for every currency in settings.
   async function ensureTodayRates(settings: Settings | undefined): Promise<void> {
@@ -395,6 +411,7 @@ export function createSync(
     try {
       settings = await currentSettings()
       await ensureTodayRates(settings)
+      await refreshBankRates()
     } catch (e) {
       note(fxErrors, e)
     }

@@ -5,9 +5,11 @@ import { goalProgress, limitStatus, monthReport } from '@shared/calc.ts'
 import { categoryStyle } from '@shared/defaults.ts'
 import { addDays, monthOf } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
-import { currentRates, round2 } from '@shared/fx.ts'
+import { round2 } from '@shared/fx.ts'
+import { ratesView } from '@shared/ratesText.ts'
 import type { Category, Transaction } from '@shared/types.ts'
 import { useApp } from '../context.tsx'
+import { BANK_RATES_KEY, freshBankRates } from '../lib/bank-rates.ts'
 import { byWho, categoryOf, partnerLabel } from '../lib/records.ts'
 import { useNav } from '../nav/Navigator.tsx'
 import { CategoryIcon } from '../ui/CategoryIcon.tsx'
@@ -39,10 +41,10 @@ function monthDays(month: string): (string | null)[] {
  * the month with «Я / Маша» and the top 4 categories, goals, limits. Numbers are the report's and the calendar's.
  */
 export function Overview({ today }: { today: string }) {
-  const { db } = useApp()
+  const { db, now } = useApp()
   const nav = useNav()
   const data = useLiveQuery(async () => {
-    const [settings, txs, categories, goals, moves, limits, rates] = await Promise.all([
+    const [settings, txs, categories, goals, moves, limits, rates, bankMeta] = await Promise.all([
       db.settings.filter(alive).first(),
       db.transactions.filter(alive).toArray(),
       db.categories.toArray(),
@@ -50,11 +52,12 @@ export function Overview({ today }: { today: string }) {
       db.goal_moves.filter(alive).toArray(),
       db.limits.filter(alive).toArray(),
       db.fx_rates.toArray(),
+      db.meta.get(BANK_RATES_KEY),
     ])
-    return { settings, txs, categories, goals, moves, limits, rates }
+    return { settings, txs, categories, goals, moves, limits, rates, bankMeta }
   }, [db])
   if (!data) return <aside className="daside" aria-label="Обзор" />
-  const { settings, txs, categories, goals, moves, limits, rates } = data
+  const { settings, txs, categories, goals, moves, limits, rates, bankMeta } = data
 
   const month = monthOf(today)
   const [, m] = month.split('-').map(Number)
@@ -68,7 +71,7 @@ export function Overview({ today }: { today: string }) {
   const byId = new Map<string, Category>(categories.map((c) => [c.id, c]))
   const top = report.byCategory.slice(0, 4).map((c) => ({ ...c, category: categoryOf(c.categoryId, byId) }))
 
-  const fx = currentRates(rates, today)
+  const fx = ratesView(rates, today, freshBankRates(bankMeta?.value, now().getTime()))
   const liveGoals = goals.filter((g) => !g.archived)
   const liveLimits = limits
     .map((l) => ({ l, c: byId.get(l.category_id) }))
@@ -147,21 +150,25 @@ export function Overview({ today }: { today: string }) {
         ))}
       </section>
 
-      {fx.date && (
+      {fx && (
         <section className="card" aria-label="Курс валют">
           <div className="ahead">
             <h3>Курс валют</h3>
             <span className="label">{dayMonth(fx.date)}</span>
           </div>
+          {fx.live && <p className="label orates-hint">Покупка → продажа</p>}
           <div className="orates num">
-            {fx.pairs.map((p) => (
-              <div key={p.unit} className="orate">
-                <span className="nm">{money(1, p.unit, { whole: true })}</span>
-                <span className="v">{p.uah !== null ? money(p.uah, 'UAH') : '—'}</span>
-                <span className="v">{p.mdl !== null ? money(p.mdl, 'MDL') : '—'}</span>
+            {fx.blocks.map((b) => (
+              <div key={b.unit} className="orate">
+                <span className="nm">{b.title}</span>
+                <span className="v">
+                  {b.uah && <span>{b.uah}</span>}
+                  {b.mdl && <span>{b.mdl}</span>}
+                </span>
               </div>
             ))}
           </div>
+          <p className="label orates-src">{fx.source}</p>
         </section>
       )}
 

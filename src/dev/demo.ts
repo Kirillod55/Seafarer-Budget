@@ -246,7 +246,17 @@ export async function seedDemo(db: LocalDb, today: string): Promise<void> {
     { id: 'demo-limit-food', category_id: catId('Продукты'), monthly_usd: 400, deleted: false, deleted_at: null, deleted_batch: null, dirty: 0 },
   ]
 
-  await db.transaction('rw', [db.settings, db.accounts, db.categories, db.transactions, db.goals, db.goal_moves, db.limits, db.fx_rates], async () => {
+  await db.transaction('rw', [db.settings, db.accounts, db.categories, db.transactions, db.goals, db.goal_moves, db.limits, db.fx_rates, db.meta], async () => {
+    await db.meta.put({
+      key: 'bankRates',
+      value: {
+        at: new Date().toISOString(),
+        rates: {
+          USD: { uah: { buy: 45.25, sell: 45.95 }, mdl: { buy: 17.85, sell: 18.15 } },
+          EUR: { uah: { buy: 50.3, sell: 51.3 }, mdl: { buy: 20.03, sell: 20.28 } },
+        },
+      },
+    })
     await db.fx_rates.bulkPut(rates)
     await db.accounts.bulkPut(accounts)
     await db.categories.bulkPut(categories)
