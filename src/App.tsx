@@ -82,7 +82,7 @@ export default function App() {
   }
   const client = supabase
 
-  if (auth === 'checking') return <p className="splash muted">Загрузка…</p>
+  if (auth === 'checking') return null // the launch screen stays until a real screen is there
   if (auth === 'out') {
     return (
       <Login

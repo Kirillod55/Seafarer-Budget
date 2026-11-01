@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, dailyBudget, reservingGoalMoves, reservedUsd, type DailyBudget } from '@shared/calc.ts'
@@ -9,6 +9,7 @@ import { ratesView } from '@shared/ratesText.ts'
 import type { Settings } from '@shared/types.ts'
 import { DayGroups } from '../components/DayGroups.tsx'
 import { QuickInput } from '../components/QuickInput.tsx'
+import { hideSplash } from '../ui/splash.ts'
 import { RatesCard } from '../components/RatesCard.tsx'
 import { SyncCloud, isNetworkError } from '../components/SyncCloud.tsx'
 import { useApp } from '../context.tsx'
@@ -79,7 +80,12 @@ export function Home() {
     }
   }
 
-  if (!data) return <p className="muted pad">Загрузка…</p>
+  // the launch screen goes when the home screen has its data
+  useEffect(() => {
+    if (data) hideSplash()
+  }, [data])
+
+  if (!data) return null
   const { settings, txs, rates, moves, goals, categories, accounts } = data
   if (!settings) return <QuickInput />
 

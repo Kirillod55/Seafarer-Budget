@@ -33,7 +33,7 @@ export function Authed({ client, onSignOut }: { client: SupabaseClient; onSignOu
     }
   }, [client])
 
-  if (!services) return <p className="splash muted">Загрузка…</p>
+  if (!services) return null // the launch screen stays
   return (
     <AppProvider value={services.app}>
       <FirstRunGate syncOnce={services.syncOnce}>

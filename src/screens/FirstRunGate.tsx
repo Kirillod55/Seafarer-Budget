@@ -1,3 +1,4 @@
+import { hideSplash } from '../ui/splash.ts'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useApp } from '../context.tsx'
 import { resolveStartup, type StartupState } from '../startup.ts'
@@ -25,7 +26,11 @@ export function FirstRunGate({
     void check()
   }, [check])
 
-  if (state === 'loading') return <p className="splash muted">Загрузка…</p>
+  useEffect(() => {
+    if (state === 'need_internet' || state === 'wizard') hideSplash()
+  }, [state])
+
+  if (state === 'loading') return null // the launch screen stays
   if (state === 'need_internet') {
     return (
       <main className="page narrow center">

@@ -9,9 +9,191 @@
     <meta name="apple-mobile-web-app-title" content="Бюджет" />
     <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
     <title>Seafarer Budget</title>
+    <style>
+      /* The launch screen: here and not in the bundle, so it shows before any script has loaded (src/ui/splash.ts hides it). */
+      #splash {
+        --sp-bg: #ffffff;
+        --sp-text: #14161a;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        overflow: hidden;
+        background: var(--sp-bg);
+        color: var(--sp-text);
+        font: 700 22px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        letter-spacing: -0.2px;
+        transition: opacity 0.32s ease-out, transform 0.32s ease-out;
+      }
+      @media (prefers-color-scheme: dark) {
+        #splash {
+          --sp-bg: #0e0f12;
+          --sp-text: #f2f3f5;
+        }
+      }
+      #splash[data-theme='light'] {
+        --sp-bg: #ffffff;
+        --sp-text: #14161a;
+      }
+      #splash[data-theme='dark'] {
+        --sp-bg: #0e0f12;
+        --sp-text: #f2f3f5;
+      }
+      #splash.out {
+        opacity: 0;
+        transform: scale(1.03);
+      }
+      /* the PC has its own start: phones only */
+      @media (min-width: 768px) {
+        #splash {
+          display: none;
+        }
+      }
+      .sp-float {
+        animation: spBob 3.2s ease-in-out 1s infinite alternate;
+      }
+      .sp-tile {
+        display: block;
+        width: 116px;
+        height: 116px;
+        border-radius: 29px;
+        background: #c6f432;
+        box-shadow: 0 16px 44px rgba(198, 244, 50, 0.24);
+        animation: spIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      }
+      .sp-draw {
+        stroke-dasharray: 1;
+        stroke-dashoffset: 1;
+        animation: spDraw 0.7s cubic-bezier(0.32, 0.72, 0, 1) 0.25s forwards;
+      }
+      .sp-badge {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: spPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) 0.8s both;
+      }
+      .sp-name {
+        animation: spUp 0.45s ease-out 0.9s both;
+      }
+      .sp-sea {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 150px;
+        pointer-events: none;
+        animation: spRise 1s cubic-bezier(0.32, 0.72, 0, 1) 0.2s both;
+      }
+      .sp-wave {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 200%;
+        fill: #c6f432;
+      }
+      .sp-w1 {
+        height: 150px;
+        opacity: 0.1;
+        animation: spSail 11s linear infinite;
+      }
+      .sp-w2 {
+        height: 104px;
+        opacity: 0.16;
+        animation: spSail 7s linear infinite reverse;
+      }
+      @keyframes spIn {
+        from {
+          opacity: 0;
+          transform: scale(0.6);
+        }
+      }
+      @keyframes spDraw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes spPop {
+        from {
+          opacity: 0;
+          transform: scale(0);
+        }
+      }
+      @keyframes spUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+      }
+      @keyframes spRise {
+        from {
+          transform: translateY(100%);
+        }
+      }
+      @keyframes spSail {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+      @keyframes spBob {
+        from {
+          transform: translateY(0) rotate(-2deg);
+        }
+        to {
+          transform: translateY(-9px) rotate(2deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash *,
+        #splash {
+          animation: none !important;
+          transition: none !important;
+        }
+        .sp-draw {
+          stroke-dashoffset: 0;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="splash" role="status" aria-label="Загрузка">
+      <div class="sp-float">
+        <svg class="sp-tile" viewBox="0 0 100 100" aria-hidden="true">
+          <g transform="translate(14 16) scale(3)" fill="none" stroke="#11140a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle class="sp-draw" pathLength="1" cx="12" cy="5" r="2" />
+            <path class="sp-draw" pathLength="1" d="M12 7v14M5 12H3a9 9 0 0 0 18 0h-2" />
+          </g>
+          <g class="sp-badge">
+            <circle cx="73" cy="27" r="16" fill="#c6f432" />
+            <circle cx="73" cy="27" r="13" fill="#11140a" />
+            <g transform="translate(64.88 19.01) scale(0.67708)" fill="none" stroke="#c6f432" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 5.5h5.2a3 3 0 0 1 0 6H8zM8 11.5h6a3.2 3.2 0 0 1 0 6.4H8zM8 4v15.4" />
+              <path d="M10 3.2v2.3M13 3.2v2.3M10 17.9v2.4M13 17.9v2.4" />
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="sp-name">Seafarer Budget</div>
+      <div class="sp-sea" aria-hidden="true">
+        <svg class="sp-wave sp-w1" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 60Q150 15 300 60T600 60T900 60T1200 60V120H0Z" /></svg>
+        <svg class="sp-wave sp-w2" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 60Q150 105 300 60T600 60T900 60T1200 60V120H0Z" /></svg>
+      </div>
+    </div>
+    <script>
+      // the stored theme, and a long absence: then the launch plays to its end (src/ui/splash.ts)
+      try {
+        var sp = document.getElementById('splash')
+        var theme = localStorage.getItem('sb-theme')
+        if (theme === 'light' || theme === 'dark') sp.setAttribute('data-theme', theme)
+        var now = Date.now()
+        var last = Number(localStorage.getItem('sb-last')) || 0
+        if (now - last > 6 * 60 * 60 * 1000) sp.setAttribute('data-long', String(now))
+        localStorage.setItem('sb-last', String(now))
+      } catch (e) {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

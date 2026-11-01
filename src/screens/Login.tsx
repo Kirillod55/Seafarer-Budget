@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { hideSplash } from '../ui/splash.ts'
 import { AuthBrand } from '../desk/AuthBrand.tsx'
 import { useDesk } from '../desk/layout.ts'
 import { CalendarDays, Check, Eye, EyeOff, MonitorSmartphone, UsersRound } from '../ui/icons.ts'
@@ -19,6 +20,7 @@ export function Login({
   /** `remember` (PC «Оставаться в системе», on by default): false = forget the session when the window closes */
   onLogin(email: string, password: string, remember?: boolean): Promise<string | null>
 }) {
+  useEffect(() => hideSplash(), [])
   const desk = useDesk()
   const [show, setShow] = useState(false)
   const [remember, setRemember] = useState(true)

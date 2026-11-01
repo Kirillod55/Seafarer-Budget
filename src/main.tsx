@@ -11,6 +11,7 @@ import { isDemo } from './dev/is-demo.ts'
 import { createUpdateGate } from './pwa-update.ts'
 import { isTauri } from './runtime.ts'
 import { Shell } from './Shell.tsx'
+import { hideSplash, watchSplash } from './ui/splash.ts'
 import { applyTextScale, applyTheme, loadTheme, watchSystemTheme } from './ui/theme.ts'
 import './styles.css'
 import './desk/desk.css'
@@ -35,6 +36,8 @@ applyTextScale()
 watchLayout() // html.desk / html.desk-s by the window width, before the first paint
 watchSystemTheme()
 const root = createRoot(document.getElementById('root')!)
+if (isTauri()) hideSplash()
+else watchSplash()
 
 async function start(): Promise<void> {
   // Dev-only demo (#demo): the signed-in app on its own database, no Supabase. `import.meta.env.DEV` is false

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../context.tsx'
 import type { LocalDb } from '../db/local.ts'
 import { prefersReducedMotion } from './motion.ts'
+import { rememberTheme } from './splash.ts'
 
 /** «Как в системе» / «Светлая» / «Тёмная». Stored per device (Dexie meta), never synced. */
 export type ThemeChoice = 'system' | 'light' | 'dark'
@@ -38,6 +39,7 @@ export function applyTheme(t: ThemeChoice, doc: Document = document): void {
   const root = doc.documentElement
   if (t === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', t)
+  rememberTheme(t)
 
   const effective = t === 'system' ? (systemDark(doc) ? 'dark' : 'light') : t
   let meta = doc.querySelector<HTMLMetaElement>('meta[name="theme-color"]')

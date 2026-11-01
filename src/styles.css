@@ -23,11 +23,6 @@ body,
 }
 
 .pad,
-.splash {
-  padding: 2rem 1rem;
-  text-align: center;
-}
-
 .error {
   color: var(--danger);
 }
