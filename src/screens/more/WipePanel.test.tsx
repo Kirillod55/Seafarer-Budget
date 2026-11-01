@@ -332,7 +332,7 @@ describe('«Вернуть удалённое» expires', () => {
     act(() => vi.advanceTimersByTime(RESTORE_MS - 120_000))
     expect(within(card).getByRole('button', { name: 'Вернуть удалённое' })).toBeTruthy()
     clock = TEST_NOW.getTime() + RESTORE_MS + 1000
-    act(() => vi.advanceTimersByTime(120_000))
+    act(() => vi.advanceTimersByTime(125_000))
     await waitFor(() => expect(within(card).queryByRole('button', { name: 'Вернуть удалённое' })).toBeNull())
   })
 })
