@@ -88,6 +88,11 @@ const deps: KeepaliveDeps = {
     if (!res.ok) throw new Error(`NBU ${res.status}`)
     return parseNbu(await res.json(), currencies)
   },
+  async cronToken() {
+    const { data, error } = await db.from('cron_tokens').select('value').eq('name', 'rates').maybeSingle()
+    check('read cron token', error)
+    return (data?.value as string | undefined) ?? null
+  },
   async writeRates(r) {
     const { error } = await db.from('fx_rates').upsert(r, { onConflict: 'date,currency' })
     check('write fx_rates', error)

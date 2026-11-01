@@ -642,7 +642,7 @@ describe('Morph', () => {
         expect(old.textContent).toBe('Первое')
         expect(old.getAttribute('aria-hidden')).toBe('true')
         expect(old.querySelector('[id]')).toBeNull()
-        act(() => void anims[0].onfinish?.call(anims[0], {} as AnimationPlaybackEvent))
+        act(() => void anims[anims.length - 1].onfinish?.call(anims[anims.length - 1], {} as AnimationPlaybackEvent))
         expect(container.querySelector('.mOld')).toBeNull()
       },
     )

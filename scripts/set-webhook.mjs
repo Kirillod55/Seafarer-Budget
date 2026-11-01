@@ -44,6 +44,7 @@ const commands = await call('setMyCommands', {
     { command: 'week', description: 'Траты за неделю' },
     { command: 'goals', description: 'Как цели' },
     { command: 'limits', description: 'Как лимиты' },
+    { command: 'currency', description: 'Курс доллара и евро' },
     { command: 'export', description: 'Выгрузка CSV' },
     { command: 'help', description: 'Как пользоваться ботом и что он умеет' },
   ],

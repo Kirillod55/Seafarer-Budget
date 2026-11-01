@@ -8,6 +8,8 @@ import { toCsv } from './csv.ts'
 import { addDays, localDate } from './dates.ts'
 import { money } from './format.ts'
 import { round2, usdRate } from './fx.ts'
+import { dayMonth } from './bot/ctx.ts'
+import { ratesText } from './ratesText.ts'
 import { purgeDue, RESTORE_MS } from './wipe.ts'
 import { safeEqual } from './secret.ts'
 import { SOFT_TABLES } from './types.ts'
@@ -36,6 +38,8 @@ export interface KeepaliveDeps {
   /** deleted = true for these bin rows, guarded at write time: only rows still binned with deleted_at < olderThan */
   markDeleted(table: SoftTable, ids: string[], olderThan: string): Promise<void>
   fetchNbu(date: string, currencies: string[]): Promise<FxRate[]>
+  /** the token pg_cron sends for the morning rates (public.cron_tokens, service role only) */
+  cronToken(): Promise<string | null>
   writeRates(rows: FxRate[]): Promise<void>
   patchTx(id: string, patch: Partial<Transaction>): Promise<void>
   deleteBotUpdatesBefore(iso: string): Promise<void>
@@ -201,9 +205,47 @@ export async function runKeepalive(deps: KeepaliveDeps, o: KeepaliveOptions): Pr
   return { db_ms, done }
 }
 
-/** The HTTP entry: POST with X-Keepalive-Secret only (401 otherwise, nothing done). */
+const RATES_HOUR = 8
+const RATE_CURRENCIES = ['UAH', 'USD', 'EUR', 'MDL']
+
+const localHour = (now: Date, timeZone: string) =>
+  Number(new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', hourCycle: 'h23' }).format(now))
+
+/**
+ * The hourly call from pg_cron: at 08:00 in settings.timezone today's NBU rates go to Kirill; every other hour
+ * nothing happens. If the NBU does not answer, the message carries the latest rates with their own date.
+ */
+export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions): Promise<boolean> {
+  const s = await deps.settings()
+  if (!s || localHour(o.now, s.timezone) !== RATES_HOUR) return false
+  const today = localDate(o.now, s.timezone)
+  try {
+    const fresh = await deps.fetchNbu(today, RATE_CURRENCIES)
+    if (fresh.length) await deps.writeRates(fresh)
+  } catch (e) {
+    console.error('morning rates:', e instanceof Error ? e.message : String(e))
+  }
+  await deps.send(o.ownerChatId, ratesText(await deps.rates(), today, dayMonth))
+  return true
+}
+
+/**
+ * The HTTP entry: POST with X-Keepalive-Secret (401 otherwise, nothing done), or ?job=rates with the X-Cron-Token
+ * pg_cron sends.
+ */
 export async function handleKeepalive(req: Request, deps: KeepaliveDeps, o: KeepaliveOptions, secret: string): Promise<Response> {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+  if (new URL(req.url).searchParams.get('job') === 'rates') {
+    const token = await deps.cronToken().catch(() => null)
+    if (!token || !safeEqual(req.headers.get('X-Cron-Token'), token)) return new Response('Unauthorized', { status: 401 })
+    try {
+      const sent = await runMorningRates(deps, o)
+      return new Response(JSON.stringify({ ok: true, sent }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    } catch (e) {
+      console.error('morning rates failed:', e instanceof Error ? e.message : String(e))
+      return new Response(JSON.stringify({ ok: false }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    }
+  }
   if (!safeEqual(req.headers.get('X-Keepalive-Secret'), secret)) return new Response('Unauthorized', { status: 401 })
   try {
     const r = await runKeepalive(deps, o)

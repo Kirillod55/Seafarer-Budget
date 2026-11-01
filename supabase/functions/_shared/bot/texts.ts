@@ -53,6 +53,7 @@ export function helpText(ctx: Ctx, greeting = false): string {
     '• /today — сегодня · /week — неделя · /month — месяц',
     '• /left — сколько можно тратить сегодня',
     '• /balance — сколько денег на счетах',
+    '• /currency — курс доллара и евро к гривне и лею',
     '• /goals — цели · /limits — лимиты',
     '• найди такси · сколько на кафе · кто сколько потратил',
     '• /export — выгрузка для Excel',

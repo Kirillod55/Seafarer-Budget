@@ -34,7 +34,7 @@ export function UpdateToast({ updater }: { updater: Updater | null }) {
                 Позже
               </button>
               <button type="button" className="fbtn primary" onClick={() => void updater.install()}>
-                Обновить и перезапустить
+                Обновить
               </button>
             </div>
           )}

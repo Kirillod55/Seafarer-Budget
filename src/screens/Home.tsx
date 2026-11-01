@@ -4,8 +4,8 @@ import { alive } from '@shared/alive.ts'
 import { activeBalances, balanceUsd, dailyBudget, reservingGoalMoves, reservedUsd, type DailyBudget } from '@shared/calc.ts'
 import { localDate } from '@shared/dates.ts'
 import { money } from '@shared/format.ts'
-import { round2, usdRate } from '@shared/fx.ts'
-import type { Settings } from '@shared/types.ts'
+import { currentRates, round2, usdRate } from '@shared/fx.ts'
+import type { FxRate, Settings } from '@shared/types.ts'
 import { DayGroups } from '../components/DayGroups.tsx'
 import { QuickInput } from '../components/QuickInput.tsx'
 import { SyncCloud, isNetworkError } from '../components/SyncCloud.tsx'
@@ -39,6 +39,20 @@ function CountUp({ value, className }: { value: number; className: string }) {
  * «＋»; the balance with «Свободно / Запас / Посадка» under it; the day card by the §2 states; the quick input;
  * the latest records. Pull down syncs.
  */
+/** The dollar and the euro in hryvnias and lei by the NBU, under the balance. */
+function Rates({ rates, today }: { rates: FxRate[]; today: string }) {
+  const { date, pairs } = currentRates(rates, today)
+  if (!date) return null
+  return (
+    <div className="home-rates num" aria-label={`Курс НБУ на ${dayMonth(date)}`}>
+      {pairs.map((p) => {
+        const parts = [p.uah !== null && money(p.uah, 'UAH'), p.mdl !== null && money(p.mdl, 'MDL')].filter(Boolean)
+        return parts.length > 0 && <span key={p.unit}>{`${money(1, p.unit, { whole: true })} = ${parts.join(' · ')}`}</span>
+      })}
+    </div>
+  )
+}
+
 export function Home() {
   const { db, now, scheduler } = useApp()
   const { openRecord } = useRecordSheet()
@@ -146,6 +160,7 @@ export function Home() {
               )}
             </div>
           </div>
+          <Rates rates={rates} today={today} />
         </section>
 
         <DayCard budget={budget} settings={settings} today={today} onSettings={() => nav.switchTab('more')} />

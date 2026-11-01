@@ -84,6 +84,7 @@ export function Calendar() {
   // nearest to today (the last day of a past month, the 1st of a future one)
   const pageMonth = (k: number) => {
     slideFrom(k)
+    setDir(k) // the day card rides the same way as the grid
     const next = shiftMonth(shown, k)
     setMonth(next)
     const current = monthOf(today)

@@ -531,6 +531,7 @@
 
 .morph {
   position: relative;
+  overflow-anchor: none; /* the browser must not nudge the page while the height glides */
 }
 
 .morph > .mOld {

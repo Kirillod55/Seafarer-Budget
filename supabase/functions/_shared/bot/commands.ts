@@ -4,6 +4,7 @@ import { toCsv } from '../csv.ts'
 import { addDays, daysBetween, monthOf, prevMonth } from '../dates.ts'
 import { money } from '../format.ts'
 import { round2 } from '../fx.ts'
+import { ratesText } from '../ratesText.ts'
 import { RESTORE_MS } from '../wipe.ts'
 import { restoreBatch } from './clear.ts'
 import type { Transaction } from '../types.ts'
@@ -98,6 +99,12 @@ export function daysToLanding(ctx: Ctx): BotReply[] {
   const n = daysBetween(ctx.today, d)
   if (n < 0) return [send(ctx, `Посадка была ${dayMonth(d)}. Укажи новую: «посадка 20 декабря»`)]
   return [send(ctx, n === 0 ? `Посадка сегодня, ${dayMonth(d)}` : `До посадки ${n} дн — ${dayMonth(d)}`)]
+}
+
+/** /currency: the dollar and the euro in hryvnias and lei by the NBU. */
+export async function currency(ctx: Ctx): Promise<BotReply[]> {
+  const snap = await load(ctx)
+  return [send(ctx, ratesText(snap.rates, ctx.today, dayMonth))]
 }
 
 /** /balance: per active account by currency (≈ $), total, set aside for goals, free. */

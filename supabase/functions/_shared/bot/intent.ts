@@ -17,9 +17,9 @@ import { helpText, IN_APP, ONLY_OWNER_CATEGORIES, SHORT_HELP } from './texts.ts'
 import type { BotReply } from './types.ts'
 
 export type Command = 'start' | 'help' | 'today' | 'week' | 'month' | 'left' | 'undo' | 'balance' | 'goals' | 'limits' |
-  'export' | 'settings' | 'clear' | 'last' | 'ping'
+  'export' | 'settings' | 'clear' | 'last' | 'ping' | 'currency'
 
-const SLASH = /^\/(start|help|today|week|month|left|undo|balance|goals|limits|export|settings|clear|last|ping)(?:@\w+)?(?:\s|$)/
+const SLASH = /^\/(start|help|today|week|month|left|undo|balance|goals|limits|export|settings|clear|last|ping|currency)(?:@\w+)?(?:\s|$)/
 
 const FILLERS = /(?<![\p{L}\d])(ээ+|эм+|слушай|пожалуйста|пж|плиз|а|ну|скажи|подскажи)(?![\p{L}\d])/gu
 const PHRASES: [RegExp, Command][] = [
@@ -36,6 +36,7 @@ const PHRASES: [RegExp, Command][] = [
   [/^(настройки|настройки бота)$/, 'settings'],
   [/^(за неделю|траты за неделю|сколько за неделю|неделя)$/, 'week'],
   [/^(очисти историю)$/, 'clear'],
+  [/^(курсы|курсы валют|курс валют|какой курс)$/, 'currency'],
 ]
 
 /** A command from «/x» or plain words (fillers and punctuation ignored); null otherwise. */
@@ -65,6 +66,7 @@ export async function runCommand(ctx: Ctx, c: Command): Promise<BotReply[]> {
     case 'clear': return startClear(ctx)
     case 'last': return search(ctx, '/last')
     case 'ping': return ping(ctx, ctx.pingInfo)
+    case 'currency': return cmd.currency(ctx)
   }
 }
 

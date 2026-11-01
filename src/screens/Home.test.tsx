@@ -61,6 +61,27 @@ beforeEach(() => {
   env = makeEnv()
 })
 
+describe('Home: the NBU rates under the balance', () => {
+  it('the dollar and the euro in hryvnias and lei', async () => {
+    await seed({})
+    await env.db.fx_rates.bulkPut([
+      { date: '2026-10-20', currency: 'USD', uah_per_unit: 42 },
+      { date: '2026-10-20', currency: 'EUR', uah_per_unit: 49 },
+      { date: '2026-10-20', currency: 'MDL', uah_per_unit: 2.4 },
+      { date: '2026-10-20', currency: 'UAH', uah_per_unit: 1 },
+    ])
+    renderHome()
+    expect(await screen.findByText('$1 = ₴42 · MDL 17.50')).toBeTruthy()
+    expect(screen.getByText('€1 = ₴49 · MDL 20.42')).toBeTruthy()
+  })
+  it('no rates yet: no line at all', async () => {
+    await seed({})
+    renderHome()
+    await waitFor(() => expect(card()).toBeTruthy())
+    expect(document.querySelector('.home-rates')).toBeNull()
+  })
+})
+
 describe('Home: the day card (§2 states)', () => {
   it('normal day: $59.67 a day, spent $36.68, «Осталось $22.99», «$60 ÷ 1 дн»', async () => {
     await seed({ next_contract_date: '2026-10-21', reserve_usd: 0 }, [

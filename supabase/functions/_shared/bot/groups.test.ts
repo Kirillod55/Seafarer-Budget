@@ -260,6 +260,20 @@ describe('goals, limits, settings (groups 4, 5, 7)', () => {
   })
 })
 
+describe('/currency', () => {
+  it('the dollar and the euro in hryvnias and lei, by command and in words', async () => {
+    const s = new MemStore()
+    s.rateRows = [
+      { date: TODAY, currency: 'USD', uah_per_unit: 42 }, { date: TODAY, currency: 'EUR', uah_per_unit: 49 },
+      { date: TODAY, currency: 'MDL', uah_per_unit: 2.4 }, { date: TODAY, currency: 'UAH', uah_per_unit: 1 },
+    ]
+    const text = textOf(await run(s, msg('/currency')))
+    expect(text).toContain('$1 = ₴42 · MDL 17.50')
+    expect(text).toContain('€1 = ₴49 · MDL 20.42')
+    expect(textOf(await run(s, msg('курсы валют')))).toBe(text)
+  })
+})
+
 describe('/help and commands in words', () => {
   it('help: HTML, < 4096, lines by mode and chat', async () => {
     const s = new MemStore()

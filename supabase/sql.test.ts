@@ -139,7 +139,7 @@ describe('v1.1 migration on PGlite', { timeout: SLOW }, () => {
     const tables = await fresh.query<{ n: number }>(
       `select count(*)::int as n from pg_tables where schemaname = 'public'`,
     )
-    expect(tables.rows[0].n).toBe(9)
+    expect(tables.rows[0].n).toBe(10)
     await fresh.close()
   })
 

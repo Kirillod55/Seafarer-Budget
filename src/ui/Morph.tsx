@@ -85,8 +85,9 @@ export function Morph({
       el.style.overflow = ''
       setGhost((g) => (g === ghost ? null : g))
     }
-    anims[0].onfinish = finish
-    const t = setTimeout(finish, 420)
+    // the last animation is the new content's, the longest one: ending earlier would cut its tail with a visible snap
+    anims[anims.length - 1].onfinish = finish
+    const t = setTimeout(finish, 480)
     return () => {
       clearTimeout(t)
       if (!done) {

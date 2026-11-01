@@ -112,6 +112,15 @@
   margin-top: 14px;
 }
 
+.home-rates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.882rem; /* 15 */
+}
+
 .stat {
   display: flex;
   flex-direction: column;

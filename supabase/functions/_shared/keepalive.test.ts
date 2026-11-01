@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS } from './defaults.ts'
-import { handleKeepalive, reminderDue, runKeepalive, webhookProblem } from './keepalive.ts'
+import { handleKeepalive, reminderDue, runKeepalive, runMorningRates, webhookProblem } from './keepalive.ts'
 import type { KeepaliveDeps, KeepaliveOptions } from './keepalive.ts'
 import type { Account, Category, FxRate, Settings, SoftTable, Transaction } from './types.ts'
 
@@ -48,6 +48,7 @@ class Fake implements KeepaliveDeps {
     this.nbuCalls.push(date)
     return [{ date, currency: 'USD', uah_per_unit: 40 }, { date, currency: 'UAH', uah_per_unit: 1 }, { date, currency: 'EUR', uah_per_unit: 44 }]
   }
+  async cronToken() { return 'cr0n' }
   async writeRates(rows: FxRate[]) { this.fx.push(...rows) }
   async patchTx(id: string, p: Partial<Transaction>) { this.patched[id] = p }
   async deleteBotUpdatesBefore(iso: string) { this.updatesBefore = iso }
@@ -156,6 +157,47 @@ describe('runKeepalive', () => {
     const weekday = new Fake()
     await runKeepalive(weekday, opts(MORNING))
     expect(weekday.docs).toHaveLength(0)
+  })
+})
+
+describe('morning rates (pg_cron, 08:00 local)', () => {
+  const cron = (token?: string) =>
+    new Request('https://x/functions/v1/keepalive?job=rates', { method: 'POST', headers: token ? { 'X-Cron-Token': token } : {} })
+  const EIGHT = new Date('2026-11-02T06:00:00Z') // 08:00 in Kyiv (winter time)
+  const fake = () => {
+    const f = new Fake()
+    f.settingsRow.timezone = 'Europe/Kyiv'
+    f.fetchNbu = async (date: string) => [
+      { date, currency: 'USD', uah_per_unit: 42 }, { date, currency: 'EUR', uah_per_unit: 49 },
+      { date, currency: 'MDL', uah_per_unit: 2.4 }, { date, currency: 'UAH', uah_per_unit: 1 },
+    ]
+    return f
+  }
+  it('at 08:00 local: the rates go to Kirill only, in hryvnias and lei', async () => {
+    const f = fake()
+    const res = await handleKeepalive(cron('cr0n'), f, opts(EIGHT), 's3cret')
+    expect(await res.json()).toEqual({ ok: true, sent: true })
+    expect(f.sent).toHaveLength(1)
+    expect(f.sent[0].chat).toBe(opts(EIGHT).ownerChatId)
+    expect(f.sent[0].text).toBe('Курс НБУ на 2 ноября:\n$1 = ₴42 · MDL 17.50\n€1 = ₴49 · MDL 20.42')
+  })
+  it('any other hour: nothing is sent or fetched', async () => {
+    const f = fake()
+    const res = await handleKeepalive(cron('cr0n'), f, opts(new Date('2026-11-02T07:00:00Z')), 's3cret')
+    expect(await res.json()).toEqual({ ok: true, sent: false })
+    expect(f.sent).toEqual([])
+  })
+  it('the NBU down: the latest rates with their own date', async () => {
+    const f = fake()
+    f.fetchNbu = async () => { throw new Error('down') }
+    await runMorningRates(f, opts(EIGHT))
+    expect(f.sent[0].text).toContain('Курс НБУ на 21 октября:')
+  })
+  it('401 without the token or with a wrong one; the keepalive secret does not open it', async () => {
+    const f = fake()
+    expect((await handleKeepalive(cron(), f, opts(EIGHT), 's3cret')).status).toBe(401)
+    expect((await handleKeepalive(cron('s3cret'), f, opts(EIGHT), 's3cret')).status).toBe(401)
+    expect(f.sent).toEqual([])
   })
 })
 

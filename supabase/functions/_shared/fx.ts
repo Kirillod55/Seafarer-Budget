@@ -49,3 +49,19 @@ export function usdRate(
 export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
+
+export interface RatePair {
+  unit: 'USD' | 'EUR'
+  uah: number | null
+  mdl: number | null
+}
+
+/** The dollar and the euro in hryvnias and lei by the NBU, the latest rates on or before `date`. */
+export function currentRates(rates: FxRate[], date: string): { date: string | null; pairs: RatePair[] } {
+  const mdl = latestOnOrBefore(rates, 'MDL', date)
+  const pairs = (['USD', 'EUR'] as const).map((unit): RatePair => {
+    const r = latestOnOrBefore(rates, unit, date)
+    return { unit, uah: r ? r.uah_per_unit : null, mdl: r && mdl ? r.uah_per_unit / mdl.uah_per_unit : null }
+  })
+  return { date: latestOnOrBefore(rates, 'USD', date)?.date ?? null, pairs }
+}
