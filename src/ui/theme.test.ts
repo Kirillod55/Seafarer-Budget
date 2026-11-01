@@ -101,6 +101,27 @@ describe('useTheme', () => {
     expect(await loadTheme(env.db)).toBe('light')
   })
 
+  it('a browser with view transitions cross-fades the whole screen: the theme changes inside the transition', async () => {
+    const env = makeEnv()
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(AppProvider, { value: env, children })
+    const { result } = renderHook(() => useTheme(), { wrapper })
+    const start = vi.fn((update: () => void) => update())
+    Object.assign(document, { startViewTransition: start })
+    try {
+      await act(async () => result.current[1]('dark'))
+    } finally {
+      delete (document as { startViewTransition?: unknown }).startViewTransition
+    }
+    expect(start).toHaveBeenCalledOnce()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(document.documentElement.classList.contains('theme-fade')).toBe(false)
+  })
+
+  it('inherited text never transitions on every element: the colour is on <body> only', () => {
+    const everything = css.slice(css.indexOf('html.theme-fade,'), css.indexOf('html.theme-fade body'))
+    expect(everything).not.toMatch(/[^-]color 0\.4s/)
+  })
+
   it('starts from the theme already applied to <html>', () => {
     applyTheme('dark')
     const env = makeEnv()

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../context.tsx'
 import type { LocalDb } from '../db/local.ts'
+import { prefersReducedMotion } from './motion.ts'
 
 /** «Как в системе» / «Светлая» / «Тёмная». Stored per device (Dexie meta), never synced. */
 export type ThemeChoice = 'system' | 'light' | 'dark'
@@ -67,7 +68,7 @@ export function watchSystemTheme(doc: Document = document): () => void {
 
 let fadeTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Colours flow into the new theme over 0.4 s (CSS html.theme-fade; off with Reduce Motion via CSS). */
+/** For a browser without view transitions: colours flow over 0.4 s (CSS html.theme-fade; off with Reduce Motion via CSS). */
 function fadeTheme(doc: Document): void {
   const root = doc.documentElement
   root.classList.add('theme-fade')
@@ -76,6 +77,20 @@ function fadeTheme(doc: Document): void {
     root.classList.remove('theme-fade')
     fadeTimer = null
   }, FADE_MS)
+}
+
+/**
+ * The whole screen cross-fades from a picture of the old theme into the new one, all of it at the same moment
+ * (CSS ::view-transition). Transitions on every element cannot do that: a text that inherits its colour restarts its
+ * transition on each step of its parent's, so the deeper it sits, the later it arrives.
+ */
+function switchTheme(t: ThemeChoice, doc: Document): void {
+  if (typeof doc.startViewTransition === 'function' && !prefersReducedMotion()) {
+    doc.startViewTransition(() => applyTheme(t, doc))
+    return
+  }
+  fadeTheme(doc)
+  applyTheme(t, doc)
 }
 
 /**
@@ -117,8 +132,7 @@ export function useTheme(): [ThemeChoice, (t: ThemeChoice) => void] {
     (t: ThemeChoice) => {
       chosen.current = true
       setTheme(t)
-      fadeTheme(document)
-      applyTheme(t)
+      switchTheme(t, document)
       void saveTheme(db, t)
     },
     [db],
