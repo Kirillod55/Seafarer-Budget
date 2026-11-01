@@ -185,7 +185,8 @@ function usePlace(anchor: RefObject<HTMLButtonElement | null>, menu: RefObject<H
     m.style.left = `${left}px`
     // 8 px from the field and 8 px from the window edge on either side
     const roomBelow = innerHeight - r.bottom - 16
-    const roomAbove = r.top - 16
+    const band = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-top')) || 0 // the band under the iPhone clock
+    const roomAbove = r.top - 16 - band
     let h = m.offsetHeight
     let below = true
     if (h > roomBelow) {

@@ -2,6 +2,7 @@
 
 .ptr-wrap {
   position: relative;
+  padding-top: env(safe-area-inset-top, 0px); /* the strip grows below the band under the iPhone clock */
 }
 
 .ptr {

@@ -47,7 +47,7 @@ html.desk.scrolling {
 html.desk .screen {
   max-width: 1240px;
   margin: 0 auto;
-  padding: 24px 32px 48px;
+  padding: calc(24px + var(--safe-top)) 32px 48px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -55,6 +55,11 @@ html.desk .screen {
 
 html.desk .screen.below {
   left: var(--sidew);
+}
+
+/* the screen already keeps below the band */
+html.desk .ptr-wrap {
+  padding-top: 0;
 }
 
 html.desk .backscrim {
@@ -75,7 +80,7 @@ html.desk .side {
   flex-direction: column;
   gap: 2px;
   width: var(--sidew);
-  padding: 20px 12px;
+  padding: calc(20px + var(--safe-top)) 12px 20px;
   overflow-y: auto;
   border-right: 1px solid var(--line);
   background: color-mix(in srgb, var(--track) 45%, var(--bg));
@@ -872,9 +877,9 @@ html.desk.desk-s .dgrid {
 
 .daside {
   position: sticky;
-  top: 24px;
+  top: calc(24px + var(--safe-top));
   /* taller than the window: it scrolls on its own, so its bottom is never out of reach */
-  max-height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px - var(--safe-top));
   overflow-y: auto;
   scrollbar-width: thin;
   display: flex;
@@ -1159,7 +1164,7 @@ html.desk .accs > :first-child {
 /* a long list scrolls, «Операции» stays at hand */
 html.desk .accops {
   position: sticky;
-  top: 24px;
+  top: calc(24px + var(--safe-top));
 }
 
 html.desk .accs-main {

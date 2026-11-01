@@ -120,7 +120,9 @@ describe('useTheme', () => {
   it('the app runs under the iPhone status bar and paints the band there itself', () => {
     const html = readFileSync('index.html', 'utf8')
     expect(html).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"')
-    expect(css).toMatch(/body::before[^}]*height: env\(safe-area-inset-top/)
+    expect(css).toMatch(/body::before,\s*\.wzlayer::before[^}]*height: env\(safe-area-inset-top/)
+    expect(html).toMatch(/#splash::before[^}]*height: env\(safe-area-inset-top/)
+    expect(readFileSync('src/ui/pull.css', 'utf8')).toMatch(/\.ptr-wrap[^}]*padding-top: env\(safe-area-inset-top/)
   })
 
   it('inherited text never transitions on every element: the colour is on <body> only', () => {

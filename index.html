@@ -14,6 +14,7 @@
       #splash {
         --sp-bg: #ffffff;
         --sp-text: #14161a;
+        --sp-band: #14161a;
         position: fixed;
         inset: 0;
         z-index: 9999;
@@ -33,15 +34,28 @@
         #splash {
           --sp-bg: #0e0f12;
           --sp-text: #f2f3f5;
+          --sp-band: #0e0f12;
         }
       }
       #splash[data-theme='light'] {
         --sp-bg: #ffffff;
         --sp-text: #14161a;
+        --sp-band: #14161a;
       }
       #splash[data-theme='dark'] {
         --sp-bg: #0e0f12;
         --sp-text: #f2f3f5;
+        --sp-band: #0e0f12;
+      }
+      /* the same band as body::before in tokens.css, or the white iPhone clock is lost on the white splash */
+      #splash::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        left: 0;
+        height: env(safe-area-inset-top, 0px);
+        background: var(--sp-band);
       }
       #splash.out {
         opacity: 0;

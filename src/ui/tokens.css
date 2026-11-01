@@ -186,6 +186,7 @@ html:not(#_)[data-theme="dark"] {
  * Every font size is in rem so it follows the setting.
  */
 html {
+  --safe-top: env(safe-area-inset-top, 0px); /* for scripts: they cannot read env() */
   font-size: calc(17px * var(--ts, 1));
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -198,8 +199,10 @@ body {
 }
 
 /* the app runs up to the very top of the iPhone screen (black-translucent): this band sits under the clock and the
-   Dynamic Island, changes with the theme like everything else, and the content scrolls under it */
-body::before {
+   Dynamic Island, changes with the theme like everything else, and the content scrolls under it. The wizard's layer
+   covers the page's band, so it has its own */
+body::before,
+.wzlayer::before {
   content: '';
   position: fixed;
   top: 0;

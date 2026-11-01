@@ -17,7 +17,7 @@
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  margin-top: calc(10px + env(safe-area-inset-top, 0px));
+  margin-top: 10px;
 }
 
 .home .datebtn {
