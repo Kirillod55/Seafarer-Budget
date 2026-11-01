@@ -674,6 +674,36 @@ describe('Morph', () => {
   })
 })
 
+describe('Morph at the end of a swap', () => {
+  it('the old copy is hidden before its fade is cancelled: it never shows again at full opacity', () => {
+    const anims: { el: Element; onfinish: (() => void) | null; cancel(): void }[] = []
+    const atCancel: string[] = []
+    reducedMotion(false)
+    withAnimate(
+      function (this: Element) {
+        const el = this as HTMLElement
+        const a = { ...fakeAnim(), el, onfinish: null, cancel: () => void (el.classList.contains('mOld') && atCancel.push(el.style.visibility)) }
+        anims.push(a)
+        return a as unknown as Animation
+      },
+      () => {
+        const { rerender } = render(
+          <Morph k="29" fade>
+            <p>29 октября</p>
+          </Morph>,
+        )
+        rerender(
+          <Morph k="30" fade>
+            <p>30 октября</p>
+          </Morph>,
+        )
+        act(() => anims[anims.length - 1].onfinish?.())
+        expect(atCancel).toEqual(['hidden'])
+      },
+    )
+  })
+})
+
 describe('useFlip', () => {
   function List({ items }: { items: string[] }) {
     const ref = useRef<HTMLDivElement>(null)

@@ -74,6 +74,8 @@ export function Morph({
     const finish = () => {
       if (done) return
       done = true
+      // hidden first: cancelling drops `fill: forwards`, and until React removes the copy it would show for a frame
+      old.style.visibility = 'hidden'
       anims.forEach((a) => a.cancel())
       el.style.overflow = ''
       el.style.minHeight = ''
