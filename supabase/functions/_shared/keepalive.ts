@@ -221,10 +221,11 @@ const localHour = (now: Date, timeZone: string) =>
  * they switched it off in /settings (the columns are absent before the migration: then it is on); every other hour
  * nothing happens. If a bank does not answer, the message carries the latest rates with their own date.
  */
-export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions): Promise<boolean> {
+export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions, test = false): Promise<boolean> {
   const s = await deps.settings()
-  if (!s || localHour(o.now, s.timezone) !== RATES_HOUR) return false
-  const chats = [
+  if (!s || (!test && localHour(o.now, s.timezone) !== RATES_HOUR)) return false
+  // a test run (by hand, with the keepalive secret) goes to Kirill alone, at any hour
+  const chats = test ? [o.ownerChatId] : [
     ...(s.rates_daily_owner !== false ? [o.ownerChatId] : []),
     ...(o.partnerChatId !== null && s.rates_daily_partner !== false ? [o.partnerChatId] : []),
   ]
@@ -249,11 +250,14 @@ export async function runMorningRates(deps: KeepaliveDeps, o: KeepaliveOptions):
  */
 export async function handleKeepalive(req: Request, deps: KeepaliveDeps, o: KeepaliveOptions, secret: string): Promise<Response> {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
-  if (new URL(req.url).searchParams.get('job') === 'rates') {
-    const token = await deps.cronToken().catch(() => null)
-    if (!token || !safeEqual(req.headers.get('X-Cron-Token'), token)) return new Response('Unauthorized', { status: 401 })
+  const url = new URL(req.url)
+  if (url.searchParams.get('job') === 'rates') {
+    const test = url.searchParams.get('test') === '1'
+    const token = test ? secret : await deps.cronToken().catch(() => null)
+    const given = req.headers.get(test ? 'X-Keepalive-Secret' : 'X-Cron-Token')
+    if (!token || !safeEqual(given, token)) return new Response('Unauthorized', { status: 401 })
     try {
-      const sent = await runMorningRates(deps, o)
+      const sent = await runMorningRates(deps, o, test)
       return new Response(JSON.stringify({ ok: true, sent }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     } catch (e) {
       console.error('morning rates failed:', e instanceof Error ? e.message : String(e))

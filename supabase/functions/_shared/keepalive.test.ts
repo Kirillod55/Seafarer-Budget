@@ -214,6 +214,17 @@ describe('morning rates (pg_cron, 08:00 local)', () => {
     expect(f.sent[0].text).toContain('🇲🇩 MDL 18.04 (НБМ)')
     expect(f.sent[0].text).toContain('🏦 ПриватБанк')
   })
+  it('a test run: any hour, to Kirill alone, only with the keepalive secret', async () => {
+    const test = (secret?: string) =>
+      new Request('https://x/functions/v1/keepalive?job=rates&test=1', { method: 'POST', headers: secret ? { 'X-Keepalive-Secret': secret } : {} })
+    const noon = new Date('2026-11-02T10:00:00Z')
+    const f = fake()
+    expect((await handleKeepalive(test('nope'), f, opts(noon), 's3cret')).status).toBe(401)
+    expect(f.sent).toEqual([])
+    const res = await handleKeepalive(test('s3cret'), f, opts(noon), 's3cret')
+    expect(await res.json()).toEqual({ ok: true, sent: true })
+    expect(f.sent.map((m) => m.chat)).toEqual([opts(noon).ownerChatId])
+  })
   it('any other hour: nothing is sent or fetched', async () => {
     const f = fake()
     const res = await handleKeepalive(cron('cr0n'), f, opts(new Date('2026-11-02T07:00:00Z')), 's3cret')
